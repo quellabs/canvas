@@ -1,0 +1,54 @@
+{
+  "name": "quellabs/canvas",
+  "description": "A modern, lightweight PHP framework with contextual containers, automatic service discovery, and ObjectQuel ORM integration",
+  "keywords": [
+    "framework",
+    "contextual-containers",
+    "dependency-injection",
+    "templating"
+  ],
+  "type": "library",
+  "license": "MIT",
+  "config": {
+    "platform": {
+      "php": "8.2"
+    },
+    "allow-plugins": {
+      "quellabs/discover": false
+    }
+  },
+  "require": {
+    "ext-json": "*",
+    "ext-mysqli": "*",
+    "ext-pdo": "*",
+    "ext-curl": "*",
+    "ext-gd": "*",
+    "ext-fileinfo": "*",
+    "monolog/monolog": "*",
+    "quellabs/contracts": "^1.0",
+    "quellabs/discover": "^1.",
+    "quellabs/dependency-injection": "^1.0",
+    "quellabs/sculpt": "^1.0",
+    "quellabs/signal-hub": "^1.0",
+    "quellabs/canvas-smarty": "^1.0",
+    "quellabs/annotation-reader": "^1.0",
+    "symfony/http-foundation": "*",
+    "dragonmantank/cron-expression": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "Quellabs\\Canvas\\": "src/"
+    }
+  },
+  "extra": {
+    "discover": {
+      "sculpt": {
+        "provider": "Quellabs\\Canvas\\Sculpt\\CanvasProvider",
+        "config": "config/app.php"
+      },
+      "task-scheduler": {
+        "provider": "Quellabs\\Canvas\\Tasks\\Task"
+      }
+    }
+  }
+}
