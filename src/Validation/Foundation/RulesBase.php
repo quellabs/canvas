@@ -2,13 +2,13 @@
 	
 	namespace Quellabs\Canvas\Validation\Foundation;
 	
-	use Quellabs\Canvas\Sanitization\Contracts\SanitizationRuleInterface;
+	use Quellabs\Canvas\Validation\Contracts\ValidationRuleInterface;
 	
 	/**
 	 * Validation rule that checks if at least one of the provided conditions is satisfied.
 	 * This rule passes if any of the nested validation conditions returns true.
 	 */
-	abstract class RulesBase implements SanitizationRuleInterface {
+	abstract class RulesBase implements ValidationRuleInterface {
 		
 		/**
 		 * User provided error message
