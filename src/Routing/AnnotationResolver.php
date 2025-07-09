@@ -810,96 +810,172 @@
 			// Must contain at least one {variable} but NOT be a complete variable segment
 			$hasVariable = preg_match('/\{[^}]+}/', $segment);
 			$isCompleteVariable = !empty($segment) && $segment[0] === '{' && str_ends_with($segment, '}');
-			
 			return $hasVariable && !$isCompleteVariable;
 		}
 		
 		/**
-		 * Matches a route segment that contains partial variables against a URL segment
+		 * Matches a route segment that contains partial variables against a URL segment.
+		 * Supports syntax like "v{id:int}", "user-{slug}", or "file-{name:regex([a-z]{3,5})}"
 		 * @param string $routeSegment Route segment like "v{id:int}" or "user-{slug}"
 		 * @param string $urlSegment URL segment to match against
 		 * @param array &$variables Variables array to store captured values
 		 * @return bool True if segment matches and variables are extracted
 		 */
 		private function matchPartialVariableSegment(string $routeSegment, string $urlSegment, array &$variables): bool {
-			// Initialize regex pattern builder and variable tracking
-			$i = 0;
+			// Compile the route segment pattern into a regex pattern and extract variable names
+			// This converts something like "v{id:int}" into a regex pattern like "/^v(\d+)$/"
+			// and returns the variable names like ["id"]
+			$result = $this->compilePartialSegmentPattern($routeSegment);
+			
+			// Check if the segment compilation was successful
+			if (!$result) {
+				return false; // Malformed segment - couldn't parse the route pattern
+			}
+			
+			// Extract the compiled regex pattern and variable names from the result
+			$pattern = $result[0];
+			$variableNames = $result[1];
+			
+			// Attempt to match the URL segment against the compiled regex pattern
+			if (preg_match($pattern, $urlSegment, $matches)) {
+				// Loop through each variable name that was found in the route segment
+				foreach ($variableNames as $name) {
+					// Check if this variable was captured in the regex match
+					if (isset($matches[$name])) {
+						// Store the captured value in the variables array using the variable name as key
+						// For example, if route is "v{id:int}" and URL is "v123",
+						// this would set $variables['id'] = '123'
+						$variables[$name] = $matches[$name];
+					}
+				}
+				
+				// Return true to indicate successful match and variable extraction
+				return true;
+			}
+			
+			// No match found - the URL segment doesn't match the route pattern
+			return false;
+		}
+		
+		/**
+		 * Compiles a route segment with inline variables into a regex pattern.
+		 * Converts "/users/{id:int}/posts/{slug}" into regex with named capture groups
+		 * @param string $segment The route segment to compile
+		 * @return array|null Returns [$pattern, $variableNames] or null on failure
+		 */
+		private function compilePartialSegmentPattern(string $segment): ?array {
+			$position = 0;
 			$pattern = '';
 			$variableNames = [];
-			$length = strlen($routeSegment);
+			$segmentLength = strlen($segment);
 			
-			// Parse the route segment character by character
-			while ($i < $length) {
-				if ($routeSegment[$i] === '{') {
-					// Found start of variable placeholder, find the closing brace
-					$start = $i;
+			// Process each character in the segment
+			while ($position < $segmentLength) {
+				// Check if we found a variable placeholder starting with '{'
+				if ($segment[$position] === '{') {
+					// Extract the variable content between braces
+					$variableContent = $this->extractVariableContent($segment, $position);
 					
-					// Advance past the opening brace
-					$i++;
-					
-					// Find the closing brace
-					while ($i < $length && $routeSegment[$i] !== '}') {
-						$i++;
+					// If extraction failed (unbalanced braces), return null
+					if ($variableContent === null) {
+						return null;
 					}
 					
-					// Check if we found a closing brace (malformed if not)
-					if ($i >= $length) {
-						return false; // Malformed variable - no closing brace
-					}
+					// Parse the variable definition (name and optional type)
+					$variableInfo = $this->parseVariableDefinition($variableContent);
+					$variableNames[] = $variableInfo['name'];
 					
-					// Extract variable definition (content between braces)
-					$variableDefinition = substr($routeSegment, $start + 1, $i - $start - 1);
-					
-					// Parse variable name and optional validation pattern
-					if (str_contains($variableDefinition, ':')) {
-						// Variable has a validation pattern (e.g., "id:int")
-						[$varName, $validationPattern] = explode(':', $variableDefinition, 2);
-						
-						$variableNames[] = $varName;
-						
-						// Convert validation pattern to appropriate regex
-						$pattern .= match ($validationPattern) {
-							'int', 'integer', 'numeric' => '(\d+)',                    // Numbers only
-							'alpha' => '([a-zA-Z]+)',                                  // Letters only
-							'alnum', 'alphanumeric' => '([a-zA-Z0-9]+)',              // Letters and numbers
-							'slug' => '([a-z0-9-]+)',                                 // Lowercase letters, numbers, hyphens
-							'uuid' => '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})', // UUID format
-							default => '([^\/]+)'                                      // Any characters except forward slash
-						};
-					} else {
-						// No validation pattern, just capture the variable name
-						$variableNames[] = $variableDefinition;
-						$pattern .= '([^\/]+)'; // Match any characters except forward slash
-					}
-					
-					// Move past the closing brace
+					// Add named capture group to pattern
+					$pattern .= '(?<' . preg_quote($variableInfo['name'], '/') . '>' . $variableInfo['regex'] . ')';
 				} else {
-					// Regular character (not part of variable placeholder)
-					$char = $routeSegment[$i];
-				
-					// Escape special regex characters to treat them literally
-					$pattern .= preg_quote($char, '/');
+					// Regular character - escape it for regex
+					$pattern .= preg_quote($segment[$position], '/');
+					$position++;
 				}
-				
-				$i++;
 			}
 			
-			// Create final regex pattern with anchors to match entire string
-			$finalPattern = '/^' . $pattern . '$/';
+			return ['/^' . $pattern . '$/u', $variableNames];
+		}
+		
+		/**
+		 * Extracts variable content from between braces, handling nested braces
+		 * Updates the position reference to point after the closing brace
+		 * @param string $segment The full segment string
+		 * @param int &$position Current position (passed by reference)
+		 * @return string|null Variable content or null if braces are unbalanced
+		 */
+		private function extractVariableContent(string $segment, int &$position): ?string {
+			$segmentLength = strlen($segment);
+			$position++; // Skip opening brace
+			$braceDepth = 1;
+			$content = '';
 			
-			// Test if the URL segment matches our generated pattern
-			if (preg_match($finalPattern, $urlSegment, $matches)) {
-				// Extract captured variable values and store them
-				for ($j = 0; $j < count($variableNames); $j++) {
-					// Skip the full match (index 0), start from captured groups (index 1+)
-					if (isset($matches[$j + 1])) {
-						$variables[$variableNames[$j]] = $matches[$j + 1];
-					}
+			// Find matching closing brace, handling nested braces
+			while ($position < $segmentLength && $braceDepth > 0) {
+				if ($segment[$position] === '{') {
+					$braceDepth++;
+				} elseif ($segment[$position] === '}') {
+					$braceDepth--;
 				}
 				
-				return true; // Successful match
+				// Only add to content if we're not at the final closing brace
+				if ($braceDepth > 0) {
+					$content .= $segment[$position];
+				}
+				
+				$position++;
 			}
 			
-			return false; // No match found
+			// Early return if braces are unbalanced
+			if ($braceDepth !== 0) {
+				return null;
+			}
+			
+			return $content;
+		}
+		
+		/**
+		 * Parses variable definition to extract name and type
+		 * Handles both "name" and "name:type" formats
+		 * @param string $content The variable content (without braces)
+		 * @return array Returns ['name' => string, 'regex' => string]
+		 */
+		private function parseVariableDefinition(string $content): array {
+			// Handle simple variable name without type
+			if (!str_contains($content, ':')) {
+				return [
+					'name'  => $content,
+					'regex' => '[^\/]+' // Default: match anything except slash
+				];
+			}
+			
+			// Parse variable with type specification
+			$parts = explode(':', $content, 2);
+			
+			return [
+				'name'  => $parts[0],
+				'regex' => $this->resolveTypeToRegex($parts[1])
+			];
+		}
+		
+		/**
+		 * Resolves a route type to a regex pattern.
+		 * Also supports custom regex like "regex([a-z]{3,5})".
+		 * @param string $type
+		 * @return string
+		 */
+		private function resolveTypeToRegex(string $type): string {
+			if (str_starts_with($type, 'regex(') && str_ends_with($type, ')')) {
+				return substr($type, 6, -1); // Custom regex inside regex(...)
+			}
+			
+			return match ($type) {
+				'int', 'integer', 'numeric' => '\d+',
+				'alpha' => '[a-zA-Z]+',
+				'alnum', 'alphanumeric' => '[a-zA-Z0-9]+',
+				'slug' => '[a-zA-Z0-9-]+',
+				'uuid' => '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',
+				default => '[^\/]+',
+			};
 		}
 	}
