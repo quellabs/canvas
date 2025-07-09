@@ -1,6 +1,6 @@
 <?php
 	
-	namespace Quellabs\Canvas\Routing;
+	namespace Quellabs\Canvas\Routing\Components;
 	
 	/**
 	 * RouteSegmentAnalyzer
