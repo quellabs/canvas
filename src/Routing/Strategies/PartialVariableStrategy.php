@@ -6,50 +6,135 @@
 	use Quellabs\Canvas\Routing\MatchResult;
 	
 	/**
-	 * Strategy for matching URL segments containing partial variables.
-	 *
-	 * This strategy handles route segments that contain variable placeholders
-	 * mixed with static text (e.g., "user-{id}" or "page-{slug}.html").
-	 * It uses pre-compiled regular expressions to extract variable values
-	 * from the URL segment.
+	 * Updated PartialVariableStrategy that works with the enhanced compiler.
 	 */
 	class PartialVariableStrategy implements SegmentMatchingStrategyInterface {
 		
 		/**
-		 * Attempts to match a URL segment against a route segment pattern.
-		 *
-		 * @param array $segment The route segment configuration containing:
-		 *                      - 'compiled_regex': Pre-compiled regex pattern
-		 *                      - 'variable_names': Array of variable names to extract
-		 * @param MatchingContext $context The current matching context with URL data
-		 * @return MatchResult Result indicating whether matching should continue or stop
+		 * Matches a segment that contains both literal text and variables.
 		 */
 		public function match(array $segment, MatchingContext $context): MatchResult {
-			// Get the pre-compiled regex pattern for this segment
-			$pattern = $segment['compiled_regex'];
+			// Check if this segment contains a multi-wildcard
+			if (!empty($segment['is_multi_wildcard']) && !empty($segment['variable_name'])) {
+				return $this->matchWildcardPartialVariable($segment, $context);
+			}
 			
-			// Get the list of variable names that should be extracted
-			$variableNames = $segment['variable_names'];
+			// Handle regular partial variables
+			return $this->matchRegularPartialVariable($segment, $context);
+		}
+		
+		/**
+		 * Handle partial variable segments that contain wildcards.
+		 */
+		private function matchWildcardPartialVariable(array $segment, MatchingContext $context): MatchResult {
+			$currentUrlSegment = $context->getCurrentUrlSegment();
 			
-			// Get the current URL segment to match against
-			$urlSegment = $context->getCurrentUrlSegment();
+			if ($currentUrlSegment === null) {
+				return MatchResult::NO_MATCH;
+			}
 			
-			// Attempt to match the URL segment using the pre-compiled regex
-			if (preg_match($pattern, $urlSegment, $matches)) {
-				// Successfully matched - extract all captured variables
-				foreach ($variableNames as $name) {
-					// Check if this variable was captured in the regex match
-					if (isset($matches[$name])) {
-						// Store the extracted variable value in the context
-						$context->setVariable($name, $matches[$name]);
+			$literalPrefix = $segment['literal_prefix'] ?? '';
+			$variableName = $segment['variable_name'];
+			
+			// Check if the URL segment starts with the required literal prefix
+			if ($literalPrefix !== '' && !str_starts_with($currentUrlSegment, $literalPrefix)) {
+				return MatchResult::NO_MATCH;
+			}
+			
+			// For multi-wildcard in partial segment, capture the remainder of this segment
+			// plus all remaining URL segments
+			$remainingUrlSegments = $context->getRemainingUrlSegments();
+			
+			// Start with the part of current segment after the literal prefix
+			$capturedParts = [substr($currentUrlSegment, strlen($literalPrefix))];
+			
+			// Add all remaining URL segments
+			if (count($remainingUrlSegments) > 1) {
+				$capturedParts = array_merge($capturedParts, array_slice($remainingUrlSegments, 1));
+			}
+			
+			$capturedPath = implode('/', $capturedParts);
+			
+			// Store the captured path
+			if ($variableName === '**') {
+				$context->addToVariableArray('**', $capturedPath);
+			} else {
+				$context->setVariable($variableName, $capturedPath);
+			}
+			
+			// Since we consumed all remaining segments, this is a complete match
+			return MatchResult::COMPLETE_MATCH;
+		}
+		
+		/**
+		 * Handle regular partial variable segments (non-wildcard).
+		 */
+		private function matchRegularPartialVariable(array $segment, MatchingContext $context): MatchResult {
+			$currentUrlSegment = $context->getCurrentUrlSegment();
+			
+			// Use compiled regex if available
+			if (!empty($segment['compiled_regex'])) {
+				if (preg_match($segment['compiled_regex'], $currentUrlSegment, $matches)) {
+					// Extract named captures and store as variables
+					foreach ($segment['variable_names'] as $varName) {
+						if (isset($matches[$varName])) {
+							$context->setVariable($varName, $matches[$varName]);
+						}
 					}
+					
+					return MatchResult::CONTINUE_MATCHING;
+				}
+				return MatchResult::NO_MATCH;
+			}
+			
+			// Fallback for segments without compiled regex
+			return $this->fallbackPartialMatch($segment, $context);
+		}
+		
+		/**
+		 * Fallback matching for partial variables without compiled regex.
+		 */
+		private function fallbackPartialMatch(array $segment, MatchingContext $context): MatchResult {
+			$currentUrlSegment = $context->getCurrentUrlSegment();
+			
+			// Extract literal prefix/suffix from the original segment
+			$original = $segment['original'];
+			
+			// Simple extraction logic for basic cases
+			if (preg_match('/^([^{]*)(\{[^}]+})(.*)$/', $original, $matches)) {
+				$literalPrefix = $matches[1];
+				$variablePart = $matches[2];
+				$literalSuffix = $matches[3];
+				
+				// Check prefix and suffix
+				if ($literalPrefix !== '' && !str_starts_with($currentUrlSegment, $literalPrefix)) {
+					return MatchResult::NO_MATCH;
 				}
 				
-				// Signal that matching was successful and should continue
+				if ($literalSuffix !== '' && !str_ends_with($currentUrlSegment, $literalSuffix)) {
+					return MatchResult::NO_MATCH;
+				}
+				
+				// Extract variable value
+				$startPos = strlen($literalPrefix);
+				$endPos = strlen($literalSuffix) > 0 ? -strlen($literalSuffix) : null;
+				
+				$variableValue = $endPos !== null ?
+					substr($currentUrlSegment, $startPos, $endPos - $startPos) :
+					substr($currentUrlSegment, $startPos);
+				
+				// Extract variable name
+				$variableName = trim($variablePart, '{}');
+				
+				// Clean variable name (remove type constraints and wildcards)
+				if (str_contains($variableName, ':')) {
+					$variableName = explode(':', $variableName)[0];
+				}
+				
+				$context->setVariable($variableName, $variableValue);
 				return MatchResult::CONTINUE_MATCHING;
 			}
 			
-			// Pattern didn't match - this route segment is not compatible
 			return MatchResult::NO_MATCH;
 		}
 	}
