@@ -26,17 +26,10 @@
 		private LoggerInterface $logger;
 		
 		/**
-		 * @var int Maximum execution time in seconds (ignored by this strategy)
-		 */
-		private int $timeout;
-		
-		/**
 		 * Constructor - Initialize the strategy with a logger
-		 * @param int $timeout Maximum execution time in seconds (ignored by this strategy)
 		 * @param LoggerInterface $logger Logger for recording timeout events and task execution info
 		 */
-		public function __construct(int $timeout, LoggerInterface $logger) {
-			$this->timeout = $timeout;
+		public function __construct(LoggerInterface $logger) {
 			$this->logger = $logger;
 		}
 		

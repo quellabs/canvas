@@ -387,26 +387,6 @@
 		}
 		
 		/**
-		 * Generate a unique backup path with timestamp
-		 * @param string $targetPath Original file path
-		 * @return string Unique backup path
-		 */
-		private function generateUniqueBackupPath(string $targetPath): string {
-			$timestamp = date('Y-m-d_H-i-s');
-			$backupPath = $targetPath . '.backup.' . $timestamp;
-			
-			// Ensure uniqueness for rapid successive calls
-			$counter = 1;
-			
-			while (file_exists($backupPath)) {
-				$backupPath = $targetPath . '.backup.' . $timestamp . '_' . $counter;
-				$counter++;
-			}
-			
-			return $backupPath;
-		}
-		
-		/**
 		 * Verify that copy operation was successful
 		 * @param string $sourcePath Source file path
 		 * @param string $targetPath Target file path
