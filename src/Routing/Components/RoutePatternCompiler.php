@@ -105,7 +105,9 @@
 					'pattern'           => null,        // Regex pattern for validation
 					'is_multi_wildcard' => false,       // Whether this consumes multiple segments
 					'compiled_regex'    => null,        // Pre-compiled regex for partial variables
-					'variable_names'    => []           // Array of variable names for partial segments
+					'variable_names'    => [],          // Array of variable names for partial segments
+					'literal_prefix'    => null,  // For partial variables
+					'literal_suffix'    => null   // For partial variables
 				];
 				
 				// Compile segment based on its type
@@ -157,9 +159,19 @@
 						$result = $this->compilePartialSegmentPattern($segment);
 						
 						if ($result) {
-							// Store the compiled regex and variable names
-							$compiledSegment['compiled_regex'] = $result[0];    // Regex pattern
-							$compiledSegment['variable_names'] = $result[1];    // Array of variable names
+							$compiledSegment['compiled_regex'] = $result['pattern'];
+							$compiledSegment['variable_names'] = $result['variables'];
+							$compiledSegment['literal_prefix'] = $result['literal_prefix'] ?? null;
+							$compiledSegment['literal_suffix'] = $result['literal_suffix'] ?? null;
+							
+							// Check if any variables are wildcards
+							foreach ($result['variable_info'] as $varInfo) {
+								if ($varInfo['is_wildcard']) {
+									$compiledSegment['is_multi_wildcard'] = $varInfo['is_multi_wildcard'];
+									$compiledSegment['variable_name'] = $varInfo['clean_name'];
+									break;
+								}
+							}
 						}
 						
 						break;
@@ -186,9 +198,15 @@
 			
 			// Track variable names found in the segment for later reference
 			$variableNames = [];
+			$variableInfo = [];
 			
 			// Cache segment length to avoid repeated strlen() calls
 			$segmentLength = strlen($segment);
+			
+			// Track literal parts
+			$literalPrefix = '';
+			$literalSuffix = '';
+			$hasFoundVariable = false;
 			
 			// Process each character in the segment
 			while ($position < $segmentLength) {
@@ -203,21 +221,37 @@
 					}
 					
 					// Parse the variable definition to get name and regex pattern
-					$variableInfo = $this->parseVariableDefinition($variableContent);
+					$varInfo = $this->parseVariableDefinition($variableContent);
 					
 					// Store the variable name for the return array
-					$variableNames[] = $variableInfo['name'];
+					$hasFoundVariable = true;
+					$variableNames[] = $varInfo['name'];
+					$variableInfo[] = $varInfo;
 					
-					// Add a named capture group to the regex pattern
-					// Format: (?<name>regex) where name is escaped for regex safety
-					$pattern .= '(?<' . preg_quote($variableInfo['name'], '/') . '>' . $variableInfo['regex'] . ')';
-					
-					// Note: $position is advanced by extractVariableContent()
+					// For wildcard variables in partial segments, we need special handling
+					if (!$varInfo['is_wildcard']) {
+						// Regular variable
+						$pattern .= '(?<' . preg_quote($varInfo['name'], '/') . '>' . $varInfo['regex'] . ')';
+					} elseif ($varInfo['is_multi_wildcard']) {
+						// Multi-wildcard in partial segment - this gets special treatment
+						// The pattern here is just for validation, actual matching is handled differently
+						$pattern .= '(?<' . preg_quote($varInfo['name'], '/') . '>.*?)';
+					} else {
+						// Single wildcard
+						$pattern .= '(?<' . preg_quote($varInfo['name'], '/') . '>[^\/]*)';
+					}
 				} else {
-					// For literal characters, escape them for regex and add to pattern
-					$pattern .= preg_quote($segment[$position], '/');
+					// Literal character
+					$char = $segment[$position];
+					$pattern .= preg_quote($char, '/');
 					
-					// Move to the next character
+					// Track literal prefix/suffix
+					if (!$hasFoundVariable) {
+						$literalPrefix .= $char;
+					} else {
+						$literalSuffix .= $char;
+					}
+					
 					$position++;
 				}
 			}
@@ -225,7 +259,13 @@
 			// Return the complete regex pattern with anchors and the variable names
 			// ^...$ ensures the pattern matches the entire string
 			// /u flag enables Unicode support
-			return ['/^' . $pattern . '$/u', $variableNames];
+			return [
+				'pattern'        => '/^' . $pattern . '$/u',
+				'variables'      => $variableNames,
+				'variable_info'  => $variableInfo,
+				'literal_prefix' => $literalPrefix ?: null,
+				'literal_suffix' => $literalSuffix ?: null
+			];
 		}
 		
 		/**
@@ -276,11 +316,10 @@
 			// Process characters until we reach the end or close all braces
 			while ($position < $segmentLength && $braceDepth > 0) {
 				// Check for opening brace - increases nesting depth
+				// Check for closing brace - decreases nesting depth
 				if ($segment[$position] === '{') {
 					$braceDepth++;
-				}
-				// Check for closing brace - decreases nesting depth
-				elseif ($segment[$position] === '}') {
+				} elseif ($segment[$position] === '}') {
 					$braceDepth--;
 				}
 				
@@ -309,25 +348,46 @@
 		 * @return array Returns ['name' => string, 'regex' => string]
 		 */
 		private function parseVariableDefinition(string $content): array {
-			// Check if the variable has a type specification (contains ':')
-			// Examples: 'id' (no type) vs 'id:int' (with type)
-			if (!str_contains($content, ':')) {
-				// No type specified - use default regex that matches any non-slash characters
-				// This prevents variables from matching across URL segments
-				return [
-					'name'  => $content,
-					'regex' => '[^\/]+'  // Match one or more non-slash characters
-				];
+			$isWildcard = false;
+			$isMultiWildcard = false;
+			$cleanName = $content;
+			$regex = '[^\/]+';
+			
+			// Check for wildcard patterns
+			if (str_ends_with($content, ':**')) {
+				$isWildcard = true;
+				$isMultiWildcard = true;
+				$cleanName = substr($content, 0, -3); // Remove :**
+				$regex = '.*'; // Multi-wildcard pattern
+			} elseif (str_ends_with($content, ':*')) {
+				$isWildcard = true;
+				$isMultiWildcard = false;
+				$cleanName = substr($content, 0, -2); // Remove :*
+				$regex = '[^\/]*'; // Single wildcard pattern
+			} elseif ($content === '**') {
+				$isWildcard = true;
+				$isMultiWildcard = true;
+				$cleanName = '**';
+				$regex = '.*';
+			} elseif ($content === '*') {
+				$isWildcard = true;
+				$isMultiWildcard = false;
+				$cleanName = '*';
+				$regex = '[^\/]*';
+			} elseif (str_contains($content, ':')) {
+				// Regular typed variable
+				$parts = explode(':', $content, 2);
+				$cleanName = $parts[0];
+				$regex = $this->resolveTypeToRegex($parts[1]);
 			}
 			
-			// Split on first colon to separate name from type definition
-			// Limit to 2 parts in case the regex itself contains colons
-			$parts = explode(':', $content, 2);
-			
-			// Return the variable name and resolve the type to its regex pattern
 			return [
-				'name'  => $parts[0],                              // Variable name (before colon)
-				'regex' => $this->resolveTypeToRegex($parts[1])    // Type converted to regex pattern
+				'name' => $cleanName,
+				'clean_name' => $cleanName,
+				'regex' => $regex,
+				'is_wildcard' => $isWildcard,
+				'is_multi_wildcard' => $isMultiWildcard,
+				'original_content' => $content
 			];
 		}
 	}

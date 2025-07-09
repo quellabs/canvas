@@ -15,7 +15,7 @@
 	use Quellabs\Canvas\Routing\Components\RouteSegmentAnalyzer;
 	
 	/**
-	 * AnnotationResolver (Refactored)
+	 * AnnotationResolver
 	 *
 	 * Main orchestrator class for route resolution that coordinates all routing components.
 	 * This refactored version delegates specific responsibilities to focused classes while
