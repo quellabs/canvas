@@ -64,7 +64,7 @@
 				}
 			}
 			
-			// Fallback to static (should never reach here due to static checker)
+			// Fallback to static (should never reach here due to the static checker)
 			return 'static';
 		}
 		
@@ -102,21 +102,26 @@
 			
 			// Analyze each segment to determine its impact on priority
 			foreach ($segments as $segment) {
-				// Handle partial variable segments (e.g., "user-{id}-profile")
-				if ($this->hasPartialVariable($segment)) {
-					// Partial variables are moderately penalized as they're semi-specific
-					$penalties += 30;
-				} else {
-					// Determine the segment type (static, variable, wildcard, etc.)
-					$segmentType = $this->getSegmentType($segment);
-					
-					// Apply type-specific penalty based on how generic the segment is
-					$penalties += $this->getSegmentPenalty($segmentType);
-					
-					// Count static segments for bonus calculation
-					if ($segmentType === 'static') {
-						$staticSegments++;
-					}
+				// Determine the segment type (static, variable, wildcard, etc.)
+				$segmentType = $this->getSegmentType($segment);
+				
+				// Apply type-specific penalty based on how generic the segment is
+				// Special handling for partial variables with multi-wildcards
+			    if (
+					$segmentType === 'partial_variable' &&
+				    (
+						str_contains($segment, ':**') ||
+						str_contains($segment, ':.*')
+				    )
+			    ) {
+				    $penalties += 200;  // Treat like multi_wildcard_var
+			    } else {
+				    $penalties += $this->getSegmentPenalty($segmentType);
+			    }
+	
+				// Count static segments for bonus calculation
+				if ($segmentType === 'static') {
+					$staticSegments++;
 				}
 			}
 			
@@ -141,7 +146,7 @@
 		}
 		
 		/**
-		 * Classify route type for indexing optimization
+		 * Classify the route type for indexing optimization
 		 * @param array $route Route configuration array with compiled_pattern
 		 * @return string 'wildcard', 'dynamic', or 'static'
 		 */
@@ -164,7 +169,7 @@
 		}
 		
 		/**
-		 * Get penalty points for segment type
+		 * Get penalty points for the segment type
 		 *
 		 * This method assigns penalty scores to different segment types based on
 		 * their specificity. Higher penalties are given to more generic segment
@@ -178,7 +183,7 @@
 		 * - Partial variables: 30 points
 		 * - Static segments: 0 points (most specific)
 		 *
-		 * @param string $segmentType The segment type to get penalty for
+		 * @param string $segmentType The segment type to get a penalty for
 		 * @return int Penalty points to subtract from route priority
 		 */
 		public function getSegmentPenalty(string $segmentType): int {
@@ -208,8 +213,16 @@
 		 * @return bool True if segment contains embedded variables
 		 */
 		public function hasPartialVariable(string $segment): bool {
+			// Check if the segment contains any variable pattern (text within curly braces)
 			$hasVariable = preg_match('/\{[^}]+}/', $segment);
+			
+			// Determine if the entire segment is a complete variable
+			// A complete variable starts with '{' and ends with '}'
 			$isCompleteVariable = !empty($segment) && $segment[0] === '{' && str_ends_with($segment, '}');
+			
+			// Return true only if segment has variables but is NOT a complete variable
+			// This identifies partial variables like "user{id}" or "v{id:int}"
+			// but excludes complete variables like "{id}" or "{name:string}"
 			return $hasVariable && !$isCompleteVariable;
 		}
 		
