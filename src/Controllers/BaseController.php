@@ -16,9 +16,9 @@
 		
 		/**
 		 * The view renderer instance used for rendering templates.
-		 * @var TemplateEngineInterface
+		 * @var TemplateEngineInterface|null
 		 */
-		protected TemplateEngineInterface $view;
+		protected ?TemplateEngineInterface $view;
 		
 		/**
 		 * The EntityManager (ObjectQuel)
@@ -28,12 +28,20 @@
 		
 		/**
 		 * BaseController constructor.
-		 * @param TemplateEngineInterface $templateEngine The template engine to use for rendering
+		 * @param TemplateEngineInterface|null $templateEngine The template engine to use for rendering
 		 * @param EntityManager|null $entityManager
 		 */
-		public function __construct(TemplateEngineInterface $templateEngine, ?EntityManager $entityManager) {
+		public function __construct(?TemplateEngineInterface $templateEngine, ?EntityManager $entityManager) {
 			$this->view = $templateEngine;
 			$this->em = $entityManager;
+		}
+		
+		/**
+		 * Returns true if a template engine was installed, false if not.
+		 * @return bool
+		 */
+		protected function hasTemplateEngine(): bool {
+			return $this->view !== null;
 		}
 		
 		/**
