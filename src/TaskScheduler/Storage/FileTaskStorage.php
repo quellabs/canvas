@@ -407,15 +407,15 @@
 						"Failed to acquire lock within {$this->maxLockWaitTime} seconds after {$attempt} attempts: {$lockFile}"
 					);
 				}
-				
+
 				// Apply exponential backoff with jitter to reduce thundering herd
 				$jitterRange = $currentBackoffMs * self::JITTER_FACTOR;
-				$jitter = mt_rand(-$jitterRange * 1000, $jitterRange * 1000) / 1000;
+				$jitter = mt_rand((int)(-$jitterRange * 1000), (int)($jitterRange * 1000)) / 1000;
 				$sleepTimeMs = max(1, (int)($currentBackoffMs + $jitter));
-				
+
 				// Sleep for the calculated backoff time (convert ms to microseconds)
 				usleep($sleepTimeMs * 1000);
-				
+
 				// Increase backoff for next iteration, capped at maximum
 				$currentBackoffMs = min($currentBackoffMs * self::BACKOFF_MULTIPLIER, self::MAX_BACKOFF_MS);
 			}

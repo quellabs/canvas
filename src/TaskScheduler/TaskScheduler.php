@@ -105,7 +105,7 @@
 				$this->logger->info("Task {$taskName} completed successfully in {$duration}ms");
 				
 				// Return a successful result with timing information
-				return new TaskResult($task, true, $duration);
+				return new TaskResult($task, true, (int)$duration);
 				
 			} catch (TaskTimeoutException $e) {
 				// Handle timeout-specific exceptions from the task runner
@@ -114,14 +114,14 @@
 				$this->logger->warning("{$taskName} timeout: {$e->getMessage()}");
 				
 				// Call timeout-specific handler and return result
-				return $this->handleTaskFailure($task, $e, $duration, 'onTimeout', 'timeout handler');
+				return $this->handleTaskFailure($task, $e, (int)$duration, 'onTimeout', 'timeout handler');
 				
 			} catch (\Exception $e) {
 				// Handle all other exceptions (task logic errors, system failures, etc.)
 				$duration = round((microtime(true) - $startTime) * 1000);
 				
 				// Call general failure handler and return result
-				return $this->handleTaskFailure($task, $e, $duration, 'onFailure', 'failure handler');
+				return $this->handleTaskFailure($task, $e, (int)$duration, 'onFailure', 'failure handler');
 
 			} finally {
 				// Ensure the task is always marked as done, regardless of success or failure.
@@ -135,7 +135,7 @@
 		 * Handle task failure by calling the appropriate handler and returning result
 		 * @param TaskInterface $task The failed task
 		 * @param \Exception $exception The exception that caused the failure
-		 * @param float $duration Task execution duration in milliseconds
+		 * @param int $duration Task execution duration in milliseconds
 		 * @param string $handlerMethod Name of the handler method to call ('onTimeout' or 'onFailure')
 		 * @param string $handlerType Human-readable handler type for error logging
 		 * @return TaskResult Failed task result with exception details
@@ -143,7 +143,7 @@
 		private function handleTaskFailure(
 			TaskInterface $task,
 			\Exception $exception,
-			float $duration,
+			int $duration,
 			string $handlerMethod,
 			string $handlerType
 		): TaskResult {
