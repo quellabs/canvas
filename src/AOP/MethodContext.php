@@ -100,7 +100,7 @@
 			foreach($this->getReflection()->getParameters() as $parameter) {
 				$result[] = [
 					'name'          => $parameter->getName(),
-					'type'          => $parameter->getType() ? $parameter->getType()->getName() : null,
+					'type'          => $parameter->getType() ? (string)$parameter->getType() : null,
 					'default_value' => $parameter->isDefaultValueAvailable() ? $parameter->getDefaultValue() : null
 				];
 			}
