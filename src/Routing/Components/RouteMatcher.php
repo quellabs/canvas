@@ -155,7 +155,7 @@
 				// Get the current route segment definition (contains type and constraints)
 				$segment = $context->getCurrentRouteSegment();
 				
-				// Select appropriate matching strategy based on segment type
+				// Select the appropriate matching strategy based on segment type
 				// (e.g., literal, parameter, wildcard, optional, etc.)
 				$strategy = $this->getStrategy($segment['type']);
 				
@@ -170,8 +170,8 @@
 					return true;
 				}
 				
+				// The segment failed to match - entire route fails
 				if ($result === MatchResult::NO_MATCH) {
-					// The segment failed to match - entire route fails
 					return false;
 				}
 				
