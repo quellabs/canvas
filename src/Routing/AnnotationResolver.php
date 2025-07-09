@@ -168,11 +168,18 @@
 			$penalties = 0;
 			
 			foreach ($segments as $segment) {
-				$segmentType = $this->getSegmentType($segment);
-				$penalties += $this->getSegmentPenalty($segmentType);
-				
-				if ($segmentType === 'static') {
-					$staticSegments++;
+				// Check for partial variables
+				if ($this->hasPartialVariable($segment)) {
+					// Partial variables get medium priority - more specific than full variables
+					// but less specific than static segments
+					$penalties += 30;
+				} else {
+					$segmentType = $this->getSegmentType($segment);
+					$penalties += $this->getSegmentPenalty($segmentType);
+					
+					if ($segmentType === 'static') {
+						$staticSegments++;
+					}
 				}
 			}
 			
@@ -324,7 +331,7 @@
 			while ($this->hasMoreSegments($routePattern, $routeIndex, $requestUrl, $urlIndex)) {
 				$routeSegment = $routePattern[$routeIndex];
 				
-				// Handle multi-segment wildcards
+				// Handle multi-segment wildcards FIRST
 				if ($this->isMultiWildcard($routeSegment)) {
 					// Pass the complete route pattern and current index
 					$result = $this->handleMultiWildcard(
@@ -353,7 +360,7 @@
 					continue;
 				}
 				
-				// Handle single wildcards
+				// Handle single wildcards SECOND
 				if ($this->isSingleWildcard($routeSegment)) {
 					$this->handleSingleWildcard($routeSegment, $requestUrl[$urlIndex], $variables);
 					++$urlIndex;
@@ -361,16 +368,25 @@
 					continue;
 				}
 				
-				// Handle variable segments
+				// Handle partial variables THIRD (before full variables!)
+				if ($this->hasPartialVariable($routeSegment) && !$this->isVariable($routeSegment)) {
+					if ($this->matchPartialVariableSegment($routeSegment, $requestUrl[$urlIndex], $variables)) {
+						++$urlIndex;
+						++$routeIndex;
+						continue;
+					} else {
+						return false; // Partial variable didn't match
+					}
+				}
+				
+				// Handle full variable segments FOURTH
 				if ($this->isVariable($routeSegment)) {
 					$result = $this->handleVariable($routeSegment, $requestUrl, $urlIndex, $variables);
 					
-					// Multi-wildcard variable consumed everything
 					if ($result === true) {
 						return true;
 					}
 					
-					// Validation failed
 					if ($result === false) {
 						return false;
 					}
@@ -380,7 +396,7 @@
 					continue;
 				}
 				
-				// Handle static segments
+				// Handle static segments LAST
 				if ($routeSegment !== $requestUrl[$urlIndex]) {
 					return false;
 				}
@@ -448,18 +464,20 @@
 			// Named multi-wildcard alternative syntax
 			return str_starts_with($segment, '{') && str_ends_with($segment, ':.*}');
 		}
-
+		
 		/**
 		 * Determines if a route segment is a variable placeholder
 		 *
 		 * Variables are enclosed in curly braces: {id}, {slug}, {path:*}, etc.
 		 * They can be simple variables or include patterns after a colon.
+		 * IMPORTANT: This should only return true for FULL variable segments that start with {
 		 *
 		 * @param string $segment Route segment to check
 		 * @return bool True if the segment is a variable placeholder
 		 */
 		private function isVariable(string $segment): bool {
-			return !empty($segment) && $segment[0] === '{';
+			// Must be a complete variable segment (starts with { and ends with })
+			return !empty($segment) && $segment[0] === '{' && str_ends_with($segment, '}');
 		}
 		
 		/**
@@ -781,5 +799,107 @@
 			
 			// And return the found routes
 			return $result;
+		}
+		
+		/**
+		 * Checks if a route segment contains partial variables (like "v{id:int}")
+		 * @param string $segment Route segment to check
+		 * @return bool True if segment contains embedded variables
+		 */
+		private function hasPartialVariable(string $segment): bool {
+			// Must contain at least one {variable} but NOT be a complete variable segment
+			$hasVariable = preg_match('/\{[^}]+}/', $segment);
+			$isCompleteVariable = !empty($segment) && $segment[0] === '{' && str_ends_with($segment, '}');
+			
+			return $hasVariable && !$isCompleteVariable;
+		}
+		
+		/**
+		 * Matches a route segment that contains partial variables against a URL segment
+		 * @param string $routeSegment Route segment like "v{id:int}" or "user-{slug}"
+		 * @param string $urlSegment URL segment to match against
+		 * @param array &$variables Variables array to store captured values
+		 * @return bool True if segment matches and variables are extracted
+		 */
+		private function matchPartialVariableSegment(string $routeSegment, string $urlSegment, array &$variables): bool {
+			// Initialize regex pattern builder and variable tracking
+			$i = 0;
+			$pattern = '';
+			$variableNames = [];
+			$length = strlen($routeSegment);
+			
+			// Parse the route segment character by character
+			while ($i < $length) {
+				if ($routeSegment[$i] === '{') {
+					// Found start of variable placeholder, find the closing brace
+					$start = $i;
+					
+					// Advance past the opening brace
+					$i++;
+					
+					// Find the closing brace
+					while ($i < $length && $routeSegment[$i] !== '}') {
+						$i++;
+					}
+					
+					// Check if we found a closing brace (malformed if not)
+					if ($i >= $length) {
+						return false; // Malformed variable - no closing brace
+					}
+					
+					// Extract variable definition (content between braces)
+					$variableDefinition = substr($routeSegment, $start + 1, $i - $start - 1);
+					
+					// Parse variable name and optional validation pattern
+					if (str_contains($variableDefinition, ':')) {
+						// Variable has a validation pattern (e.g., "id:int")
+						[$varName, $validationPattern] = explode(':', $variableDefinition, 2);
+						
+						$variableNames[] = $varName;
+						
+						// Convert validation pattern to appropriate regex
+						$pattern .= match ($validationPattern) {
+							'int', 'integer', 'numeric' => '(\d+)',                    // Numbers only
+							'alpha' => '([a-zA-Z]+)',                                  // Letters only
+							'alnum', 'alphanumeric' => '([a-zA-Z0-9]+)',              // Letters and numbers
+							'slug' => '([a-z0-9-]+)',                                 // Lowercase letters, numbers, hyphens
+							'uuid' => '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})', // UUID format
+							default => '([^\/]+)'                                      // Any characters except forward slash
+						};
+					} else {
+						// No validation pattern, just capture the variable name
+						$variableNames[] = $variableDefinition;
+						$pattern .= '([^\/]+)'; // Match any characters except forward slash
+					}
+					
+					// Move past the closing brace
+				} else {
+					// Regular character (not part of variable placeholder)
+					$char = $routeSegment[$i];
+				
+					// Escape special regex characters to treat them literally
+					$pattern .= preg_quote($char, '/');
+				}
+				
+				$i++;
+			}
+			
+			// Create final regex pattern with anchors to match entire string
+			$finalPattern = '/^' . $pattern . '$/';
+			
+			// Test if the URL segment matches our generated pattern
+			if (preg_match($finalPattern, $urlSegment, $matches)) {
+				// Extract captured variable values and store them
+				for ($j = 0; $j < count($variableNames); $j++) {
+					// Skip the full match (index 0), start from captured groups (index 1+)
+					if (isset($matches[$j + 1])) {
+						$variables[$variableNames[$j]] = $matches[$j + 1];
+					}
+				}
+				
+				return true; // Successful match
+			}
+			
+			return false; // No match found
 		}
 	}
