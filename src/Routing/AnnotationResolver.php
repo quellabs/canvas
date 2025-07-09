@@ -26,10 +26,10 @@
 		 */
 		public function __construct(Kernel $kernel) {
 			parent::__construct($kernel->getAnnotationsReader());
-
+			
 			$this->kernel = $kernel;
 			$this->debugMode = $kernel->getConfiguration()->getAs('debug_mode', 'bool', false);
-			$this->matchTrailingSlashes = $kernel->getConfiguration()->getAs('match_trailing_slashes', 'bool',false);
+			$this->matchTrailingSlashes = $kernel->getConfiguration()->getAs('match_trailing_slashes', 'bool', false);
 			$this->cacheDirectory = $kernel->getConfiguration()->get('cache_dir', $kernel->getDiscover()->getProjectRoot() . "/storage/cache");
 			$this->cacheFile = 'routes.serialized';
 			
@@ -76,12 +76,12 @@
 		public function resolveAll(Request $request): array {
 			// Build a comprehensive list of all available routes across all controllers
 			$allRoutes = $this->fetchAllRoutes();
-
+			
 			// Split request uri into segments, filtering out empty strings
 			$requestUrl = array_values(array_filter(explode('/', $request->getRequestUri()), function ($e) {
 				return $e !== '';
 			}));
-
+			
 			// Attempt to match the request URL against each route in priority order
 			$result = [];
 			
@@ -159,7 +159,7 @@
 			$priority = 1000;
 			
 			// Remove leading slash and split into segments
-			$segments = array_filter(explode('/', ltrim($routePath, '/')), function($segment) {
+			$segments = array_filter(explode('/', ltrim($routePath, '/')), function ($segment) {
 				return $segment !== '';
 			});
 			
@@ -207,11 +207,11 @@
 		 */
 		private function getSegmentType(string $segment): string {
 			$segmentTypes = [
-				'multi_wildcard' => fn($s) => $s === '**',
-				'single_wildcard' => fn($s) => $s === '*',
+				'multi_wildcard'     => fn($s) => $s === '**',
+				'single_wildcard'    => fn($s) => $s === '*',
 				'multi_wildcard_var' => fn($s) => str_ends_with($s, ':**}') || str_ends_with($s, ':.*}'),
-				'variable' => fn($s) => !empty($s) && $s[0] === '{',
-				'static' => fn($s) => true // fallback
+				'variable'           => fn($s) => !empty($s) && $s[0] === '{',
+				'static'             => fn($s) => true // fallback
 			];
 			
 			foreach ($segmentTypes as $type => $checker) {
@@ -625,15 +625,11 @@
 		 * @return bool True if segment matches the pattern
 		 */
 		private function validateSegment(string $segment, string $pattern): bool {
-			return match ($pattern) {
-				'numeric', 'int', 'integer' => ctype_digit($segment),
-				'alpha' => ctype_alpha($segment),
-				'alnum', 'alphanumeric' => ctype_alnum($segment),
-				'slug' => preg_match('/^[a-z0-9-]+$/', $segment),
-				'uuid' => preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $segment),
-				'email' => filter_var($segment, FILTER_VALIDATE_EMAIL) !== false,
-				default => true // Unknown patterns always pass (for backward compatibility)
-			};
+			// Get the regex pattern for this type
+			$regex = $this->resolveTypeToRegex($pattern);
+			
+			// Test the segment against the pattern
+			return preg_match('/^' . $regex . '$/', $segment) === 1;
 		}
 		
 		/**
@@ -960,21 +956,59 @@
 		
 		/**
 		 * Resolves a route type to a regex pattern.
-		 * Also supports custom regex like "regex([a-z]{3,5})".
+		 * Uses only predefined, safe patterns for security.
 		 * @param string $type
 		 * @return string
 		 */
 		private function resolveTypeToRegex(string $type): string {
-			if (str_starts_with($type, 'regex(') && str_ends_with($type, ')')) {
-				return substr($type, 6, -1); // Custom regex inside regex(...)
-			}
-			
 			return match ($type) {
-				'int', 'integer', 'numeric' => '\d+',
+				// Numeric types
+				'int', 'integer' => '\d+',
+				'float', 'decimal' => '\d+\.\d+',
+				'number' => '\d+(\.\d+)?',
+				
+				// Text types
 				'alpha' => '[a-zA-Z]+',
 				'alnum', 'alphanumeric' => '[a-zA-Z0-9]+',
+				'word' => '\w+',
 				'slug' => '[a-zA-Z0-9-]+',
+				
+				// Identifiers
 				'uuid' => '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',
+				
+				// Date/Time
+				'date' => '\d{4}-\d{2}-\d{2}',
+				'year' => '\d{4}',
+				'month' => '(0[1-9]|1[0-2])',
+				'day' => '(0[1-9]|[12]\d|3[01])',
+				'time' => '\d{2}:\d{2}(:\d{2})?',
+				
+				// Web-specific
+				'email' => '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+				'domain' => '[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+				'url' => 'https?://[^\s/$.?#].[^\s]*',
+				'path' => '[a-zA-Z0-9\-_.\/]+',
+				'filename' => '[a-zA-Z0-9\-_.]+',
+				
+				// Version/Code patterns
+				'version' => 'v?\d+\.\d+(\.\d+)?',
+				'semver' => '\d+\.\d+\.\d+(-[a-zA-Z0-9\-]+)?',
+				'hex' => '[a-fA-F0-9]+',
+				'base64' => '[a-zA-Z0-9+/=]+',
+				
+				// Common business patterns
+				'sku' => '[A-Z0-9\-]+',
+				'isbn' => '\d{3}-\d{1,5}-\d{1,7}-\d{1,7}-\d{1}',
+				'phone' => '\+?[0-9\-\s\(\)]+',
+				'postal' => '[A-Z0-9\s\-]+',
+				
+				// Locale/Language
+				'locale' => '[a-z]{2}(_[A-Z]{2})?',
+				'language' => '[a-z]{2,3}',
+				'country' => '[A-Z]{2}',
+				'currency' => '[A-Z]{3}',
+				
+				// Default: match anything except slash
 				default => '[^\/]+',
 			};
 		}
