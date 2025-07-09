@@ -18,9 +18,6 @@
 			// Numeric types
 			'int'          => '\d+',
 			'integer'      => '\d+',
-			'float'        => '\d+\.\d+',
-			'decimal'      => '\d+\.\d+',
-			'number'       => '\d+(\.\d+)?',
 			
 			// Text types
 			'alpha'        => '[a-zA-Z]+',
@@ -32,23 +29,10 @@
 			// Identifiers
 			'uuid'         => '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',
 			
-			// Date/Time
-			'date'         => '\d{4}-\d{2}-\d{2}',
-			'year'         => '\d{4}',
-			'month'        => '(0[1-9]|1[0-2])',
-			'day'          => '(0[1-9]|[12]\d|3[01])',
-			'time'         => '\d{2}:\d{2}(:\d{2})?',
-			
 			// Web-specific
 			'email'        => '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
-			'domain'       => '[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
-			'url'          => 'https?://[^\s/$.?#].[^\s]*',
-			'path'         => '[a-zA-Z0-9\-_.\/]+',
-			'filename'     => '[a-zA-Z0-9\-_.]+',
 			
 			// Version/Code patterns
-			'version'      => 'v?\d+\.\d+(\.\d+)?',
-			'semver'       => '\d+\.\d+\.\d+(-[a-zA-Z0-9\-]+)?',
 			'hex'          => '[a-fA-F0-9]+',
 			'base64'       => '[a-zA-Z0-9+/=]+',
 			
@@ -228,23 +212,25 @@
 					// Build a regex pattern based on variable type
 					$pattern .= $this->buildVariablePattern($varInfo);
 					
-				} else {
-					// Handle literal character
-					$this->processLiteralCharacter(
-						$currentChar,
-						$pattern,
-						$literalPrefix,
-						$literalSuffix,
-						$hasFoundVariable
-					);
-					
-					$position++;
+					// Next iteration
+					continue;
 				}
+				
+				// Handle literal character
+				$this->processLiteralCharacter(
+					$currentChar,
+					$pattern,
+					$literalPrefix,
+					$literalSuffix,
+					$hasFoundVariable
+				);
+				
+				$position++;
 			}
 			
 			// Return compiled pattern and variable names
 			return [
-				'pattern'        => $pattern,
+				'pattern'        => '/^' . $pattern . '$/',
 				'variables'      => $variableNames,
 				'literal_prefix' => $literalPrefix,
 				'literal_suffix' => $literalSuffix,
@@ -281,7 +267,6 @@
 		
 		/**
 		 * Builds the regex pattern for a variable based on its type.
-		 *
 		 * @param array $varInfo Variable information containing name, regex, and type flags
 		 * @return string The regex pattern for this variable
 		 */
