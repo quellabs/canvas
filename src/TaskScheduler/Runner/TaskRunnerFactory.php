@@ -27,7 +27,7 @@
 		public static function create(int $timeout, LoggerInterface $logger): TaskRunnerInterface {
 			// Return no-timeout strategy when timeout is disabled (0 seconds)
 			if ($timeout == 0) {
-				return new StrategyNoTimeout($timeout, $logger);
+				return new StrategyNoTimeout($logger);
 			}
 			
 			// Prefer PCNTL-based strategy if system supports process control functions
