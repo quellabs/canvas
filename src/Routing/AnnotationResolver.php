@@ -160,6 +160,7 @@
 		/**
 		 * Get or build route index for fast lookups
 		 * @return array Complete route index ready for lookups
+		 * @throws AnnotationReaderException
 		 */
 		private function getRouteIndex(): array {
 			// Return cached index if available
@@ -168,20 +169,12 @@
 			}
 			
 			// Get all routes (from cache or fresh build)
-			$allRoutes = $this->fetchAllRoutesOptimized();
+			$allRoutes = $this->cacheManager->getCachedRoutes(function() {
+				return $this->routeDiscovery->buildRoutesFromControllers();
+			});
 			
 			// Build and cache the index
 			return $this->routeIndex = $this->indexBuilder->buildRouteIndex($allRoutes);
-		}
-		
-		/**
-		 * Fetch all routes using optimized caching strategy
-		 * @return array All compiled routes ready for matching
-		 */
-		private function fetchAllRoutesOptimized(): array {
-			return $this->cacheManager->getCachedRoutes(function () {
-				return $this->routeDiscovery->buildRoutesFromControllers();
-			});
 		}
 		
 		/**

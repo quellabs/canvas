@@ -89,6 +89,7 @@
 							// Handle edge case of root route ("/")
 							$index['static'][''][] = $route;
 						}
+						
 						break;
 					
 					case 'wildcard':

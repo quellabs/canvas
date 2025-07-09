@@ -85,13 +85,14 @@
 		 * @param string $routePath The original route path pattern (e.g., "/user/{id}/posts")
 		 * @return array Array of compiled segment objects with pre-processed matching information
 		 */
-		public function preCompileRoute(string $routePath): array {
+		public function compileRoute(string $routePath): array {
 			// Parse the route path into individual segments
 			// e.g., "/user/{id}/posts" becomes ["user", "{id}", "posts"]
 			$segments = $this->parseRoutePath($routePath);
-			$compiledSegments = [];
 			
 			// Process each segment and compile it for optimal matching
+			$compiledSegments = [];
+
 			foreach ($segments as $segment) {
 				// Determine the type of this segment (static, variable, wildcard, etc.)
 				$type = $this->segmentAnalyzer->getSegmentType($segment);
@@ -113,7 +114,7 @@
 						// Handle variable segments like {id}, {slug}, {id:int}, {path:**}
 						$compiledSegment['variable_name'] = $this->segmentAnalyzer->extractVariableName($segment);
 						
-						// Check if variable has a type constraint (e.g., {id:int})
+						// Check if the variable has a type constraint (e.g., {id:int})
 						if (str_contains($segment, ':')) {
 							// Split variable name and type constraint
 							$parts = explode(':', trim($segment, '{}'), 2);
@@ -128,6 +129,7 @@
 							// Matches any characters except forward slash
 							$compiledSegment['pattern'] = '[^\/]+';
 						}
+						
 						break;
 					
 					case 'single_wildcard':
@@ -159,6 +161,7 @@
 							$compiledSegment['compiled_regex'] = $result[0];    // Regex pattern
 							$compiledSegment['variable_names'] = $result[1];    // Array of variable names
 						}
+						
 						break;
 				}
 				
@@ -240,8 +243,12 @@
 		 * @return array Clean route segments like ['users', '{id}', 'posts']
 		 */
 		public function parseRoutePath(string $routePath): array {
+			// Remove leading slash and split the path into segments by '/'
+			// ltrim() removes any leading '/' characters to normalize the input
 			$segments = explode('/', ltrim($routePath, '/'));
 			
+			// Filter out empty segments that might occur from double slashes or trailing slashes
+			// This ensures we only keep meaningful path segments
 			return array_filter($segments, function ($segment) {
 				return $segment !== '';
 			});

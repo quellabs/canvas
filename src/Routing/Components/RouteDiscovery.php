@@ -49,6 +49,7 @@
 		 * route cache needs to be rebuilt.
 		 *
 		 * @return array Array of compiled route definitions sorted by priority (highest first)
+		 * @throws AnnotationReaderException
 		 */
 		public function buildRoutesFromControllers(): array {
 			// Fetch the controller directory
@@ -65,10 +66,10 @@
 				// Extract route definitions from the current controller
 				$controllerRoutes = $this->getRoutesFromController($controller);
 				
-				// Pre-compile route patterns for performance optimization
+				// Compile route patterns for performance optimization
 				foreach ($controllerRoutes as &$route) {
 					// Store the compiled pattern alongside the original route data
-					$route['compiled_pattern'] = $this->patternCompiler->preCompileRoute($route['route_path']);
+					$route['compiled_pattern'] = $this->patternCompiler->compileRoute($route['route_path']);
 				}
 				
 				// Merge the processed routes from this controller into the main result
@@ -98,7 +99,7 @@
 			$routes = [];
 			
 			try {
-				// Get the route prefix for this controller (e.g., from class-level Route annotation)
+				// Get the route prefix for this controller (e.g., from class-level RoutePrefix annotation)
 				$routePrefix = $this->getRoutePrefix($controller);
 				
 				// Extract all route annotations from public methods in this controller
@@ -204,23 +205,19 @@
 		 * Get route prefix from controller class annotation
 		 * @param string $controller Fully qualified controller class name
 		 * @return string Route prefix (without leading slash)
+		 * @throws AnnotationReaderException
 		 */
 		public function getRoutePrefix(string $controller): string {
-			try {
-				// Get class-level Route annotations
-				$classAnnotations = $this->kernel->getAnnotationsReader()->getClassAnnotations($controller, RoutePrefix::class);
-				
-				// Use the first Route annotation found as the prefix
-				if (!$classAnnotations->isEmpty()) {
-					$routeAnnotation = $classAnnotations[0];
-					return ltrim($routeAnnotation->getRoute(), '/');
-				}
-			} catch (AnnotationReaderException $e) {
-				// Log error but continue with empty prefix
-				error_log("RouteDiscovery: Error reading class annotations for {$controller}: " . $e->getMessage());
+			// Get class-level Route annotations
+			$classAnnotations = $this->kernel->getAnnotationsReader()->getClassAnnotations($controller, RoutePrefix::class);
+			
+			// Use the first Route annotation found as the prefix
+			if ($classAnnotations->isEmpty()) {
+				return '';
 			}
 			
-			return '';
+			// Use the first RoutePrefix annotation found as the prefix
+			return ltrim($classAnnotations[0]->getRoutePrefix(), '/');
 		}
 		
 		/**
@@ -264,7 +261,7 @@
 						continue;
 					}
 					
-					// Use the annotations reader to extract Route annotations from this method
+					// Use the annotation reader to extract Route annotations from this method
 					$annotations = $this->kernel->getAnnotationsReader()->getMethodAnnotations(
 						$controller,
 						$method->getName(),
@@ -297,7 +294,7 @@
 		 * @return string Complete route path
 		 */
 		private function buildCompleteRoutePath(string $prefix, string $routePath): string {
-			// Handle root route case
+			// Handle the root route case
 			if ($routePath === '/') {
 				return $prefix ? "/{$prefix}" : '/';
 			}
