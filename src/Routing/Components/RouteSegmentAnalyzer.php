@@ -40,13 +40,13 @@
 				// Anonymous single wildcard: matches exactly one segment
 				'single_wildcard'    => fn($s) => $s === '*',
 				
-				// Named multi-wildcard variables: {path:**} or {files:.*}
-				// These capture multiple segments into a named variable
-				'multi_wildcard_var' => fn($s) => str_ends_with($s, ':**}') || str_ends_with($s, ':.*}'),
-				
 				// Partial variables: segments mixing static text with variables
 				// e.g., "user-{id}-profile" or "file.{name}.{ext}"
 				'partial_variable'   => fn($s) => $this->hasPartialVariable($s) && !$this->isVariable($s),
+				
+				// Named multi-wildcard variables: {path:**} or {files:.*}
+				// These capture multiple segments into a named variable
+				'multi_wildcard_var' => fn($s) => str_ends_with($s, ':**}') || str_ends_with($s, ':.*}'),
 				
 				// Regular variables: {id}, {slug}, {category:int}
 				// Identified by starting with opening brace
