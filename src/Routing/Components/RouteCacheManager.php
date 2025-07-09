@@ -68,42 +68,28 @@
 				return $routeBuilder();
 			}
 			
+			// Check if controller files have been modified since last cache
+			// This must happen BEFORE trying to retrieve from cache
+			if ($this->haveControllersChanged()) {
+				// Controllers changed, clear related cache and rebuild
+				$this->clearCache();
+			}
+			
 			// Use FileCache remember() for intelligent caching with concurrency protection
 			return $this->cache->remember(
 				self::ROUTES_CACHE_KEY,
 				$this->defaultTtl,
 				function () use ($routeBuilder) {
-					// Check if controller files have been modified since last cache
-					if ($this->haveControllersChanged()) {
-						// Controllers changed, clear related cache and rebuild
-						$this->clearCache();
-					}
-					
-					// Build and return fresh routes
+					// Build fresh routes
 					$routes = $routeBuilder();
 					
 					// Cache the current controller modification time
 					$this->cacheControllerModificationTime();
 					
+					// Return the routes
 					return $routes;
 				}
 			);
-		}
-		
-		/**
-		 * Cache compiled routes directly
-		 * @param array $routes Compiled routes array to cache
-		 * @return bool True if caching succeeded, false otherwise
-		 */
-		public function cacheRoutes(array $routes): bool {
-			if ($this->debugMode) {
-				return false;
-			}
-			
-			// Cache both routes and current controller modification time
-			$routesCached = $this->cache->set(self::ROUTES_CACHE_KEY, $routes, $this->defaultTtl);
-			$this->cacheControllerModificationTime();
-			return $routesCached;
 		}
 		
 		/**
@@ -154,26 +140,7 @@
 				'controllers_changed'            => $this->haveControllersChanged()
 			];
 		}
-		
-		/**
-		 * Warm up the cache with provided routes
-		 * @param array $routes Routes to cache
-		 * @return bool True if cache warming succeeded
-		 */
-		public function warmCache(array $routes): bool {
-			return $this->cacheRoutes($routes);
-		}
-		
-		/**
-		 * Force cache refresh by clearing and rebuilding
-		 * @param callable $routeBuilder Callback to build fresh routes
-		 * @return array Freshly built routes
-		 */
-		public function refreshCache(callable $routeBuilder): array {
-			$this->clearCache();
-			return $this->getCachedRoutes($routeBuilder);
-		}
-		
+
 		/**
 		 * Get last modification time of controller files
 		 * @return int Unix timestamp of the most recently modified controller file
