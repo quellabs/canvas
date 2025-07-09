@@ -92,7 +92,7 @@
 			
 			// Process each segment and compile it for optimal matching
 			$compiledSegments = [];
-
+			
 			foreach ($segments as $segment) {
 				// Determine the type of this segment (static, variable, wildcard, etc.)
 				$type = $this->segmentAnalyzer->getSegmentType($segment);
@@ -186,85 +186,69 @@
 		
 		/**
 		 * Compiles a route segment with inline variables into a regex pattern.
-		 * @param string $segment The route segment to compile
+		 *
+		 * Takes a route segment like "/users/{id:\d+}/posts/{slug}" and converts it
+		 * into a regex pattern for matching URLs, extracting variable names and their
+		 * corresponding regex patterns.
+		 *
+		 * @param string $segment The route segment to compile (e.g., "/users/{id:\d+}")
 		 * @return array|null Returns [$pattern, $variableNames] or null on failure
 		 */
 		public function compilePartialSegmentPattern(string $segment): ?array {
-			// Initialize position tracker for character-by-character parsing
-			$position = 0;
-			
-			// Build the regex pattern as we process the segment
 			$pattern = '';
-			
-			// Track variable names found in the segment for later reference
-			$variableNames = [];
-			$variableInfo = [];
-			
-			// Cache segment length to avoid repeated strlen() calls
-			$segmentLength = strlen($segment);
-			
-			// Track literal parts
+			$position = 0;
 			$literalPrefix = '';
 			$literalSuffix = '';
+			$variableNames = [];
 			$hasFoundVariable = false;
+			$variableInfo = [];
+			$segmentLength = strlen($segment);
 			
 			// Process each character in the segment
 			while ($position < $segmentLength) {
-				// Check if we've found the start of a variable definition
-				if ($segment[$position] === '{') {
-					// Extract the complete variable content between { and }
+				$currentChar = $segment[$position];
+				
+				if ($currentChar === '{') {
+					// Found start of variable definition - extract complete variable content
 					$variableContent = $this->extractVariableContent($segment, $position);
 					
-					// If variable extraction failed (malformed syntax), return null
+					// Skip route in case of malformed variable syntax (e.g., unclosed brace)
 					if ($variableContent === null) {
 						return null;
 					}
 					
-					// Parse the variable definition to get name and regex pattern
+					// Parse variable definition to extract name and regex pattern
 					$varInfo = $this->parseVariableDefinition($variableContent);
 					
-					// Store the variable name for the return array
+					// Store variable information
 					$hasFoundVariable = true;
 					$variableNames[] = $varInfo['name'];
 					$variableInfo[] = $varInfo;
 					
-					// For wildcard variables in partial segments, we need special handling
-					if (!$varInfo['is_wildcard']) {
-						// Regular variable
-						$pattern .= '(?<' . preg_quote($varInfo['name'], '/') . '>' . $varInfo['regex'] . ')';
-					} elseif ($varInfo['is_multi_wildcard']) {
-						// Multi-wildcard in partial segment - this gets special treatment
-						// The pattern here is just for validation, actual matching is handled differently
-						$pattern .= '(?<' . preg_quote($varInfo['name'], '/') . '>.*?)';
-					} else {
-						// Single wildcard
-						$pattern .= '(?<' . preg_quote($varInfo['name'], '/') . '>[^\/]*)';
-					}
-				} else {
-					// Literal character
-					$char = $segment[$position];
-					$pattern .= preg_quote($char, '/');
+					// Build a regex pattern based on variable type
+					$pattern .= $this->buildVariablePattern($varInfo);
 					
-					// Track literal prefix/suffix
-					if (!$hasFoundVariable) {
-						$literalPrefix .= $char;
-					} else {
-						$literalSuffix .= $char;
-					}
+				} else {
+					// Handle literal character
+					$this->processLiteralCharacter(
+						$currentChar,
+						$pattern,
+						$literalPrefix,
+						$literalSuffix,
+						$hasFoundVariable
+					);
 					
 					$position++;
 				}
 			}
 			
-			// Return the complete regex pattern with anchors and the variable names
-			// ^...$ ensures the pattern matches the entire string
-			// /u flag enables Unicode support
+			// Return compiled pattern and variable names
 			return [
-				'pattern'        => '/^' . $pattern . '$/u',
+				'pattern'        => $pattern,
 				'variables'      => $variableNames,
-				'variable_info'  => $variableInfo,
-				'literal_prefix' => $literalPrefix ?: null,
-				'literal_suffix' => $literalSuffix ?: null
+				'literal_prefix' => $literalPrefix,
+				'literal_suffix' => $literalSuffix,
+				'variable_info'  => $variableInfo
 			];
 		}
 		
@@ -292,6 +276,57 @@
 			return array_filter($segments, function ($segment) {
 				return $segment !== '';
 			});
+		}
+		
+		
+		/**
+		 * Builds the regex pattern for a variable based on its type.
+		 *
+		 * @param array $varInfo Variable information containing name, regex, and type flags
+		 * @return string The regex pattern for this variable
+		 */
+		private function buildVariablePattern(array $varInfo): string {
+			$escapedName = preg_quote($varInfo['name'], '/');
+			
+			if (!$varInfo['is_wildcard']) {
+				// Regular variable with custom or default regex
+				return "(?<{$escapedName}>{$varInfo['regex']})";
+			}
+			
+			if ($varInfo['is_multi_wildcard']) {
+				// Multi-wildcard (**) - matches across path segments
+				// Note: In partial segments, this requires special handling in the router
+				return "(?<{$escapedName}>.*?)";
+			}
+			
+			// Single wildcard (*) - matches within single path segment
+			return "(?<{$escapedName}>[^/]*)";
+		}
+		
+		/**
+		 * Processes a literal character and updates the pattern and prefix/suffix tracking.
+		 * @param string $char The literal character to process
+		 * @param string &$pattern The pattern being built (passed by reference)
+		 * @param string &$literalPrefix The literal prefix (passed by reference)
+		 * @param string &$literalSuffix The literal suffix (passed by reference)
+		 * @param bool $hasFoundVariable Whether we've encountered a variable yet
+		 */
+		private function processLiteralCharacter(
+			string $char,
+			string &$pattern,
+			string &$literalPrefix,
+			string &$literalSuffix,
+			bool   $hasFoundVariable
+		): void {
+			// Escape special regex characters
+			$pattern .= preg_quote($char, '/');
+			
+			// Track literal parts for potential optimization
+			if (!$hasFoundVariable) {
+				$literalPrefix .= $char;
+			} else {
+				$literalSuffix .= $char;
+			}
 		}
 		
 		/**
@@ -382,12 +417,12 @@
 			}
 			
 			return [
-				'name' => $cleanName,
-				'clean_name' => $cleanName,
-				'regex' => $regex,
-				'is_wildcard' => $isWildcard,
+				'name'              => $cleanName,
+				'clean_name'        => $cleanName,
+				'regex'             => $regex,
+				'is_wildcard'       => $isWildcard,
 				'is_multi_wildcard' => $isMultiWildcard,
-				'original_content' => $content
+				'original_content'  => $content
 			];
 		}
 	}

@@ -224,16 +224,30 @@
 		
 		/**
 		 * Extracts the variable name from a route segment
-		 * @param string $segment Route segment containing variable
-		 * @return string The extracted variable name
+		 * @param string $segment Route segment containing variable (e.g., "{id}", "v{path:**}", "user-{id:int}")
+		 * @return string The extracted variable name (e.g., "id", "path", "id")
 		 */
 		public function extractVariableName(string $segment): string {
-			$variableName = trim($segment, '{}');
+			// Handle partial segments with mixed literal text and variables
+			// Use regex to find the first variable definition within braces
+			if (preg_match('/\{([^}]+)}/', $segment, $matches)) {
+				// Extract content from inside the first set of braces
+				// For "v{path:**}" this gets "path:**"
+				$variableName = $matches[1];
+			} else {
+				// Handle simple variable segments that are entirely wrapped in braces
+				// For "{id}" this removes the surrounding braces to get "id"
+				$variableName = trim($segment, '{}');
+			}
 			
+			// Check if the variable has a type constraint (e.g., "id:int" or "path:**")
+			// If not, return the variable name as-is
 			if (!str_contains($variableName, ':')) {
 				return $variableName;
 			}
 			
+			// Split on the first colon to separate variable name from type constraint
+			// For "path:**" this returns "path", ignoring the ":**" wildcard type
 			return explode(':', $variableName, 2)[0];
 		}
 		
