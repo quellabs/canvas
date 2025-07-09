@@ -2,6 +2,7 @@
 	
 	namespace Quellabs\Canvas\Routing;
 	
+	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Canvas\Kernel;
 	use Symfony\Component\HttpFoundation\Request;
 	use Quellabs\Canvas\Cache\Foundation\FileCache;
@@ -113,6 +114,7 @@
 		/**
 		 * Get comprehensive routing statistics for debugging
 		 * @return array Comprehensive routing statistics
+		 * @throws AnnotationReaderException
 		 */
 		public function getRoutingStatistics(): array {
 			return [
