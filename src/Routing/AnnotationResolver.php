@@ -2,10 +2,16 @@
 	
 	namespace Quellabs\Canvas\Routing;
 	
-	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
 	use Quellabs\Canvas\Kernel;
-	use Quellabs\Canvas\Cache\Foundation\FileCache;
 	use Symfony\Component\HttpFoundation\Request;
+	use Quellabs\Canvas\Cache\Foundation\FileCache;
+	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
+	use Quellabs\Canvas\Routing\Components\RouteCacheManager;
+	use Quellabs\Canvas\Routing\Components\RouteDiscovery;
+	use Quellabs\Canvas\Routing\Components\RouteIndexBuilder;
+	use Quellabs\Canvas\Routing\Components\RouteMatcher;
+	use Quellabs\Canvas\Routing\Components\RoutePatternCompiler;
+	use Quellabs\Canvas\Routing\Components\RouteSegmentAnalyzer;
 	
 	/**
 	 * AnnotationResolver (Refactored)
@@ -30,8 +36,6 @@
 		private string $controllerDirectory;
 		
 		// Component dependencies
-		private RouteSegmentAnalyzer $segmentAnalyzer;
-		private RoutePatternCompiler $patternCompiler;
 		private RouteMatcher $routeMatcher;
 		private RouteIndexBuilder $indexBuilder;
 		private RouteDiscovery $routeDiscovery;
@@ -42,10 +46,6 @@
 		
 		/**
 		 * AnnotationResolver Constructor
-		 *
-		 * Initializes all routing components and establishes their dependencies.
-		 * The dependency injection pattern makes the system testable and modular.
-		 *
 		 * @param Kernel $kernel Application kernel for configuration and services
 		 */
 		public function __construct(Kernel $kernel) {
@@ -74,64 +74,44 @@
 		}
 		
 		/**
-		 * Resolves an HTTP request to find all matching routes
-		 *
-		 * This method implements the complete resolution pipeline:
-		 * 1. Parse and cache request URL
-		 * 2. Get route index (with caching)
-		 * 3. Try static routes first (O(1) lookup)
-		 * 4. Try dynamic routes (filtered search)
-		 * 5. Try wildcard routes (last resort)
-		 *
-		 * @param Request $request The incoming HTTP request to resolve
-		 * @return array Returns all matched route info or empty array if no matches
+		 * Resolves all matching routes for a given HTTP request using a tiered matching strategy.
+		 * Tries static routes first, then dynamic routes, then wildcard routes as fallback.
+		 * @param Request $request The HTTP request object
+		 * @return array Array of matched route objects, empty if no matches found
 		 */
 		public function resolveAll(Request $request): array {
 			$requestUrl = $this->parseRequestUrl($request->getRequestUri());
-			$requestMethod = $request->getMethod();
-			$originalUrl = $request->getRequestUri();
 			$routeIndex = $this->getRouteIndex();
 			
-			// Define route matching function for reusability
-			$matchRoutes = function (array $routes) use ($requestUrl, $originalUrl, $requestMethod) {
-				return array_values(array_filter(
-					array_map(
-						fn($route) => $this->routeMatcher->matchRoute($route, $requestUrl, $originalUrl, $requestMethod),
-						$routes
-					)
-				));
-			};
+			// Helper function to match routes and filter out nulls
+			$matchRoutes = fn(array $routes) => array_values(array_filter(
+				array_map(
+					fn($route) => $this->routeMatcher->matchRoute($route, $requestUrl, $request->getRequestUri(), $request->getMethod()),
+					$routes
+				)
+			));
 			
 			// Try static routes first (fastest lookup)
 			$firstSegment = $requestUrl[0] ?? '';
 			
 			if (isset($routeIndex['static'][$firstSegment])) {
-				$result = $matchRoutes($routeIndex['static'][$firstSegment]);
-				
-				if (!empty($result)) {
+				if ($result = $matchRoutes($routeIndex['static'][$firstSegment])) {
 					return $result;
 				}
 			}
 			
-			// Try dynamic routes (filtered by priority)
-			if (!empty($routeIndex['dynamic'])) {
-				$result = $matchRoutes($routeIndex['dynamic']);
-				
-				if (!empty($result)) {
+			// Try dynamic routes, then wildcard routes
+			foreach (['dynamic', 'wildcard'] as $type) {
+				if (!empty($routeIndex[$type]) && $result = $matchRoutes($routeIndex[$type])) {
 					return $result;
 				}
 			}
 			
-			// Try wildcard routes (last resort)
-			return $matchRoutes($routeIndex['wildcard'] ?? []);
+			return [];
 		}
 		
 		/**
 		 * Get comprehensive routing statistics for debugging
-		 *
-		 * This method provides detailed information about the routing system
-		 * state, which is invaluable for debugging and performance analysis.
-		 *
 		 * @return array Comprehensive routing statistics
 		 */
 		public function getRoutingStatistics(): array {
@@ -153,49 +133,17 @@
 		
 		/**
 		 * Clear all caches and force rebuild
-		 *
-		 * This method clears all internal caches and forces a complete rebuild
-		 * of the routing system. Useful during development or deployment.
-		 *
 		 * @return bool True if all caches were cleared successfully
 		 */
 		public function clearAllCaches(): bool {
 			$this->routeIndex = [];
-			
 			$this->indexBuilder->clearIndex();
 			$this->routeDiscovery->clearReflectionCache();
-			
 			return $this->cacheManager->clearCache();
 		}
 		
 		/**
-		 * Warm up all caches for optimal performance
-		 *
-		 * This method pre-builds all caches and indexes, which is useful
-		 * for deployment scenarios where you want to eliminate cold start penalties.
-		 *
-		 * @return bool True if cache warming succeeded
-		 */
-		public function warmCaches(): bool {
-			try {
-				// Build fresh routes and cache them
-				$routes = $this->fetchAllRoutesOptimized();
-				
-				// Build route index
-				$this->routeIndex = $this->indexBuilder->buildRouteIndex($routes);
-				
-				// Warm route cache
-				return $this->cacheManager->warmCache($routes);
-				
-			} catch (\Exception $e) {
-				error_log("AnnotationResolver: Cache warming failed: " . $e->getMessage());
-				return false;
-			}
-		}
-		
-		/**
 		 * Parse request URL into segments
-		 *
 		 * @param string $requestUri Raw request URI
 		 * @return array Parsed URL segments
 		 */
@@ -209,10 +157,6 @@
 		
 		/**
 		 * Get or build route index for fast lookups
-		 *
-		 * This method coordinates between the index builder and cache manager
-		 * to provide the most efficient route lookup structure possible.
-		 *
 		 * @return array Complete route index ready for lookups
 		 */
 		private function getRouteIndex(): array {
@@ -225,18 +169,11 @@
 			$allRoutes = $this->fetchAllRoutesOptimized();
 			
 			// Build and cache the index
-			$this->routeIndex = $this->indexBuilder->buildRouteIndex($allRoutes);
-			
-			return $this->routeIndex;
+			return $this->routeIndex = $this->indexBuilder->buildRouteIndex($allRoutes);
 		}
 		
 		/**
 		 * Fetch all routes using optimized caching strategy
-		 *
-		 * This method coordinates with the cache manager to implement
-		 * an intelligent caching strategy that balances performance
-		 * with cache freshness.
-		 *
 		 * @return array All compiled routes ready for matching
 		 */
 		private function fetchAllRoutesOptimized(): array {
@@ -247,7 +184,6 @@
 		
 		/**
 		 * Initialize configuration from kernel
-		 *
 		 * @return void
 		 */
 		private function initializeConfiguration(): void {
@@ -261,44 +197,70 @@
 		
 		/**
 		 * Initialize all routing components with proper dependencies
-		 *
+		 * Sets up the complete routing system including analyzers, matchers,
+		 * indexing services, and cache management
 		 * @return void
 		 */
 		private function initializeComponents(): void {
 			// Initialize core analyzers and compilers
-			$this->segmentAnalyzer = new RouteSegmentAnalyzer();
-			$this->patternCompiler = new RoutePatternCompiler($this->segmentAnalyzer);
+			// RouteSegmentAnalyzer breaks down route patterns into analyzable segments
+			$segmentAnalyzer = new RouteSegmentAnalyzer();
+			
+			// RoutePatternCompiler converts route patterns into matchable expressions
+			// Depends on segment analyzer for proper pattern parsing
+			$patternCompiler = new RoutePatternCompiler($segmentAnalyzer);
 			
 			// Initialize matcher with configuration
+			// RouteMatcher handles the actual matching of incoming requests to routes
+			// matchTrailingSlashes determines if /path/ and /path should be treated as equivalent
 			$this->routeMatcher = new RouteMatcher($this->matchTrailingSlashes);
 			
 			// Initialize indexing and discovery services
-			$this->indexBuilder = new RouteIndexBuilder($this->segmentAnalyzer);
+			// RouteIndexBuilder creates optimized indexes for faster route lookups
+			// Uses segment analyzer to understand route structure for efficient indexing
+			$this->indexBuilder = new RouteIndexBuilder($segmentAnalyzer);
+			
+			// RouteDiscovery automatically finds and registers routes from controllers
+			// Requires kernel for dependency injection, analyzer for route parsing,
+			// and compiler for converting discovered routes into usable patterns
 			$this->routeDiscovery = new RouteDiscovery(
-				$this->kernel,
-				$this->segmentAnalyzer,
-				$this->patternCompiler
+				$this->kernel,           // Application kernel for DI container access
+				$segmentAnalyzer,        // Analyzes route segments during discovery
+				$patternCompiler         // Compiles discovered routes into patterns
 			);
 			
 			// Initialize cache manager with file cache
+			// FileCache provides persistent storage for compiled routes
+			// Uses specified cache directory and 'routes' namespace for organization
 			$fileCache = new FileCache($this->cacheDirectory, 'routes');
+			
+			// RouteCacheManager coordinates caching of compiled routes and indexes
+			// In debug mode, cache is bypassed or frequently invalidated
+			// Controller directory is monitored for changes to invalidate cache
 			$this->cacheManager = new RouteCacheManager(
-				$fileCache,
-				$this->debugMode,
-				$this->controllerDirectory
+				$fileCache,              // File-based cache storage implementation
+				$this->debugMode,        // Debug flag affects cache behavior
+				$this->controllerDirectory // Directory to watch for controller changes
 			);
 		}
 		
 		/**
 		 * Initialize cache directory with proper error handling
-		 *
 		 * @return void
 		 */
 		private function initializeCacheDirectory(): void {
+			// Only attempt to create cache directory if debug mode is disabled
+			// and the directory doesn't already exist
 			if (!$this->debugMode && !is_dir($this->cacheDirectory)) {
+				// Use @ to suppress warnings and handle errors manually
+				// Create directory with 0755 permissions (rwxr-xr-x)
+				// The 'true' parameter creates parent directories recursively
 				if (!@mkdir($this->cacheDirectory, 0755, true)) {
+					// Log the error for debugging purposes
 					error_log("AnnotationResolver: Cannot create cache directory: {$this->cacheDirectory}");
+					
 					// Fall back to debug mode if caching fails
+					// This ensures the application continues to function even without caching
 					$this->debugMode = true;
 				}
 			}
@@ -306,7 +268,6 @@
 		
 		/**
 		 * Get the absolute path to the controllers directory
-		 *
 		 * @return string Absolute path to controllers directory
 		 */
 		private function getControllerDirectory(): string {
