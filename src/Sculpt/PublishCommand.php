@@ -75,9 +75,10 @@
 			$discover = new Discover();
 			$discover->addScanner(new ComposerScanner("publishers"));
 			$discover->discover();
-			
+
 			// Retrieve all discovered publisher providers from the discovery system
-			$providers = $discover->getProviders();
+			// Convert Generator to array to match method signatures
+			$providers = iterator_to_array($discover->getProviders());
 			
 			// Handle the --list flag first (no tag validation needed)
 			if ($config->hasFlag("list")) {
