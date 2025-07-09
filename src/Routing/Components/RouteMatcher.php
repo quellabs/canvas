@@ -54,7 +54,11 @@
 			
 			// Static routes must have exact segment count match
 			if ($this->isStaticCompiledRoute($compiledPattern)) {
-				return $segmentCount === $patternCount ? $this->matchStaticRoute($compiledPattern, $requestUrl, $routeData) : null;
+				if ($segmentCount === $patternCount) {
+					return $this->matchStaticRoute($compiledPattern, $requestUrl, $routeData);
+				}
+				
+				return null;
 			}
 			
 			// Process dynamic routes with parameters/wildcards
