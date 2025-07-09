@@ -99,7 +99,7 @@
 				$cacheKey = $this->resolveCacheKey($context);
 				
 				// Use cache remember pattern for atomic cache-aside operations
-				return $cache->remember($cacheKey, $this->ttl, function () use ($proceed, $cacheKey) {
+				return $cache->remember($cacheKey, $this->ttl, function () use ($proceed) {
 					return $proceed();
 				});
 				
