@@ -422,6 +422,234 @@ Use custom rules in your validation classes:
 ]
 ```
 
+# Input Sanitization
+
+Canvas provides a powerful input sanitization system that automatically cleans and normalizes incoming request data before it reaches your controllers. The sanitization system works seamlessly with Canvas's validation system to provide a complete input security layer.
+
+## Why Sanitize Input?
+
+Input sanitization is crucial for:
+- **XSS Prevention** - Remove or neutralize potentially dangerous HTML/JavaScript
+- **Data Normalization** - Ensure consistent data formats (emails, phone numbers, etc.)
+- **Content Filtering** - Strip unwanted characters or content
+- **Security Hardening** - Clean data before validation and processing
+
+## Basic Sanitization
+
+Apply sanitization using the `@InterceptWith` annotation with `SanitizeAspect`:
+
+```php
+<?php
+namespace App\Controllers;
+
+use Quellabs\Canvas\Annotations\Route;
+use Quellabs\Canvas\Annotations\InterceptWith;
+use Quellabs\Canvas\Sanitization\SanitizeAspect;
+use App\Sanitization\UserSanitization;
+
+class UserController extends BaseController {
+    
+    /**
+     * @Route("/users/create", methods={"GET", "POST"})
+     * @InterceptWith(SanitizeAspect::class, sanitizer=UserSanitization::class)
+     */
+    public function create(Request $request) {
+        if ($request->isMethod('POST')) {
+            // Request data is automatically sanitized before reaching this point
+            $name = $request->request->get('name');     // Already trimmed and cleaned
+            $email = $request->request->get('email');   // Already normalized
+            $bio = $request->request->get('bio');       // Already stripped of dangerous HTML
+            
+            // Process the clean data
+            $user = new User();
+            $user->setName($name);
+            $user->setEmail($email);
+            $user->setBio($bio);
+            
+            $this->em->persist($user);
+            $this->em->flush();
+            
+            return $this->redirect('/users');
+        }
+        
+        return $this->render('users/create.tpl');
+    }
+}
+```
+
+## Creating Sanitization Classes
+
+Define your sanitization rules in dedicated classes that implement `SanitizationInterface`:
+
+```php
+<?php
+namespace App\Sanitization;
+
+use Quellabs\Canvas\Sanitization\Contracts\SanitizationInterface;
+use Quellabs\Canvas\Sanitization\Rules\Trim;
+use Quellabs\Canvas\Sanitization\Rules\EmailSafe;
+use Quellabs\Canvas\Sanitization\Rules\StripTags;
+use Quellabs\Canvas\Sanitization\Rules\HtmlEscape;
+
+class UserSanitization implements SanitizationInterface {
+    
+    public function getRules(): array {
+        return [
+            'name' => [
+                new Trim(),                    // Remove leading/trailing whitespace
+                new StripTags()                // Remove HTML tags
+            ],
+            'email' => [
+                new Trim(),
+                new EmailSafe()                // Remove non-email characters
+            ],
+            'website' => [
+                new Trim(),
+                new UrlSafe()                  // Remove unsafe URL characters
+            ]
+        ];
+    }
+}
+```
+
+## Built-in Sanitization Rules
+
+Canvas includes essential sanitization rules focused on security and data cleaning:
+
+### Text Sanitization
+- **`Trim`** - Remove leading and trailing whitespace
+- **`StripTags`** - Remove HTML tags (with optional allowlist for safe tags)
+- **`WhitespaceNormalize`** - Convert multiple consecutive whitespace characters to single spaces
+
+### Security Sanitization
+- **`HtmlEscape`** - Convert HTML special characters to entities for XSS prevention
+- **`ScriptSafe`** - Remove or neutralize dangerous script-related content
+- **`SqlSafe`** - Remove characters commonly used in SQL injection attempts
+- **`RemoveControlChars`** - Remove control characters that can cause display issues
+
+### URL and Path Sanitization
+- **`EmailSafe`** - Remove characters not allowed in email addresses
+- **`UrlSafe`** - Remove characters not safe for URLs
+- **`PathSafe`** - Remove characters not safe for file paths (prevents directory traversal)
+
+## Combining Sanitization with Validation
+
+Sanitization works best when combined with validation. The order depends on your specific needs:
+
+```php
+class ContactController extends BaseController {
+    
+    /**
+     * @Route("/contact", methods={"GET", "POST"})
+     * @InterceptWith(ValidateAspect::class, validator=ContactValidation::class)
+     * @InterceptWith(SanitizeAspect::class, sanitizer=ContactSanitization::class)
+     */
+    public function contact(Request $request) {
+        if ($request->isMethod('POST')) {
+            // Data flow: Raw Input → Sanitization → Validation → Controller
+            // Only clean, valid data reaches your business logic
+            
+            if ($request->attributes->get('validation_passed', false)) {
+                $this->processContactForm($request);
+                return $this->redirect('/contact/success');
+            }
+            
+            return $this->render('contact.tpl', [
+                'errors' => $request->attributes->get('validation_errors', []),
+                'old'    => $request->request->all()  // Already sanitized data
+            ]);
+        }
+        
+        return $this->render('contact.tpl');
+    }
+}
+```
+
+## Chain Sanitization
+
+Apply multiple sanitization rules to the same field. Rules are executed in the order they're defined:
+
+```php
+class ProductSanitization implements SanitizationInterface {
+    
+    public function getRules(): array {
+        return [
+            'title' => [
+                new Trim(),                    // 1. Remove whitespace
+                new StripTags(),              // 2. Remove HTML
+                new WhitespaceNormalize()     // 3. Normalize internal whitespace
+            ],
+            'description' => [
+                new Trim(),
+                new StripTags(['p', 'br', 'strong', 'em', 'ul', 'ol', 'li']),
+                new HtmlEscape(),             // Escape any remaining HTML
+                new WhitespaceNormalize()     // Convert multiple spaces to single
+            ],
+            'slug' => [
+                new Trim(),
+                new PathSafe()                // Make safe for URLs/paths
+            ]
+        ];
+    }
+}
+```
+
+## Custom Sanitization Rules
+
+Create your own sanitization rules by implementing `SanitizationRuleInterface`. Here are examples of non-destructive sanitization:
+
+```php
+<?php
+namespace App\Sanitization\Rules;
+
+use Quellabs\Canvas\Sanitization\Contracts\SanitizationRuleInterface;
+
+class RemoveNullBytes implements SanitizationRuleInterface {
+    
+    public function sanitize(mixed $value): mixed {
+        if (!is_string($value)) {
+            return $value;
+        }
+        
+        // Remove null bytes that can cause security issues
+        return str_replace("\0", '', $value);
+    }
+}
+
+class RemoveInvisibleChars implements SanitizationRuleInterface {
+    
+    public function sanitize(mixed $value): mixed {
+        if (!is_string($value)) {
+            return $value;
+        }
+        
+        // Remove invisible Unicode characters that can cause display issues
+        return preg_replace('/[\x{200B}-\x{200D}\x{FEFF}]/u', '', $value);
+    }
+}
+```
+
+## Performance Considerations
+
+- **Selective Sanitization** - Only define rules for fields that need sanitization
+- **Efficient Rules** - Custom rules should be optimized for performance
+- **Type Checking** - Rules should check input types before processing
+
+## Error Handling
+
+Sanitization is designed to be non-breaking. Invalid sanitization classes or rules will throw descriptive exceptions:
+
+```php
+// If sanitization class doesn't exist
+InvalidArgumentException: Sanitization class 'App\Invalid\Class' does not exist
+
+// If class doesn't implement SanitizationInterface  
+InvalidArgumentException: Sanitization class 'App\MyClass' must implement SanitizationInterface
+
+// If sanitization class can't be instantiated
+RuntimeException: Failed to instantiate sanitization class 'App\MyClass': Constructor requires parameter
+```
+
 ## Built-in Aspects
 
 Canvas includes three powerful built-in aspects that handle common web application concerns. These aspects demonstrate the framework's commitment to security, performance, and best practices.
