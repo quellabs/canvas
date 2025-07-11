@@ -14,6 +14,7 @@
 	use Quellabs\Canvas\Discover\KernelProvider;
 	use Quellabs\Canvas\Discover\RequestProvider;
 	use Quellabs\Canvas\Discover\SessionInterfaceProvider;
+	use Quellabs\Canvas\Discover\SignalHubProvider;
 	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
 	use Quellabs\Canvas\Legacy\LegacyBridge;
 	use Quellabs\Canvas\Legacy\LegacyHandler;
@@ -53,6 +54,7 @@
 			$this->dependencyInjector->register(new KernelProvider($this));
 			$this->dependencyInjector->register(new ConfigurationProvider($this->configuration));
 			$this->dependencyInjector->register(new DiscoverProvider($this->discover));
+			$this->dependencyInjector->register(new SignalHubProvider());
 			
 			// Initialize legacy support
 			$this->initializeLegacySupport();
