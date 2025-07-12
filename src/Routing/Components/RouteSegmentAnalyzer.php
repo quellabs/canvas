@@ -5,9 +5,50 @@
 	/**
 	 * RouteSegmentAnalyzer
 	 *
-	 * Handles URL classification and segment analysis for route matching.
-	 * This class is responsible for determining segment types, calculating
-	 * route priorities, and extracting variable information from route patterns.
+	 * Handles URL classification and segment analysis for route matching optimization.
+	 * Analyzes route patterns to determine segment types, calculate route priorities,
+	 * and extract variable information for efficient routing decisions.
+	 *
+	 * Core responsibilities:
+	 * - Segment classification: Determines the type of each route segment
+	 * - Priority calculation: Assigns specificity scores for optimal matching order
+	 * - Route categorization: Classifies entire routes for indexing strategies
+	 * - Variable detection: Identifies parameters, wildcards, and partial variables
+	 * - Pattern analysis: Evaluates route complexity for performance optimization
+	 * - Path parsing: Breaks down route strings into processable segments
+	 *
+	 * Segment type classification:
+	 * - Static: Exact string matches requiring no processing
+	 * - Variable: Single parameters with optional type constraints
+	 * - Single wildcard: Matches one segment with flexible content
+	 * - Multi-wildcard: Matches multiple segments for path capturing
+	 * - Partial variable: Mixed static/dynamic content within single segments
+	 * - Multi-wildcard variable: Named multi-segment capturing
+	 *
+	 * Priority calculation algorithm:
+	 * - Base score: Starting priority value
+	 * - Static bonus: Higher scores for exact-match segments
+	 * - Variable penalty: Reduced scores for dynamic segments
+	 * - Wildcard penalty: Significant reduction for catch-all patterns
+	 * - Length bonus: Slight preference for longer, more specific routes
+	 * - Full static bonus: Maximum priority for completely static routes
+	 *
+	 * Route classification for indexing:
+	 * - Static routes: No variables or wildcards, fastest matching
+	 * - Dynamic routes: Contains variables but predictable structure
+	 * - Wildcard routes: Contains catch-all patterns, requires special handling
+	 *
+	 * Analysis features:
+	 * - Variable name extraction from parameter syntax
+	 * - Type constraint identification and processing
+	 * - Wildcard pattern recognition (*, **, named variants)
+	 * - Partial variable detection for complex segment patterns
+	 * - Route complexity assessment for performance optimization
+	 *
+	 * The analyzer provides the intelligence needed for the routing system to make
+	 * optimal decisions about indexing strategies, matching algorithms, and priority
+	 * ordering to ensure the most specific routes are matched first while maintaining
+	 * high performance across different route pattern complexities.
 	 */
 	class RouteSegmentAnalyzer {
 		

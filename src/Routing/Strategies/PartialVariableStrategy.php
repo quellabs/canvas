@@ -6,6 +6,12 @@
 	use Quellabs\Canvas\Routing\MatchResult;
 	
 	/**
+	 * Strategy for matching URL segments containing partial variables.
+	 *
+	 * This strategy handles route segments that contain variable placeholders
+	 * mixed with static text (e.g., "user-{id}" or "page-{slug}.html").
+	 * It uses pre-compiled regular expressions to extract variable values
+	 * from the URL segment.
 	 * Updated PartialVariableStrategy that works with the enhanced compiler.
 	 */
 	class PartialVariableStrategy implements SegmentMatchingStrategyInterface {
