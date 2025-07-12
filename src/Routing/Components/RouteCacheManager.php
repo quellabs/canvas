@@ -10,15 +10,47 @@
 	/**
 	 * RouteCacheManager
 	 *
-	 * Manages route caching and optimization using the existing FileCache system.
-	 * This class provides route-specific caching logic while leveraging the robust
-	 * FileCache implementation for thread-safe storage operations.
+	 * Manages route caching and optimization using the FileCache system to provide
+	 * persistent storage of compiled routes with intelligent cache invalidation based
+	 * on controller file modifications.
 	 *
-	 * The caching strategy prioritizes performance while ensuring cache freshness:
-	 * - Leverages existing FileCache for atomic operations and concurrency protection
-	 * - Automatic cache invalidation based on controller file modifications
-	 * - Debug mode bypass for development
-	 * - Intelligent cache key generation for route data
+	 * Core responsibilities:
+	 * - Route caching: Stores compiled routes and indexes to avoid expensive rebuilds
+	 * - Cache invalidation: Automatically detects controller file changes
+	 * - File modification tracking: Monitors controller directory for updates
+	 * - Debug mode handling: Bypasses caching during development
+	 * - Concurrency protection: Uses FileCache atomic operations for thread safety
+	 * - Cache statistics: Provides metrics on cache performance and status
+	 *
+	 * Caching strategy:
+	 * - Production mode: Aggressive caching with file modification detection
+	 * - Debug mode: Cache bypass for immediate reflection of code changes
+	 * - Intelligent invalidation: Compares controller modification times
+	 * - Atomic operations: Thread-safe cache updates using FileCache
+	 * - Configurable TTL: Default 24-hour cache lifetime with override support
+	 *
+	 * Cache validation process:
+	 * 1. Checks if cached routes exist
+	 * 2. Compares current controller modification times with cached times
+	 * 3. Invalidates cache if any controller files changed
+	 * 4. Falls back to route rebuilding if cache is stale or missing
+	 * 5. Stores new controller modification times alongside routes
+	 *
+	 * File monitoring:
+	 * - Recursive directory scanning for PHP files
+	 * - Modification time tracking for cache invalidation
+	 * - Error handling for filesystem access issues
+	 * - Graceful degradation when file scanning fails
+	 *
+	 * Performance impact:
+	 * - Cache hits: Near-instant route loading (microseconds)
+	 * - Cache misses: Full route discovery and compilation (milliseconds)
+	 * - File monitoring: Lightweight timestamp comparisons
+	 * - Memory efficiency: Routes loaded once per application lifecycle
+	 *
+	 * The cache manager ensures optimal performance in production while maintaining
+	 * development-friendly behavior with automatic cache invalidation when controllers
+	 * are modified.
 	 */
 	class RouteCacheManager {
 		

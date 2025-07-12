@@ -5,9 +5,52 @@
 	/**
 	 * RoutePatternCompiler
 	 *
-	 * Handles route pattern compilation and regex generation for optimal runtime performance.
-	 * This class pre-processes route patterns into optimized internal representations that
-	 * can be matched quickly against incoming URLs without runtime pattern parsing.
+	 * Handles route pattern compilation and regex generation for optimal runtime
+	 * performance. Pre-processes route patterns into optimized internal representations
+	 * that can be matched quickly against incoming URLs without runtime pattern parsing.
+	 *
+	 * Core responsibilities:
+	 * - Route pattern parsing: Breaks down route strings into analyzable segments
+	 * - Segment compilation: Converts each segment into structured matching data
+	 * - Regex generation: Creates optimized regex patterns for complex segments
+	 * - Type constraint resolution: Maps type hints to corresponding regex patterns
+	 * - Variable extraction: Identifies and processes route variables and wildcards
+	 * - Partial variable handling: Supports mixed static/dynamic segments
+	 *
+	 * Compilation process:
+	 * 1. Parses route path into individual segments
+	 * 2. Determines segment type (static, variable, wildcard, partial)
+	 * 3. Extracts variable names and type constraints
+	 * 4. Generates appropriate regex patterns for validation
+	 * 5. Handles wildcard types (single *, multi **)
+	 * 6. Compiles partial variables with embedded patterns
+	 * 7. Stores all metadata for efficient runtime matching
+	 *
+	 * Supported segment types:
+	 * - Static: Exact string matching (e.g., "users", "api")
+	 * - Variables: Parameter extraction (e.g., "{id}", "{slug:alpha}")
+	 * - Single wildcards: One segment matching (e.g., "*", "{file:*}")
+	 * - Multi-wildcards: Multiple segment matching (e.g., "**", "{path:**}")
+	 * - Partial variables: Mixed segments (e.g., "v{version}", "file-{name}.{ext}")
+	 *
+	 * Type constraint system:
+	 * - Numeric: int, integer (matches digits)
+	 * - Text: alpha, alnum, word, slug (character classes)
+	 * - Identifiers: uuid, email, phone (structured patterns)
+	 * - Business: sku, isbn, postal (domain-specific patterns)
+	 * - Locale: language, country, currency (internationalization)
+	 * - Custom: Extensible pattern mapping system
+	 *
+	 * Regex optimization:
+	 * - Named capture groups for variable extraction
+	 * - Efficient pattern compilation with minimal backtracking
+	 * - Literal prefix/suffix extraction for partial variables
+	 * - Wildcard-aware pattern generation
+	 * - Error handling for malformed patterns
+	 *
+	 * The compiler transforms human-readable route patterns into machine-optimized
+	 * matching structures, enabling fast URL resolution while supporting complex
+	 * routing scenarios including nested wildcards and type validation.
 	 */
 	class RoutePatternCompiler {
 		

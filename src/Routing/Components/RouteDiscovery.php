@@ -9,10 +9,46 @@
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	
 	/**
+	 * RouteDiscovery
+	 *
 	 * Discovers and extracts routes from controller classes using reflection and
-	 * annotation reading. This class handles the scanning of controller directories,
-	 * extraction of route annotations, and building of complete route definitions
-	 * with compiled patterns and calculated priorities.
+	 * annotation reading. Handles the scanning of controller directories, extraction
+	 * of route annotations, and building of complete route definitions with compiled
+	 * patterns and calculated priorities.
+	 *
+	 * Core responsibilities:
+	 * - Controller class discovery: Recursively scans configured controller directories
+	 * - Annotation extraction: Uses reflection to read @Route and @RoutePrefix annotations
+	 * - Route compilation: Pre-compiles route patterns using RoutePatternCompiler
+	 * - Priority calculation: Assigns priority scores based on route specificity
+	 * - Route prefix handling: Combines class-level prefixes with method-level routes
+	 * - Inheritance support: Walks class inheritance chains for route prefix accumulation
+	 *
+	 * Discovery process:
+	 * 1. Scans controller directory for PHP classes
+	 * 2. Reflects each controller class to examine public methods
+	 * 3. Extracts @RoutePrefix annotations from class hierarchy
+	 * 4. Finds @Route annotations on individual methods
+	 * 5. Combines prefixes with method routes to build complete paths
+	 * 6. Compiles route patterns for optimal runtime matching
+	 * 7. Calculates priority scores for proper matching order
+	 * 8. Sorts routes by priority (highest specificity first)
+	 *
+	 * Route priority calculation considers:
+	 * - Static segments (higher priority)
+	 * - Variable segments (medium priority)
+	 * - Wildcard segments (lower priority)
+	 * - Route length (longer routes slightly favored)
+	 * - Fully static routes (highest priority bonus)
+	 *
+	 * Performance optimizations:
+	 * - Reflection result caching to avoid repeated class inspection
+	 * - Magic method filtering to skip framework methods
+	 * - Lazy compilation only when routes are actually needed
+	 * - Memory-efficient processing of large controller sets
+	 *
+	 * The discovery process is expensive and typically runs only during cache
+	 * rebuilds or in development mode. Results are cached for production use.
 	 */
 	class RouteDiscovery {
 		
@@ -44,10 +80,6 @@
 		 * extracts their route definitions, and pre-compiles the route patterns
 		 * for optimal runtime performance. The compiled routes are sorted by
 		 * priority to ensure correct matching order during request processing.
-		 *
-		 * NOTE: This is an expensive operation that should only be called when the
-		 * route cache needs to be rebuilt.
-		 *
 		 * @return array Array of compiled route definitions sorted by priority (highest first)
 		 * @throws AnnotationReaderException
 		 */
@@ -139,12 +171,16 @@
 		 * @return array Array of fully qualified controller class names
 		 */
 		public function getAllControllers(): array {
+			// Get the controller directory path from configuration
 			$controllerDir = $this->getControllerDirectory();
 			
+			// Return empty array if no controller directory is configured or found
 			if (!$controllerDir) {
 				return [];
 			}
 			
+			// Use the kernel's discovery service to scan the directory and find all controller classes
+			// This will return an array of fully qualified class names (FQCN) for each controller
 			return $this->kernel->getDiscover()->findClassesInDirectory($controllerDir);
 		}
 		
