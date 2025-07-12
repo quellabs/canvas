@@ -143,9 +143,9 @@
 		 */
 		private function generateMethodKey(MethodContext $context): string {
 			// Get class and method information
-			$target = $context->getTarget();
+			$target = $context->getController();
 			$className = get_class($target);
-			$methodName = $context->getMethodName();
+			$methodName = $context->getMethod();
 			
 			// Extract short class name
 			$shortClassName = substr(strrchr($className, '\\'), 1) ?: $className;
