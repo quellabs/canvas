@@ -82,11 +82,6 @@
 				return true;
 			}
 			
-			// Skip validation if no type is specified in conditions
-			if (!isset($this->type)) {
-				return true;
-			}
-			
 			// Handle types that use PHP's is_* functions (e.g., is_string, is_int)
 			if (in_array($this->type, $this->is_a_types)) {
 				if (!call_user_func("is_{$this->type}", $value)) {
