@@ -56,6 +56,9 @@
 			$this->dependencyInjector->register(new DiscoverProvider($this->discover));
 			$this->dependencyInjector->register(new SignalHubProvider());
 			
+			// Initialize legacy fallback handler to null explicitly to please phpstan
+			$this->legacyFallbackHandler = null;
+			
 			// Initialize legacy support
 			$this->initializeLegacySupport();
 			

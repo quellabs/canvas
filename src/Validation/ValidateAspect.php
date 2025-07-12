@@ -42,7 +42,6 @@
 		 * @param Container $di The Dependency Injector object
 		 * @param string $validator The validation class name that contains the rules
 		 * @param bool $autoRespond In the case of JSON, send an auto response
-		 * @throws \InvalidArgumentException If validation class doesn't exist or implement interface
 		 */
 		public function __construct(Container $di, string $validator, bool $autoRespond = false, ?string $formId = null) {
 			$this->di = $di;

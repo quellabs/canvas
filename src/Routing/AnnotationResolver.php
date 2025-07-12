@@ -154,34 +154,7 @@
 		}
 		
 		/**
-		 * NEW METHOD: Find intersection of two route arrays efficiently
-		 * @param array $routes1 First route array
-		 * @param array $routes2 Second route array
-		 * @return array Intersection of routes
-		 */
-		private function intersectRoutes(array $routes1, array $routes2): array {
-			$result = [];
-			$routes2Hash = [];
-			
-			// Create hash map for O(1) lookups
-			foreach ($routes2 as $route) {
-				$key = $route['controller'] . '::' . $route['method'] . '::' . $route['route_path'];
-				$routes2Hash[$key] = $route;
-			}
-			
-			// Find matches
-			foreach ($routes1 as $route) {
-				$key = $route['controller'] . '::' . $route['method'] . '::' . $route['route_path'];
-				if (isset($routes2Hash[$key])) {
-					$result[] = $route;
-				}
-			}
-			
-			return $result;
-		}
-		
-		/**
-		 * ENHANCED VERSION: Get comprehensive routing statistics including pre-filtering metrics
+		 * Get comprehensive routing statistics including pre-filtering metrics
 		 * @return array Comprehensive routing statistics
 		 * @throws AnnotationReaderException
 		 */
@@ -203,14 +176,15 @@
 			
 			// Add enhanced filtering information
 			$indexStats = $this->indexBuilder->getIndexStatistics();
+			
 			$baseStats['enhanced_filtering'] = [
 				'strategies_enabled' => [
-					'http_method_filtering' => 'Enabled',
-					'segment_count_filtering' => 'Enabled',
+					'http_method_filtering'        => 'Enabled',
+					'segment_count_filtering'      => 'Enabled',
 					'multi_level_static_filtering' => 'Enabled',
-					'prefix_trie_lookup' => 'Enabled'
+					'prefix_trie_lookup'           => 'Enabled'
 				],
-				'index_metrics' => $indexStats
+				'index_metrics'      => $indexStats
 			];
 			
 			return $baseStats;
