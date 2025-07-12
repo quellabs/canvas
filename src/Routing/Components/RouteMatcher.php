@@ -52,59 +52,56 @@
 		}
 		
 		/**
-		 * ENHANCED: Match a URL against a single route with optimized pre-checks
-		 * @param array $routeData
-		 * @param array $requestUrl
-		 * @param string $originalUrl
-		 * @param string $requestMethod
-		 * @return array|null
+		 * Match a URL against a single route with optimized pre-checks
+		 *
+		 * This method performs efficient route matching by applying early exit conditions
+		 * and handling both static and dynamic routes with parameter extraction.
+		 *
+		 * @param array $routeData Complete route configuration including pattern, methods, and metadata
+		 * @param array $requestUrl URL segments split by '/' for matching against route pattern
+		 * @param string $originalUrl The full original URL string for trailing slash validation
+		 * @param string $requestMethod HTTP method (GET, POST, PUT, DELETE, etc.)
+		 * @return array|null Returns matched route data with extracted parameters, or null if no match
 		 */
 		public function matchRoute(array $routeData, array $requestUrl, string $originalUrl, string $requestMethod): ?array {
-			if (str_contains($routeData['route_path'] ?? '', 'path:**')) {
-				error_log("=== RouteMatcher::matchRoute DEBUG ===");
-				error_log("Route path: " . ($routeData['route_path'] ?? 'unknown'));
-				error_log("Request URL segments: " . print_r($requestUrl, true));
-				error_log("HTTP methods match: " . (in_array($requestMethod, $routeData['http_methods']) ? 'YES' : 'NO'));
-			}
-			
-			// Early exit if HTTP method doesn't match
+			// OPTIMIZATION: Early exit if HTTP method doesn't match
+			// This prevents unnecessary processing for routes that don't support the request method
 			if (!in_array($requestMethod, $routeData['http_methods'])) {
 				return null;
 			}
 			
-			// Trailing slash validation
+			// VALIDATION: Check trailing slash consistency if strict matching is enabled
+			// Ensures URL format matches exactly what the route expects (with/without trailing slash)
 			if ($this->matchTrailingSlashes && !$this->trailingSlashMatches($originalUrl, $routeData['route_path'])) {
-				if (str_contains($routeData['route_path'] ?? '', 'path:**')) {
-					error_log("TRAILING SLASH MISMATCH");
-				}
 				return null;
 			}
 			
+			// Extract the compiled pattern and calculate segment counts for comparison
 			$compiledPattern = $routeData['compiled_pattern'];
-			$segmentCount = count($requestUrl);
-			$patternCount = count($compiledPattern);
+			$segmentCount = count($requestUrl);      // Number of URL segments to match
+			$patternCount = count($compiledPattern); // Number of pattern segments defined
 			
-			if (str_contains($routeData['route_path'] ?? '', 'path:**')) {
-				error_log("Segment count: $segmentCount, Pattern count: $patternCount");
-				error_log("Is static route: " . ($this->isStaticCompiledRoute($compiledPattern) ? 'YES' : 'NO'));
-			}
-			
-			// Static route handling
+			// BRANCH 1: Handle static routes (no dynamic parameters)
+			// Static routes are faster to process as they only require exact string comparison
 			if ($this->isStaticCompiledRoute($compiledPattern)) {
+				// DEBUG: Log when processing static routes with wildcard patterns
+				// This helps identify potential performance issues with complex static routes
 				if (str_contains($routeData['route_path'] ?? '', 'path:**')) {
 					error_log("Taking STATIC route path");
 				}
+				
+				// VALIDATION: Static routes must have exact segment count match
+				// If counts don't match, this route cannot possibly match the request
 				if ($segmentCount !== $patternCount) {
 					return null;
 				}
+				
+				// Delegate to optimized static route matching algorithm
 				return $this->matchStaticRoute($compiledPattern, $requestUrl, $routeData);
 			}
 			
-			if (str_contains($routeData['route_path'] ?? '', 'path:**')) {
-				error_log("Taking DYNAMIC route path");
-			}
-			
-			// Dynamic route handling
+			// BRANCH 2: Handle dynamic routes (contains parameters, wildcards, etc.)
+			// Dynamic routes require more complex processing to extract parameter values
 			return $this->matchDynamicRoute($compiledPattern, $requestUrl, $routeData, $segmentCount, $patternCount);
 		}
 		
@@ -130,14 +127,14 @@
 		}
 		
 		/**
-		 * ENHANCED: Optimized static route matching with early termination
+		 *  Optimized static route matching with early termination
 		 * @param array $compiledPattern
 		 * @param array $requestUrl
 		 * @param array $routeData
 		 * @return array|null
 		 */
 		private function matchStaticRoute(array $compiledPattern, array $requestUrl, array $routeData): ?array {
-			// ENHANCED: Single loop with early termination
+			//  Single loop with early termination
 			for ($i = 0; $i < count($compiledPattern); $i++) {
 				if ($compiledPattern[$i]['original'] !== $requestUrl[$i]) {
 					return null; // Early termination on first mismatch
@@ -153,9 +150,9 @@
 				'variables'    => [] // Static routes have no variables
 			];
 		}
-		
+
 		/**
-		 * ENHANCED: Optimized dynamic route matching with segment count pre-validation
+		 * Optimized dynamic route matching with segment count pre-validation
 		 * @param array $compiledPattern
 		 * @param array $requestUrl
 		 * @param array $routeData
@@ -164,66 +161,35 @@
 		 * @return array|null
 		 */
 		private function matchDynamicRoute(array $compiledPattern, array $requestUrl, array $routeData, int $segmentCount, int $patternCount): ?array {
-			if (str_contains($routeData['route_path'] ?? '', 'path:**')) {
-				error_log("=== matchDynamicRoute DEBUG ===");
-				error_log("Segment count: $segmentCount, Pattern count: $patternCount");
-				error_log("Route has wildcards: " . ($this->routeHasWildcards($compiledPattern) ? 'YES' : 'NO'));
-			}
-			
-			// Pre-validate segment counts for non-wildcard routes
+			// Early exit: validate segment counts based on route type
 			if (!$this->routeHasWildcards($compiledPattern)) {
-				if (str_contains($routeData['route_path'] ?? '', 'path:**')) {
-					error_log("Non-wildcard route - checking exact segment count");
-				}
 				// Non-wildcard dynamic routes must have exact segment count
 				if ($segmentCount !== $patternCount) {
-					if (str_contains($routeData['route_path'] ?? '', 'path:**')) {
-						error_log("SEGMENT COUNT MISMATCH for non-wildcard route");
-					}
 					return null;
 				}
 			} else {
-				if (str_contains($routeData['route_path'] ?? '', 'path:**')) {
-					error_log("Wildcard route - checking minimum segments");
-				}
 				// Wildcard routes need minimum segment validation
 				$minRequiredSegments = $this->calculateMinimumRequiredSegments($compiledPattern);
-				if (str_contains($routeData['route_path'] ?? '', 'path:**')) {
-					error_log("Min required segments: $minRequiredSegments");
-				}
+				
 				if ($segmentCount < $minRequiredSegments) {
-					if (str_contains($routeData['route_path'] ?? '', 'path:**')) {
-						error_log("INSUFFICIENT SEGMENTS for wildcard route");
-					}
 					return null;
 				}
 			}
 			
-			if (str_contains($routeData['route_path'] ?? '', 'path:**')) {
-				error_log("Proceeding to urlMatchesCompiledRoute");
-			}
-			
-			// Proceed with detailed pattern matching
+			// Attempt pattern matching with variables extraction
 			$variables = [];
-			if ($this->urlMatchesCompiledRoute($requestUrl, $compiledPattern, $variables)) {
-				if (str_contains($routeData['route_path'] ?? '', 'path:**')) {
-					error_log("urlMatchesCompiledRoute SUCCESS");
-					error_log("Variables: " . print_r($variables, true));
-				}
-				return [
-					'http_methods' => $routeData['http_methods'],
-					'controller'   => $routeData['controller'],
-					'method'       => $routeData['method'],
-					'route'        => $routeData['route'],
-					'variables'    => $variables
-				];
+			if (!$this->urlMatchesCompiledRoute($requestUrl, $compiledPattern, $variables)) {
+				return null;
 			}
 			
-			if (str_contains($routeData['route_path'] ?? '', 'path:**')) {
-				error_log("urlMatchesCompiledRoute FAILED");
-			}
-			
-			return null;
+			// Success: return matched route data
+			return [
+				'http_methods' => $routeData['http_methods'],
+				'controller'   => $routeData['controller'],
+				'method'       => $routeData['method'],
+				'route'        => $routeData['route'],
+				'variables'    => $variables
+			];
 		}
 		
 		/**
@@ -265,10 +231,12 @@
 				if (in_array($segment['type'], ['multi_wildcard', 'multi_wildcard_var'])) {
 					continue;
 				}
+				
 				// Multi-wildcard variables can also consume zero or more
 				if ($segment['type'] === 'variable' && !empty($segment['is_multi_wildcard'])) {
 					continue;
 				}
+				
 				// All other segment types require at least one URL segment
 				$minSegments++;
 			}

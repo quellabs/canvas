@@ -16,6 +16,11 @@
 		private int $urlIndex = 0;
 		private int $routeIndex = 0;
 		
+		/**
+		 * MatchingContext constructor
+		 * @param array $requestUrl
+		 * @param array $compiledPattern
+		 */
 		public function __construct(array $requestUrl, array $compiledPattern) {
 			$this->requestUrl = $requestUrl;
 			$this->compiledPattern = $compiledPattern;
