@@ -14,8 +14,11 @@
 	 */
 	class RateLimitAspect implements BeforeAspect {
 		
-		/** Strategies the user can use */
-		const array VALID_STRATEGIES = ['fixed_window', 'sliding_window', 'token_bucket'];
+		/** @var string[] Valid rate limiting strategies */
+		private const array VALID_STRATEGIES = ['fixed_window', 'sliding_window', 'token_bucket'];
+		
+		/** @var string[] Valid rate limiting scopes */
+		private const array VALID_SCOPES = ['ip', 'user', 'api_key', 'global', 'custom'];
 		
 		/** @var CacheInterface */
 		private CacheInterface $cache;
@@ -75,8 +78,19 @@
 				throw new \InvalidArgumentException('Limit and window must be positive integers');
 			}
 			
+			// Validate strategy
 			if (!in_array($strategy, self::VALID_STRATEGIES)) {
 				throw new \InvalidArgumentException('Invalid strategy: ' . $strategy);
+			}
+			
+			// Validate scope
+			if (!in_array($scope, self::VALID_SCOPES)) {
+				throw new \InvalidArgumentException("Invalid scope '$scope'. Valid options: " . implode(', ', $validScopes));
+			}
+			
+			// Validate custom scope has identifier
+			if ($scope === 'custom' && empty($identifier)) {
+				throw new \InvalidArgumentException("Custom scope requires a non-empty identifier");
 			}
 		}
 		
@@ -350,9 +364,6 @@
 				
 				// Custom identifier - allows for flexible rate limiting strategies
 				'custom' => $this->identifier,
-				
-				// Default fallback to IP-based limiting for safety
-				default => $request->getClientIp()
 			};
 
 			// Sanitize each component to prevent special character conflicts and cache key collisions
