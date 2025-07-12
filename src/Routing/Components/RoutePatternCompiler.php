@@ -300,18 +300,11 @@
 		 * @return string The corresponding regex pattern
 		 */
 		public function resolveTypeToRegex(string $type): string {
-			// Handle wildcard types explicitly
-			if ($type === '*') {
-				return '[^/]*';  // Single wildcard - any chars except path separator
-			}
-			
-			// Multi-wildcard - any chars including path separators
-			if ($type === '**') {
-				return '.*';
-			}
-			
-			// Use the existing TYPE_PATTERNS for other types
-			return self::TYPE_PATTERNS[$type] ?? '[^/]+';
+			return match($type) {
+				'*' => '[^/]*',     // Single wildcard - any chars except path separator
+				'**' => '.*',       // Multi-wildcard - any chars including path separators
+				default => self::TYPE_PATTERNS[$type] ?? '[^/]+'
+			};
 		}
 		
 		/**
@@ -337,10 +330,8 @@
 		 * @return string The regex pattern for this variable
 		 */
 		private function buildVariablePattern(array $varInfo): string {
-			$varName = $varInfo['name'];
-			
 			// Ensure the variable name is safe for regex
-			$safeVarName = preg_replace('/[^a-zA-Z0-9_]/', '_', $varName);
+			$safeVarName = preg_replace('/[^a-zA-Z0-9_]/', '_', $varInfo['name']);
 			
 			// Regular variable with custom or default regex
 			if (!$varInfo['is_wildcard']) {
@@ -433,51 +424,119 @@
 		/**
 		 * Parses variable definition to extract name and type
 		 * @param string $content The variable content (without braces)
-		 * @return array Returns ['name' => string, 'regex' => string]
+		 * @return array Returns ['name' => string, 'regex' => string, ...]
 		 */
 		private function parseVariableDefinition(string $content): array {
-			$isWildcard = false;
-			$isMultiWildcard = false;
-			$cleanName = $content;
-			$regex = '[^/]+'; // Default regex
-			
-			// Check for wildcard patterns
-			if (str_ends_with($content, ':**')) {
-				$isWildcard = true;
-				$isMultiWildcard = true;
-				$cleanName = substr($content, 0, -3); // Remove :**
-				$regex = '.*'; // Multi-wildcard pattern
-			} elseif (str_ends_with($content, ':*')) {
-				$isWildcard = true;
-				$isMultiWildcard = false;
-				$cleanName = substr($content, 0, -2); // Remove :*
-				// FIX: Use escaped regex pattern for single wildcard
-				$regex = '[^/]*'; // FIXED: Remove backslash that was causing the issue
-			} elseif ($content === '**') {
-				$isWildcard = true;
-				$isMultiWildcard = true;
-				$cleanName = '**';
-				$regex = '.*';
-			} elseif ($content === '*') {
-				$isWildcard = true;
-				$isMultiWildcard = false;
-				$cleanName = '*';
-				// FIX: Use escaped regex pattern
-				$regex = '[^/]*'; // FIXED: Remove backslash
-			} elseif (str_contains($content, ':')) {
-				// Regular typed variable
-				$parts = explode(':', $content, 2);
-				$cleanName = $parts[0];
-				$regex = $this->resolveTypeToRegex($parts[1]);
-			}
-			
-			return [
-				'name'              => $cleanName,
-				'clean_name'        => $cleanName,
-				'regex'             => $regex,
-				'is_wildcard'       => $isWildcard,
-				'is_multi_wildcard' => $isMultiWildcard,
+			$result = [
+				'name'              => $content,
+				'clean_name'        => $content,
+				'regex'             => '[^/]+', // Default regex
+				'is_wildcard'       => false,
+				'is_multi_wildcard' => false,
 				'original_content'  => $content
 			];
+			
+			// Handle special wildcard cases first
+			if ($this->isSpecialWildcard($content, $result)) {
+				return $result;
+			}
+			
+			// Handle suffixed wildcards
+			if ($this->isSuffixedWildcard($content, $result)) {
+				return $result;
+			}
+			
+			// Handle typed variables (contains :)
+			if (str_contains($content, ':')) {
+				$this->parseTypedVariable($content, $result);
+			}
+			
+			return $result;
+		}
+		
+		/**
+		 * Check and handle special wildcard cases (* and **)
+		 *
+		 * This method identifies pure wildcard patterns and configures their behavior:
+		 * - '*' matches any characters except forward slashes (single segment)
+		 * - '**' matches any characters including forward slashes (multiple segments)
+		 *
+		 * @param string $content The route segment content to check
+		 * @param array &$result Reference to result array that gets populated with wildcard config
+		 * @return bool True if content is a special wildcard, false otherwise
+		 */
+		private function isSpecialWildcard(string $content, array &$result): bool {
+			// Define wildcard patterns and their corresponding regex patterns
+			$wildcards = [
+				'**' => ['regex' => '.*', 'multi' => true],        // Multi-segment wildcard
+				'*'  => ['regex' => '[^/]*', 'multi' => false]    // Single-segment wildcard
+			];
+			
+			// Check if the content matches any defined wildcard pattern
+			if (!isset($wildcards[$content])) {
+				return false;
+			}
+			
+			// Extract configuration for the matched wildcard
+			$config = $wildcards[$content];
+			
+			// Populate result array with wildcard properties
+			$result['is_wildcard'] = true;                    // Mark as wildcard
+			$result['is_multi_wildcard'] = $config['multi']; // Single or multi-segment flag
+			$result['regex'] = $config['regex'];             // Regex pattern for matching
+			
+			return true;
+		}
+		
+		/**
+		 * Check and handle suffixed wildcards (:* and :**)
+		 *
+		 * This method processes named parameters with wildcard suffixes:
+		 * - 'name:*' creates a named parameter that matches single segments
+		 * - 'name:**' creates a named parameter that matches multiple segments
+		 *
+		 * @param string $content The route segment content to check
+		 * @param array &$result Reference to result array that gets populated with parameter config
+		 * @return bool True if content has a wildcard suffix, false otherwise
+		 */
+		private function isSuffixedWildcard(string $content, array &$result): bool {
+			// Define suffix patterns with their properties
+			$suffixes = [
+				':**' => ['length' => 3, 'regex' => '.*', 'multi' => true],        // Multi-segment named wildcard
+				':*'  => ['length' => 2, 'regex' => '[^/]*', 'multi' => false]    // Single-segment named wildcard
+			];
+			
+			// Check each suffix pattern to see if content ends with it
+			foreach ($suffixes as $suffix => $config) {
+				if (str_ends_with($content, $suffix)) {
+					// Extract the parameter name by removing the suffix
+					$result['name'] = substr($content, 0, -$config['length']);
+					$result['clean_name'] = $result['name'];           // Store clean name without prefix/suffix
+					$result['regex'] = $config['regex'];               // Set regex pattern for matching
+					$result['is_wildcard'] = true;                     // Mark as wildcard
+					$result['is_multi_wildcard'] = $config['multi'];   // Set multi-segment flag
+					return true;
+				}
+			}
+			
+			return false;
+		}
+		
+		/**
+		 * This method processes parameters with type constraints in the format 'name:type'.
+		 * @param string $content The route segment content containing the typed parameter
+		 * @param array &$result Reference to result array that gets populated with parameter config
+		 * @return void
+		 */
+		private function parseTypedVariable(string $content, array &$result): void {
+			// Split content into name and type parts (limit to 2 parts in case type contains colons)
+			$parts = explode(':', $content, 2);
+			
+			// Extract parameter name (everything before first colon)
+			$result['name'] = $parts[0];
+			$result['clean_name'] = $parts[0];  // Store clean name without type suffix
+			
+			// Resolve the type (everything after first colon) to its regex pattern
+			$result['regex'] = $this->resolveTypeToRegex($parts[1]);
 		}
 	}
