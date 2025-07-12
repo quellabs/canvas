@@ -112,58 +112,80 @@
 		 * @return array Detailed statistics about route distribution and index efficiency
 		 */
 		public function getIndexStatistics(): array {
+			// Retrieve the complete route index structure
 			$index = $this->getRouteIndex();
 			
-			// Traditional statistics
+			// Count all static routes across all static segments
+			// Static routes are exact path matches with no dynamic parameters
 			$staticCount = array_reduce($index['static'] ?? [], function ($carry, $routes) {
 				return $carry + count($routes);
 			}, 0);
 			
+			// Count the number of distinct static path segments in the index
 			$staticSegments = count($index['static'] ?? []);
+			
+			// Count dynamic routes (routes with parameters like {id})
 			$dynamicCount = count($index['dynamic'] ?? []);
+			
+			// Count wildcard routes (catch-all routes like /api/*)
 			$wildcardCount = count($index['wildcard'] ?? []);
+			
+			// Calculate total routes registered in the system
 			$totalRoutes = $staticCount + $dynamicCount + $wildcardCount;
 			
-			// Enhanced index statistics
+			// Enhanced index statistics - analyze advanced indexing structures
+			
+			// Count groups organized by segment count (routes with 1 segment, 2 segments, etc.)
 			$segmentCountGroups = count($index['segment_count'] ?? []);
+			
+			// Count groups organized by HTTP method (GET, POST, PUT, etc.)
 			$httpMethodGroups = count($index['http_methods'] ?? []);
+			
+			// Count positions in the multi-level index structure
+			// Multi-level index organizes routes by parameter positions for faster lookup
 			$multiLevelPositions = count($index['multi_level'] ?? []);
 			
 			// Calculate multi-level index efficiency
+			// Count total static segment mappings across all positions in multi-level index
 			$totalStaticSegmentMappings = 0;
 			foreach ($index['multi_level'] ?? [] as $positionGroup) {
+				// Iterate through each position group (e.g., routes with params at position 1, 2, etc.)
 				foreach ($positionGroup as $staticGroup) {
+					// Count static segments mapped at this position
 					$totalStaticSegmentMappings += count($staticGroup);
 				}
 			}
 			
-			// Trie statistics
+			// Calculate the maximum depth of the prefix tree structure
 			$trieDepth = $this->calculateTrieDepth($index['prefix_tree'] ?? []);
+			
+			// Count total nodes in the prefix tree
 			$trieNodes = $this->countTrieNodes($index['prefix_tree'] ?? []);
 			
 			return [
 				// Basic route counts by category
-				'total_routes'            => $totalRoutes,
-				'static_routes'           => $staticCount,
-				'dynamic_routes'          => $dynamicCount,
-				'wildcard_routes'         => $wildcardCount,
+				'total_routes'            => $totalRoutes,                // Total number of routes
+				'static_routes'           => $staticCount,                // Routes with no parameters
+				'dynamic_routes'          => $dynamicCount,               // Routes with parameters
+				'wildcard_routes'         => $wildcardCount,              // Catch-all routes
 				
 				// Traditional index metrics
-				'static_segments'         => $staticSegments,
-				'efficiency_ratio'        => $totalRoutes > 0 ? round(($staticCount / $totalRoutes) * 100, 2) : 0,
+				'static_segments'         => $staticSegments,             // Number of static path segments
+				'efficiency_ratio'        => $totalRoutes > 0 ?           // Percentage of routes that are static
+					round(($staticCount / $totalRoutes) * 100, 2) : 0,
 				
-				// Enhanced index metrics
-				'segment_count_groups'    => $segmentCountGroups,
-				'http_method_groups'      => $httpMethodGroups,
-				'multi_level_positions'   => $multiLevelPositions,
-				'static_segment_mappings' => $totalStaticSegmentMappings,
+				// Enhanced index metrics - measure advanced indexing effectiveness
+				'segment_count_groups'    => $segmentCountGroups,         // Groups by path segment count
+				'http_method_groups'      => $httpMethodGroups,           // Groups by HTTP method
+				'multi_level_positions'   => $multiLevelPositions,        // Positions in multi-level index
+				'static_segment_mappings' => $totalStaticSegmentMappings, // Static mappings in multi-level index
 				
-				// Trie metrics
-				'trie_depth'              => $trieDepth,
-				'trie_nodes'              => $trieNodes,
+				// Trie metrics - prefix tree performance indicators
+				'trie_depth'              => $trieDepth,                  // Maximum depth of prefix tree
+				'trie_nodes'              => $trieNodes,                  // Total nodes in prefix tree
 				
 				// Performance indicators
-				'pre_filter_potential'    => $this->calculatePreFilterPotential($index),
+				'pre_filter_potential'    => $this->calculatePreFilterPotential($index), // Routing efficiency score
 			];
 		}
 		
@@ -191,34 +213,63 @@
 		 * @return array Filtered array of route candidates for matching
 		 */
 		public function getFilteredCandidates(array $requestUrl, string $requestMethod, array $routeIndex): array {
+			// Count the number of segments in the incoming request URL
+			// This is used for segment-based filtering to quickly eliminate
+			// routes that cannot possibly match due to different path lengths
 			$segmentCount = count($requestUrl);
 			
 			// Strategy 1: HTTP Method filtering (fastest elimination)
+			// Check if any routes exist for the requested HTTP method
+			// This is the fastest filter as it uses a simple array lookup
+			// and can eliminate large portions of routes immediately
 			$methodCandidates = $routeIndex['http_methods'][$requestMethod] ?? [];
+			
+			// Early exit if no routes support this HTTP method
+			// This prevents unnecessary processing of subsequent filters
 			if (empty($methodCandidates)) {
 				return [];
 			}
-
+			
 			// Strategy 2: Enhanced segment count filtering with wildcard support
+			// Filter routes based on the number of URL segments
+			// This accounts for dynamic segments and wildcard routes that
+			// might match URLs with different segment counts
 			$candidates = $this->getSegmentCountCandidates($segmentCount, $routeIndex, $methodCandidates);
 			
+			// Early exit if no routes match the segment count criteria
+			// This saves processing time on static and trie filtering
 			if (empty($candidates)) {
 				return [];
 			}
 			
 			// Strategy 3: Multi-level static filtering
+			// Apply static segment filtering at multiple levels of the URL path
+			// This checks for exact matches on static (non-parameter) segments
+			// and further reduces the candidate pool by examining fixed parts
+			// of route patterns against the incoming request segments
 			$candidates = $this->filterByStaticSegments($candidates, $requestUrl, $routeIndex);
 			
 			// Strategy 4: Trie lookup for exact static matches
+			// Use a prefix tree (trie) data structure for efficient static route lookup
+			// This is particularly effective for completely static routes
+			// as it provides O(m) lookup time where m is the path length
 			if (!empty($routeIndex['prefix_tree'])) {
+				// Search the trie index for potential matches
+				// The trie contains pre-built paths for static routes
 				$trieResults = $this->searchTrieIndex($requestUrl, $routeIndex['prefix_tree']);
-
+				
+				// Merge trie results with existing candidates
+				// Trie results are typically high-confidence matches
+				// so they're added to the final candidate set
 				if (!empty($trieResults)) {
 					$candidates = array_merge($candidates, $trieResults);
 				}
 			}
 			
-			// Remove duplicates and return
+			// Remove duplicates and return the final filtered candidate set
+			// SORT_REGULAR ensures proper comparison of route arrays
+			// This final step ensures no route is checked multiple times
+			// during the subsequent matching phase
 			return array_unique($candidates, SORT_REGULAR);
 		}
 		
@@ -231,26 +282,50 @@
 		 * @return array Candidates that can handle the segment count
 		 */
 		private function getSegmentCountCandidates(int $segmentCount, array $routeIndex, array $methodCandidates): array {
-			// Get exact segment count matches
+			// Phase 1: Get exact segment count matches
+			// First, find all routes that have exactly the same number of segments
+			// as the incoming request URL. This is the most straightforward case
+			// where route pattern "/user/{id}/profile" matches request "/user/123/profile"
 			$exactMatches = $routeIndex['segment_count'][$segmentCount] ?? [];
+			
+			// Intersect exact matches with method candidates to ensure we only
+			// consider routes that both match the segment count AND the HTTP method
 			$candidates = $this->intersectRoutes($methodCandidates, $exactMatches);
 			
-			// ENHANCED: Also check routes with fewer segments that have wildcards
+			// Phase 2: ENHANCED - Check routes with fewer segments that have wildcards
 			// Wildcards can consume multiple URL segments, so a 2-segment route pattern
 			// like "/user/v{path:**}" can match a 3-segment URL like "/user/v10/20"
+			// We need to check all routes with fewer segments than the request
 			for ($routeSegments = 1; $routeSegments < $segmentCount; $routeSegments++) {
+				// Get all routes that have this specific number of segments
+				// These are potential matches if they contain wildcard parameters
 				$routesWithFewerSegments = $routeIndex['segment_count'][$routeSegments] ?? [];
 				
 				// Filter to only include routes that have wildcards
+				// This is crucial because only routes with wildcard parameters
+				// (like {path:**} or {args:*}) can match URLs with more segments
+				// than the route pattern itself contains
 				$wildcardRoutes = array_filter($routesWithFewerSegments, function($route) {
+					// Check if this route has parameters that can consume multiple segments
+					// Examples: {path:**} (greedy), {args:*} (non-greedy), or other
+					// variable-length parameter patterns
 					return $this->routeCanHandleVariableSegments($route);
 				});
 				
-				// Intersect with method candidates
+				// Intersect wildcard routes with method candidates
+				// This ensures we maintain the HTTP method constraint while
+				// adding routes that can handle variable segment counts
 				$wildcardCandidates = $this->intersectRoutes($methodCandidates, $wildcardRoutes);
+				
+				// Merge the wildcard candidates with our existing candidates
+				// This builds up a comprehensive list of all routes that could
+				// potentially match the incoming request based on segment count analysis
 				$candidates = array_merge($candidates, $wildcardCandidates);
 			}
 			
+			// Return the complete set of candidates that can handle the request's segment count
+			// This includes both exact matches and wildcard routes with fewer segments
+			// that can expand to match the request's segment count
 			return $candidates;
 		}
 		
@@ -260,27 +335,60 @@
 		 * @param array &$index Reference to the index structure being built
 		 */
 		private function indexRoute(array $route, array &$index): void {
+			// Extract key route properties for indexing
+			// The compiled pattern contains the processed route segments ready for matching
 			$compiledPattern = $route['compiled_pattern'];
+			
+			// Classify the route type to determine optimal indexing strategies
+			// Types typically include: 'static', 'dynamic', 'wildcard', 'mixed'
 			$routeType = $this->segmentAnalyzer->classifyRoute($route);
+			
+			// Count segments for segment-based indexing
+			// This enables quick elimination of routes with incompatible segment counts
 			$segmentCount = count($compiledPattern);
+			
+			// Original route path for trie indexing and debugging
 			$routePath = $route['route_path'];
 			
-			// 1. Traditional categorization (maintains backward compatibility)
+				// Strategy 1: Traditional categorization (maintains backward compatibility)
+			// This preserves existing indexing behavior for systems that depend on
+			// route type classification. Routes are grouped by their fundamental type
+			// (static, dynamic, etc.) for compatibility with legacy matching algorithms
 			$this->addToTraditionalIndex($route, $routeType, $index);
 			
-			// 2. Multi-level static segment indexing
+			// Strategy 2: Multi-level static segment indexing
+			// Creates indexes based on static (non-parameter) segments at each position
+			// This allows rapid filtering based on fixed parts of the route pattern
+			// Example: Routes with '/api' as first segment are indexed together
+			// enabling quick elimination of non-API routes when matching '/api/users'
 			$this->addToMultiLevelIndex($route, $compiledPattern, $index);
 			
-			// 3. Segment count indexing
+			// Strategy 3: Segment count indexing
+			// Groups routes by the number of segments they contain
+			// This enables immediate elimination of routes that cannot match
+			// based on URL segment count alone, providing significant performance gains
+			// Example: 3-segment routes like '/user/{id}/profile' are indexed separately
+			// from 2-segment routes like '/user/{id}'
 			$index['segment_count'][$segmentCount][] = $route;
 			
-			// 4. HTTP method indexing
+			// Strategy 4: HTTP method indexing
+			// Creates separate indexes for each HTTP method (GET, POST, PUT, etc.)
+			// This is typically the fastest filter as it can eliminate large portions
+			// of the route table immediately based on the request method
 			foreach ($route['http_methods'] as $method) {
+				// Add this route to the index for each HTTP method it supports
+				// Multi-method routes (e.g., GET|POST) will appear in multiple indexes
 				$index['http_methods'][$method][] = $route;
 			}
 			
-			// 5. Prefix tree for static routes
+			// Strategy 5: Prefix tree (trie) for static routes
+			// Static routes benefit from trie-based indexing for O(m) lookup time
+			// where m is the path length. This is highly efficient for exact matches
+			// and provides the fastest possible lookup for completely static routes
 			if ($routeType === 'static') {
+				// Only static routes are added to the trie since they have no parameters
+				// Dynamic routes with parameters cannot be efficiently stored in a trie
+				// as the parameter values are unknown at indexing time
 				$this->addToTrieIndex($route, $routePath, $index);
 			}
 		}
