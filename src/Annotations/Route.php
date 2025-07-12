@@ -43,7 +43,6 @@
 		/**
 		 * Fetches the route path
 		 * @return string The route path as defined in the "value" parameter
-		 * @throws \Exception If the "value" parameter is not set (implicit)
 		 */
 		public function getRoute(): string {
 			return $this->parameters["value"];
