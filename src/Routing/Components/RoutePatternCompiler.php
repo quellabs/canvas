@@ -122,84 +122,19 @@
 				$type = $this->segmentAnalyzer->getSegmentType($segment);
 				
 				// Initialize the compiled segment structure with default values
-				$compiledSegment = [
-					'type'              => $type,       // Segment type for routing logic
-					'original'          => $segment,    // Original segment text for reference
-					'variable_name'     => null,        // Variable name if this captures a value
-					'pattern'           => null,        // Regex pattern for validation
-					'is_multi_wildcard' => false,       // Whether this consumes multiple segments
-					'compiled_regex'    => null,        // Pre-compiled regex for partial variables
-					'variable_names'    => [],          // Array of variable names for partial segments
-					'literal_prefix'    => null,  // For partial variables
-					'literal_suffix'    => null   // For partial variables
-				];
+				$compiledSegment = $this->initializeCompiledSegment($type, $segment);
 				
-				// Compile segment based on its type
-				switch ($type) {
-					case 'variable':
-						// Handle variable segments like {id}, {slug}, {id:int}, {path:**}
-						$compiledSegment['variable_name'] = $this->segmentAnalyzer->extractVariableName($segment);
-						
-						// Check if the variable has a type constraint (e.g., {id:int})
-						if (str_contains($segment, ':')) {
-							// Split variable name and type constraint
-							$parts = explode(':', trim($segment, '{}'), 2);
-							
-							// Convert type constraint to regex pattern
-							$compiledSegment['pattern'] = $this->resolveTypeToRegex($parts[1]);
-							
-							// Check if this is a multi-wildcard type (** or .*)
-							$compiledSegment['is_multi_wildcard'] = in_array($parts[1], ['**', '.*']);
-						} else {
-							// Default pattern for variables without type constraints
-							// Matches any characters except forward slash
-							$compiledSegment['pattern'] = '[^\/]+';
-						}
-						
-						break;
-					
-					case 'single_wildcard':
-						// Handle anonymous single wildcard (*)
-						$compiledSegment['variable_name'] = '*';
-						break;
-					
-					case 'multi_wildcard':
-					case 'multi_wildcard_var':
-						// Handle multi-wildcard segments (**) or named multi-wildcards ({**})
-						if ($segment === '**' || $segment === '{**}') {
-							// Anonymous multi-wildcard
-							$compiledSegment['variable_name'] = '**';
-						} else {
-							// Named multi-wildcard variable
-							$compiledSegment['variable_name'] = $this->segmentAnalyzer->extractVariableName($segment);
-						}
-						
-						$compiledSegment['is_multi_wildcard'] = true;
-						break;
-					
-					case 'partial_variable':
-						// Handle segments with mixed static text and variables
-						// e.g., "user-{id}-profile" or "file.{name}.{ext}"
-						$result = $this->compilePartialSegmentPattern($segment);
-						
-						if ($result) {
-							$compiledSegment['compiled_regex'] = $result['pattern'];
-							$compiledSegment['variable_names'] = $result['variables'];
-							$compiledSegment['literal_prefix'] = $result['literal_prefix'] ?? null;
-							$compiledSegment['literal_suffix'] = $result['literal_suffix'] ?? null;
-							
-							// Check if any variables are wildcards
-							foreach ($result['variable_info'] as $varInfo) {
-								if ($varInfo['is_wildcard']) {
-									$compiledSegment['is_multi_wildcard'] = $varInfo['is_multi_wildcard'];
-									$compiledSegment['variable_name'] = $varInfo['clean_name'];
-									break;
-								}
-							}
-						}
-						
-						break;
-				}
+				// Get type-specific modifications and merge them with the base structure
+				$modifications = match ($type) {
+					'variable' => $this->compileVariableSegment($segment),
+					'single_wildcard' => $this->compileSingleWildcardSegment($segment),
+					'multi_wildcard', 'multi_wildcard_var' => $this->compileMultiWildcardSegment($segment),
+					'partial_variable' => $this->compilePartialVariableSegment($segment),
+					default => [] // Static segments don't need modifications
+				};
+				
+				// Merge the modifications into the compiled segment
+				$compiledSegment = array_merge($compiledSegment, $modifications);
 				
 				// Add the compiled segment to the result array
 				$compiledSegments[] = $compiledSegment;
@@ -244,16 +179,16 @@
 					
 					// Parse the variable definition to extract name and regex pattern
 					// Example: "id:\d+" becomes ['name' => 'id', 'pattern' => '\d+']
-					$varInfo = $this->parseVariableDefinition($variableContent);
+					$variableInformation = $this->parseVariableDefinition($variableContent);
 					
 					// Store variable metadata for later use
 					$hasFoundVariable = true;
-					$variableNames[] = $varInfo['name'];
-					$variableInfo[] = $varInfo;
+					$variableNames[] = $variableInformation['name'];
+					$variableInfo[] = $variableInformation;
 					
 					// Convert the variable definition into a regex capturing group
 					// This wraps the variable pattern in parentheses for capture
-					$pattern .= $this->buildVariablePattern($varInfo);
+					$pattern .= $this->buildVariablePattern($variableInformation);
 					
 					// Continue to next iteration (position is updated in extractVariableContent)
 					continue;
@@ -300,7 +235,7 @@
 		 * @return string The corresponding regex pattern
 		 */
 		public function resolveTypeToRegex(string $type): string {
-			return match($type) {
+			return match ($type) {
 				'*' => '[^/]*',     // Single wildcard - any chars except path separator
 				'**' => '.*',       // Multi-wildcard - any chars including path separators
 				default => self::TYPE_PATTERNS[$type] ?? '[^/]+'
@@ -322,6 +257,124 @@
 			return array_filter($segments, function ($segment) {
 				return $segment !== '';
 			});
+		}
+		
+		
+		/**
+		 * Initialize a compiled segment structure with default values
+		 * @param string $type The segment type
+		 * @param string $segment The original segment text
+		 * @return array Initialized compiled segment array
+		 */
+		private function initializeCompiledSegment(string $type, string $segment): array {
+			return [
+				'type'              => $type,       // Segment type for routing logic
+				'original'          => $segment,    // Original segment text for reference
+				'variable_name'     => null,        // Variable name if this captures a value
+				'pattern'           => null,        // Regex pattern for validation
+				'is_multi_wildcard' => false,       // Whether this consumes multiple segments
+				'compiled_regex'    => null,        // Pre-compiled regex for partial variables
+				'variable_names'    => [],          // Array of variable names for partial segments
+				'literal_prefix'    => null,        // For partial variables
+				'literal_suffix'    => null         // For partial variables
+			];
+		}
+		
+		/**
+		 * Compile variable segments like {id}, {slug}, {id:int}, {path:**}
+		 * Returns only the modifications needed for variable segments
+		 * @param string $segment The original segment text
+		 * @return array Array of modifications to apply to the compiled segment
+		 */
+		private function compileVariableSegment(string $segment): array {
+			$modifications = [
+				'variable_name' => $this->segmentAnalyzer->extractVariableName($segment)
+			];
+			
+			// Check if the variable has a type constraint (e.g., {id:int})
+			if (str_contains($segment, ':')) {
+				// Split variable name and type constraint
+				$parts = explode(':', trim($segment, '{}'), 2);
+				
+				// Convert type constraint to regex pattern
+				$modifications['pattern'] = $this->resolveTypeToRegex($parts[1]);
+				
+				// Check if this is a multi-wildcard type (** or .*)
+				$modifications['is_multi_wildcard'] = in_array($parts[1], ['**', '.*']);
+			} else {
+				// Default pattern for variables without type constraints
+				// Matches any characters except forward slash
+				$modifications['pattern'] = '[^\/]+';
+			}
+			
+			return $modifications;
+		}
+		
+		/**
+		 * Compile single wildcard segments (*)
+		 * Returns only the modifications needed for single wildcard segments
+		 * @param string $segment The original segment text
+		 * @return array Array of modifications to apply to the compiled segment
+		 */
+		private function compileSingleWildcardSegment(string $segment): array {
+			return [
+				'variable_name' => '*'
+			];
+		}
+		
+		/**
+		 * Compile multi-wildcard segments (**) or named multi-wildcards ({**})
+		 * Returns only the modifications needed for multi-wildcard segments
+		 * @param string $segment The original segment text
+		 * @return array Array of modifications to apply to the compiled segment
+		 */
+		private function compileMultiWildcardSegment(string $segment): array {
+			$modifications = [
+				'is_multi_wildcard' => true
+			];
+			
+			if ($segment === '**' || $segment === '{**}') {
+				// Anonymous multi-wildcard
+				$modifications['variable_name'] = '**';
+			} else {
+				// Named multi-wildcard variable
+				$modifications['variable_name'] = $this->segmentAnalyzer->extractVariableName($segment);
+			}
+			
+			return $modifications;
+		}
+		
+		/**
+		 * Compile segments with mixed static text and variables
+		 * e.g., "user-{id}-profile" or "file.{name}.{ext}"
+		 * Returns only the modifications needed for partial variable segments
+		 * @param string $segment The original segment text
+		 * @return array Array of modifications to apply to the compiled segment
+		 */
+		private function compilePartialVariableSegment(string $segment): array {
+			$modifications = [];
+			
+			// Handle segments with mixed static text and variables
+			// e.g., "user-{id}-profile" or "file.{name}.{ext}"
+			$result = $this->compilePartialSegmentPattern($segment);
+			
+			if ($result) {
+				$modifications['compiled_regex'] = $result['pattern'];
+				$modifications['variable_names'] = $result['variables'];
+				$modifications['literal_prefix'] = $result['literal_prefix'] ?? null;
+				$modifications['literal_suffix'] = $result['literal_suffix'] ?? null;
+				
+				// Check if any variables are wildcards
+				foreach ($result['variable_info'] as $varInfo) {
+					if ($varInfo['is_wildcard']) {
+						$modifications['is_multi_wildcard'] = $varInfo['is_multi_wildcard'];
+						$modifications['variable_name'] = $varInfo['clean_name'];
+						break;
+					}
+				}
+			}
+			
+			return $modifications;
 		}
 		
 		/**
@@ -427,116 +480,121 @@
 		 * @return array Returns ['name' => string, 'regex' => string, ...]
 		 */
 		private function parseVariableDefinition(string $content): array {
-			$result = [
-				'name'              => $content,
-				'clean_name'        => $content,
-				'regex'             => '[^/]+', // Default regex
-				'is_wildcard'       => false,
-				'is_multi_wildcard' => false,
-				'original_content'  => $content
-			];
-			
-			// Handle special wildcard cases first
-			if ($this->isSpecialWildcard($content, $result)) {
-				return $result;
+			// Handle special wildcard cases first (* and **)
+			if (in_array($content, ['*', '**'])) {
+				return $this->buildSpecialWildcardDefinition($content);
 			}
 			
-			// Handle suffixed wildcards
-			if ($this->isSuffixedWildcard($content, $result)) {
-				return $result;
+			// Handle suffixed wildcards (:* and :**)
+			if (str_ends_with($content, ':*') || str_ends_with($content, ':**')) {
+				return $this->buildSuffixedWildcardDefinition($content);
 			}
 			
 			// Handle typed variables (contains :)
 			if (str_contains($content, ':')) {
-				$this->parseTypedVariable($content, $result);
+				return $this->buildTypedVariableDefinition($content);
 			}
 			
-			return $result;
+			// Simple variable without type constraints
+			return [
+				'name'              => $content,
+				'clean_name'        => $content,
+				'regex'             => '[^/]+',
+				'is_wildcard'       => false,
+				'is_multi_wildcard' => false,
+				'original_content'  => $content
+			];
 		}
 		
 		/**
-		 * Check and handle special wildcard cases (* and **)
+		 * Builds configuration for special wildcard patterns (* and **)
 		 *
-		 * This method identifies pure wildcard patterns and configures their behavior:
+		 * This method creates the configuration for pure wildcard patterns:
 		 * - '*' matches any characters except forward slashes (single segment)
 		 * - '**' matches any characters including forward slashes (multiple segments)
 		 *
-		 * @param string $content The route segment content to check
-		 * @param array &$result Reference to result array that gets populated with wildcard config
-		 * @return bool True if content is a special wildcard, false otherwise
+		 * @param string $content The wildcard content (* or **)
+		 * @return array The wildcard configuration
 		 */
-		private function isSpecialWildcard(string $content, array &$result): bool {
+		private function buildSpecialWildcardDefinition(string $content): array {
 			// Define wildcard patterns and their corresponding regex patterns
 			$wildcards = [
 				'**' => ['regex' => '.*', 'multi' => true],        // Multi-segment wildcard
 				'*'  => ['regex' => '[^/]*', 'multi' => false]    // Single-segment wildcard
 			];
 			
-			// Check if the content matches any defined wildcard pattern
-			if (!isset($wildcards[$content])) {
-				return false;
-			}
-			
-			// Extract configuration for the matched wildcard
 			$config = $wildcards[$content];
 			
-			// Populate result array with wildcard properties
-			$result['is_wildcard'] = true;                    // Mark as wildcard
-			$result['is_multi_wildcard'] = $config['multi']; // Single or multi-segment flag
-			$result['regex'] = $config['regex'];             // Regex pattern for matching
-			
-			return true;
+			return [
+				'name'              => $content,
+				'clean_name'        => $content,
+				'regex'             => $config['regex'],
+				'is_wildcard'       => true,
+				'is_multi_wildcard' => $config['multi'],
+				'original_content'  => $content
+			];
 		}
 		
 		/**
-		 * Check and handle suffixed wildcards (:* and :**)
+		 * Builds configuration for suffixed wildcard patterns (:* and :**)
 		 *
-		 * This method processes named parameters with wildcard suffixes:
+		 * This method creates configuration for named parameters with wildcard suffixes:
 		 * - 'name:*' creates a named parameter that matches single segments
 		 * - 'name:**' creates a named parameter that matches multiple segments
 		 *
-		 * @param string $content The route segment content to check
-		 * @param array &$result Reference to result array that gets populated with parameter config
-		 * @return bool True if content has a wildcard suffix, false otherwise
+		 * @param string $content The suffixed wildcard content (e.g., "name:*" or "path:**")
+		 * @return array The wildcard configuration
 		 */
-		private function isSuffixedWildcard(string $content, array &$result): bool {
+		private function buildSuffixedWildcardDefinition(string $content): array {
 			// Define suffix patterns with their properties
 			$suffixes = [
 				':**' => ['length' => 3, 'regex' => '.*', 'multi' => true],        // Multi-segment named wildcard
 				':*'  => ['length' => 2, 'regex' => '[^/]*', 'multi' => false]    // Single-segment named wildcard
 			];
 			
-			// Check each suffix pattern to see if content ends with it
+			// Find the matching suffix
 			foreach ($suffixes as $suffix => $config) {
 				if (str_ends_with($content, $suffix)) {
-					// Extract the parameter name by removing the suffix
-					$result['name'] = substr($content, 0, -$config['length']);
-					$result['clean_name'] = $result['name'];           // Store clean name without prefix/suffix
-					$result['regex'] = $config['regex'];               // Set regex pattern for matching
-					$result['is_wildcard'] = true;                     // Mark as wildcard
-					$result['is_multi_wildcard'] = $config['multi'];   // Set multi-segment flag
-					return true;
+					$name = substr($content, 0, -$config['length']);
+					
+					return [
+						'name'              => $name,
+						'clean_name'        => $name,
+						'regex'             => $config['regex'],
+						'is_wildcard'       => true,
+						'is_multi_wildcard' => $config['multi'],
+						'original_content'  => $content
+					];
 				}
 			}
 			
-			return false;
+			// Should never reach here given the calling conditions, but return safe default
+			return [
+				'name'              => $content,
+				'clean_name'        => $content,
+				'regex'             => '[^/]+',
+				'is_wildcard'       => false,
+				'is_multi_wildcard' => false,
+				'original_content'  => $content
+			];
 		}
 		
 		/**
 		 * This method processes parameters with type constraints in the format 'name:type'.
 		 * @param string $content The route segment content containing the typed parameter
-		 * @param array &$result Reference to result array that gets populated with parameter config
-		 * @return void
+		 * @return array
 		 */
-		private function parseTypedVariable(string $content, array &$result): void {
-			// Split content into name and type parts (limit to 2 parts in case type contains colons)
+		private function buildTypedVariableDefinition(string $content): array {
+			// Split content into name and type parts
 			$parts = explode(':', $content, 2);
 			
-			// Extract parameter name (everything before first colon)
-			$result['name'] = $parts[0];
-			$result['clean_name'] = $parts[0];  // Store clean name without type suffix
-			
-			// Resolve the type (everything after first colon) to its regex pattern
-			$result['regex'] = $this->resolveTypeToRegex($parts[1]);
+			return [
+				'name'              => $parts[0],
+				'clean_name'        => $parts[0],
+				'regex'             => $this->resolveTypeToRegex($parts[1]),
+				'is_wildcard'       => false,
+				'is_multi_wildcard' => false,
+				'original_content'  => $content
+			];
 		}
 	}
