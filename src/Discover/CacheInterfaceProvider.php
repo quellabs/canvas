@@ -3,7 +3,7 @@
 	namespace Quellabs\Canvas\Discover;
 	
 	use Quellabs\Discover\Discover;
-	use Quellabs\Canvas\Annotations\CacheGroup;
+	use Quellabs\Canvas\Annotations\CacheNamespace;
 	use Quellabs\Contracts\Context\MethodContext;
 	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\Canvas\Cache\Foundation\FileCache;
@@ -23,7 +23,7 @@
 		/**
 		 * The default cache key
 		 */
-		const string DEFAULT_CACHE_GROUP = "default";
+		const string DEFAULT_NAMESPACE = "default";
 		
 		/**
 		 * Singleton instance of the cache implementation
@@ -89,18 +89,18 @@
 		 */
 		public function createInstance(string $className, array $dependencies, array $metadata, ?MethodContext $methodContext=null): CacheInterface {
 			// Default cache key
-			$cacheGroup = self::DEFAULT_CACHE_GROUP;
+			$namespace = self::DEFAULT_NAMESPACE;
 			
 			// Read the annotations of the class/method
 			if ($methodContext !== null) {
 				$annotations = $this->annotationReader->getMethodAnnotations(
 					$methodContext->getClassName(),
 					$methodContext->getMethodName(),
-					CacheGroup::class
+					CacheNamespace::class
 				);
 				
 				if (!$annotations->isEmpty()) {
-					$cacheGroup = $annotations[0]->getGroup();
+					$namespace = $annotations[0]->getNamespace();
 				}
 			}
 			
@@ -108,17 +108,17 @@
 			$providerClass = $this->getProviderClass($metadata['provider'] ?? null);
 			
 			// Return existing instance if already created (singleton pattern)
-			if (isset($this->cache["{$providerClass}:{$cacheGroup}"])) {
-				return $this->cache["{$providerClass}:{$cacheGroup}"];
+			if (isset($this->cache["{$providerClass}:{$namespace}"])) {
+				return $this->cache["{$providerClass}:{$namespace}"];
 			}
 			
 			// Build the cache directory path: {project_root}/storage/cache/auto
 			$cachePath = $this->discover->getProjectRoot() . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'cache';
 			
 			// Create and store the FileCache instance, then return it
-			return $this->cache["{$providerClass}:{$cacheGroup}"] = $this->dependencyInjector->make($providerClass, [
+			return $this->cache["{$providerClass}:{$namespace}"] = $this->dependencyInjector->make($providerClass, [
 				'cachePath' => $cachePath,
-				'group'     => $cacheGroup,
+				'namespace' => $namespace,
 			]);
 		}
 		

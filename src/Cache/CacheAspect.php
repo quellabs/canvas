@@ -29,7 +29,7 @@
 		private ?string $key;
 		
 		/** @var string Context/namespace */
-		private string $group;
+		private string $namespace;
 		
 		/** @var int Time to live in seconds */
 		private int $ttl;
@@ -44,20 +44,20 @@
 		 * Constructor
 		 * @param string|null $key Cache key template (null = auto-generate from method context)
 		 * @param int $ttl Time to live in seconds (0 = never expires)
-		 * @param string $group Cache group for namespacing
+		 * @param string $namespace Cache group for namespacing
 		 * @param int $lockTimeout Lock timeout in seconds for cache operations
 		 * @param bool $gracefulFallback Whether to execute method if caching fails
 		 */
 		public function __construct(
 			?string          $key = null,
 			int              $ttl = 3600,
-			string           $group = 'default',
+			string           $namespace = 'default',
 			int              $lockTimeout = 5,
 			bool             $gracefulFallback = true
 		) {
 			$this->key = $key;
 			$this->ttl = max(0, $ttl); // Ensure non-negative TTL
-			$this->group = $group;
+			$this->namespace = $namespace;
 			$this->lockTimeout = max(1, $lockTimeout); // Ensure positive timeout
 			$this->gracefulFallback = $gracefulFallback;
 		}
@@ -83,7 +83,7 @@
 		public function around(MethodContext $context, callable $proceed): mixed {
 			try {
 				// Initialize cache with concurrency protection
-				$cache = new FileCache($this->group, $this->lockTimeout);
+				$cache = new FileCache($this->namespace, $this->lockTimeout);
 				
 				// Resolve a dynamic cache key
 				$cacheKey = $this->resolveCacheKey($context);
