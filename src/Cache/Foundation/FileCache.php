@@ -28,7 +28,7 @@
 		private string $cachePath;
 		
 		/** @var string Cache context for namespacing */
-		private string $context;
+		private string $group;
 		
 		/** @var int Maximum time to wait for locks (seconds) */
 		private int $lockTimeout;
@@ -36,12 +36,12 @@
 		/**
 		 * FileCache Constructor
 		 * @param string $cachePath Base cache directory (e.g., /storage/cache)
-		 * @param string $context Cache context for namespacing (e.g., 'pages', 'data')
+		 * @param string $group Cache context for namespacing (e.g., 'pages', 'data')
 		 * @param int $lockTimeout Maximum time to wait for locks in seconds
 		 */
-		public function __construct(string $cachePath, string $context = 'default', int $lockTimeout = 5) {
+		public function __construct(string $cachePath, string $group = 'default', int $lockTimeout = 5) {
 			$this->cachePath = rtrim($cachePath, '/');
-			$this->context = $context;
+			$this->group = $group;
 			$this->lockTimeout = $lockTimeout;
 			
 			// Ensure cache directory exists at construction time
@@ -220,7 +220,7 @@
 		 * @return string Context directory path
 		 */
 		private function getContextPath(): string {
-			return $this->cachePath . '/' . $this->context;
+			return $this->cachePath . '/' . $this->group;
 		}
 		
 		/**
