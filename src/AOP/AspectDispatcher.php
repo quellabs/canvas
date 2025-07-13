@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\AOP;
 	
 	use Quellabs\AnnotationReader\AnnotationReader;
+	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Contracts\AOP\AfterAspect;
 	use Quellabs\Contracts\AOP\AroundAspect;
 	use Quellabs\Contracts\AOP\BeforeAspect;
@@ -48,7 +49,7 @@
 		 * @param string $method The name of the method to execute on the controller
 		 * @param array $arguments Method arguments resolved from route parameters
 		 * @return Response The final HTTP response after all aspect processing
-		 * @throws \ReflectionException When method reflection fails
+		 * @throws AnnotationReaderException
 		 */
 		public function dispatch(Request $request, object $controller, string $method, array $arguments): Response {
 			try {
@@ -58,8 +59,7 @@
 					request: $request,
 					target: $controller,
 					methodName: $method,
-					arguments: $arguments,
-					reflection: new \ReflectionMethod($controller, $method)
+					arguments: $arguments
 				);
 				
 				// Discover and instantiate all aspects that apply to this method
@@ -96,6 +96,7 @@
 		 * @param object $controller The controller instance that contains the target method
 		 * @param string $method The name of the method to resolve aspects for
 		 * @return array Array of instantiated aspect objects ready for execution
+		 * @throws AnnotationReaderException
 		 */
 		private function getResolvedAspects(object $controller, string $method): array {
 			// Instantiate AspectResolver, which is used to find AOP classes

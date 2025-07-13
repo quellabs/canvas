@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Discover;
 	
 	use Quellabs\Canvas\Configuration\Configuration;
+	use Quellabs\Contracts\Context\MethodContext;
 	use Quellabs\DependencyInjection\Provider\ServiceProvider;
 	
 	/**
@@ -42,9 +43,11 @@
 		 * Creates and returns the Configuration instance
 		 * @param string $className The class name being requested (should be Configuration::class)
 		 * @param array $dependencies Dependencies for the class (unused since we return existing instance)
+		 * @param array $metadata Metadata as passed by Discover
+		 * @param MethodContext|null $methodContext
 		 * @return Configuration The returned instance
 		 */
-		public function createInstance(string $className, array $dependencies): Configuration {
+		public function createInstance(string $className, array $dependencies, array $metadata, ?MethodContext $methodContext=null): Configuration {
 			return $this->configuration;
 		}
 	}

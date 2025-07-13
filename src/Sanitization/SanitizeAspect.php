@@ -2,7 +2,6 @@
 	
 	namespace Quellabs\Canvas\Sanitization;
 	
-	use Quellabs\Canvas\Validation\Contracts\ValidationInterface;
 	use Quellabs\Contracts\AOP\BeforeAspect;
 	use Quellabs\Canvas\Sanitization\Contracts\SanitizationInterface;
 	use Quellabs\Contracts\AOP\MethodContext;
