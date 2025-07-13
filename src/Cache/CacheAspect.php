@@ -143,7 +143,7 @@
 		 */
 		private function generateMethodKey(MethodContext $context): string {
 			// Get class and method information
-			$target = $context->getTarget();
+			$target = $context->getClass();
 			$className = get_class($target);
 			$methodName = $context->getMethodName();
 			

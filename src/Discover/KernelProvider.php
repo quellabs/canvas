@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Discover;
 	
 	use Quellabs\Canvas\Kernel;
+	use Quellabs\Contracts\Context\MethodContext;
 	use Quellabs\DependencyInjection\Provider\ServiceProvider;
 	
 	/**
@@ -42,9 +43,10 @@
 		 * Creates and returns the kernel instance
 		 * @param string $className The class name being requested (should be Kernel::class)
 		 * @param array $dependencies Dependencies for the class (unused since we return existing instance)
+		 * @param MethodContext|null $methodContext
 		 * @return Kernel The framework kernel instance
 		 */
-		public function createInstance(string $className, array $dependencies): Kernel {
+		public function createInstance(string $className, array $dependencies, ?MethodContext $methodContext=null): object {
 			return $this->framework;
 		}
 	}
