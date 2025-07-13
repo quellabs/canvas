@@ -2,14 +2,9 @@
 	
 	namespace Quellabs\Canvas;
 	
-	use Dotenv\Dotenv;
-	use Dotenv\Exception\InvalidEncodingException;
-	use Dotenv\Exception\InvalidFileException;
-	use Dotenv\Exception\InvalidPathException;
 	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\Canvas\AOP\AspectDispatcher;
 	use Quellabs\Canvas\Configuration\Configuration;
-	use Quellabs\Canvas\Discover\CacheInterfaceProvider;
 	use Quellabs\Canvas\Discover\ConfigurationProvider;
 	use Quellabs\Canvas\Discover\DiscoverProvider;
 	use Quellabs\Canvas\Discover\KernelProvider;
@@ -20,6 +15,7 @@
 	use Quellabs\Canvas\Legacy\LegacyBridge;
 	use Quellabs\Canvas\Legacy\LegacyHandler;
 	use Quellabs\Canvas\Routing\AnnotationResolver;
+	use Quellabs\DependencyInjection\Autowiring\MethodContext;
 	use Quellabs\DependencyInjection\Container;
 	use Quellabs\Discover\Discover;
 	use Symfony\Component\HttpFoundation\Request;
@@ -56,7 +52,8 @@
 			$this->dependencyInjector->register(new ConfigurationProvider($this->configuration));
 			$this->dependencyInjector->register(new DiscoverProvider($this->discover));
 			$this->dependencyInjector->register(new SignalHubProvider());
-			$this->dependencyInjector->register(new CacheInterfaceProvider());
+			$this->dependencyInjector->register(new CacheInterfaceProvider($this->discover, $this->dependencyInjector, $this->annotationsReader));
+			$this->dependencyInjector->register(new AnnotationsReaderProvider($this->annotationsReader));
 			
 			// Initialize legacy fallback handler to null explicitly to please phpstan
 			$this->legacyFallbackHandler = null;
@@ -137,7 +134,7 @@
 		 */
 		public function handle(Request $request): Response {
 			// Prepare request dependencies and register with dependency injector
-			// This typically involves setting up request-scoped services and context
+			// This involves setting up request-scoped services and context
 			$providers = $this->prepareRequest($request);
 			
 			try {
@@ -288,16 +285,12 @@
 			$aspectDispatcher = new AspectDispatcher($this->annotationsReader, $this->dependencyInjector);
 			
 			// Run the request through the aspect dispatcher
-			try {
-				return $aspectDispatcher->dispatch(
-					$request,
-					$controller,
-					$urlData["method"],
-					$urlData["variables"]
-				);
-			} catch (\ReflectionException $e) {
-				return $this->createErrorResponse($e);
-			}
+			return $aspectDispatcher->dispatch(
+				$request,
+				$controller,
+				$urlData["method"],
+				$urlData["variables"]
+			);
 		}
 		
 		/**
@@ -478,7 +471,7 @@
 		 */
 		private function renderProductionErrorPageContent(): string {
 			return "<!DOCTYPE html>
-<html>
+<html lang='eng'>
 <head>
     <title>Server Error</title>
     <style>

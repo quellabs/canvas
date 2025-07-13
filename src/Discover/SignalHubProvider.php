@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Discover;
 	
 	use Quellabs\Canvas\Kernel;
+	use Quellabs\Contracts\Context\MethodContext;
 	use Quellabs\SignalHub\SignalHub;
 	use Quellabs\SignalHub\SignalHubLocator;
 	use Quellabs\DependencyInjection\Provider\ServiceProvider;
@@ -30,9 +31,11 @@
 		 * Creates and returns the kernel instance
 		 * @param string $className The class name being requested (should be Kernel::class)
 		 * @param array $dependencies Dependencies for the class (unused since we return existing instance)
+		 * @param array $metadata Metadata as passed by Discover
+		 * @param MethodContext|null $methodContext
 		 * @return SignalHub The signal hub instance
 		 */
-		public function createInstance(string $className, array $dependencies): SignalHub {
+		public function createInstance(string $className, array $dependencies, array $metadata, ?MethodContext $methodContext=null): object {
 			return SignalHubLocator::getInstance();
 		}
 	}
