@@ -5,6 +5,7 @@
 	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\Canvas\AOP\AspectDispatcher;
 	use Quellabs\Canvas\Configuration\Configuration;
+	use Quellabs\Canvas\Discover\AnnotationsReaderProvider;
 	use Quellabs\Canvas\Discover\CacheInterfaceProvider;
 	use Quellabs\Canvas\Discover\ConfigurationProvider;
 	use Quellabs\Canvas\Discover\DiscoverProvider;
@@ -53,7 +54,8 @@
 			$this->dependencyInjector->register(new ConfigurationProvider($this->configuration));
 			$this->dependencyInjector->register(new DiscoverProvider($this->discover));
 			$this->dependencyInjector->register(new SignalHubProvider());
-			$this->dependencyInjector->register(new CacheInterfaceProvider());
+			$this->dependencyInjector->register(new CacheInterfaceProvider($this->annotationsReader));
+			$this->dependencyInjector->register(new AnnotationsReaderProvider($this->annotationsReader));
 			
 			// Initialize legacy fallback handler to null explicitly to please phpstan
 			$this->legacyFallbackHandler = null;
@@ -134,7 +136,7 @@
 		 */
 		public function handle(Request $request): Response {
 			// Prepare request dependencies and register with dependency injector
-			// This typically involves setting up request-scoped services and context
+			// This involves setting up request-scoped services and context
 			$providers = $this->prepareRequest($request);
 			
 			try {

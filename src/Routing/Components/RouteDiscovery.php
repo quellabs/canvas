@@ -130,37 +130,32 @@
 		public function getRoutesFromController(string $controller): array {
 			$routes = [];
 			
-			try {
-				// Get the route prefix for this controller (e.g., from class-level RoutePrefix annotation)
-				$routePrefix = $this->getRoutePrefix($controller);
+			// Get the route prefix for this controller (e.g., from class-level RoutePrefix annotation)
+			$routePrefix = $this->getRoutePrefix($controller);
+			
+			// Extract all route annotations from public methods in this controller
+			$routeAnnotations = $this->getMethodRouteAnnotations($controller);
+			
+			// Process each method's route annotation to create complete route definitions
+			foreach ($routeAnnotations as $method => $routeAnnotation) {
+				// Get the method-specific route path from the annotation
+				$routePath = $routeAnnotation->getRoute();
 				
-				// Extract all route annotations from public methods in this controller
-				$routeAnnotations = $this->getMethodRouteAnnotations($controller);
+				// Combine controller prefix with method route to create complete path
+				$completeRoutePath = $this->buildCompleteRoutePath($routePrefix, $routePath);
 				
-				// Process each method's route annotation to create complete route definitions
-				foreach ($routeAnnotations as $method => $routeAnnotation) {
-					// Get the method-specific route path from the annotation
-					$routePath = $routeAnnotation->getRoute();
-					
-					// Combine controller prefix with method route to create complete path
-					$completeRoutePath = $this->buildCompleteRoutePath($routePrefix, $routePath);
-					
-					// Calculate priority based on route specificity
-					$priority = $this->segmentAnalyzer->calculateRoutePriority($completeRoutePath);
-					
-					// Build complete route definition with all necessary metadata
-					$routes[] = [
-						'http_methods' => $routeAnnotation->getMethods(),
-						'controller'   => $controller,
-						'method'       => $method,
-						'route'        => $routeAnnotation,
-						'route_path'   => $completeRoutePath,
-						'priority'     => $priority
-					];
-				}
-			} catch (AnnotationReaderException $e) {
-				// Log error but don't stop the discovery process
-				error_log("RouteDiscovery: Error processing controller {$controller}: " . $e->getMessage());
+				// Calculate priority based on route specificity
+				$priority = $this->segmentAnalyzer->calculateRoutePriority($completeRoutePath);
+				
+				// Build complete route definition with all necessary metadata
+				$routes[] = [
+					'http_methods' => $routeAnnotation->getMethods(),
+					'controller'   => $controller,
+					'method'       => $method,
+					'route'        => $routeAnnotation,
+					'route_path'   => $completeRoutePath,
+					'priority'     => $priority
+				];
 			}
 			
 			return $routes;
