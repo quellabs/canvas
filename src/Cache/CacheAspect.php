@@ -25,6 +25,9 @@
 	 */
 	class CacheAspect implements AroundAspect {
 		
+		/** @var Discover Discovery component */
+		private Discover $discover;
+		
 		/** @var string|null Cache key template */
 		private ?string $key;
 		
@@ -58,12 +61,11 @@
 			int              $lockTimeout = 5,
 			bool             $gracefulFallback = true
 		) {
-			$discover = new Discover();
-			
+			$this->discover = new Discover();
 			$this->key = $key;
 			$this->ttl = max(0, $ttl); // Ensure non-negative TTL
 			$this->group = $group;
-			$this->cachePath = $discover->resolveProjectPath('/storage/cache', true);
+			$this->cachePath = $this->discover->resolveProjectPath('/storage/cache', true);
 			$this->lockTimeout = max(1, $lockTimeout); // Ensure positive timeout
 			$this->gracefulFallback = $gracefulFallback;
 		}
