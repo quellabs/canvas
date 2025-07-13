@@ -89,6 +89,7 @@
 		 */
 		public function createInstance(string $className, array $dependencies, array $metadata, ?MethodContext $methodContext=null): CacheInterface {
 			// Default cache key
+			$annotationData = [];
 			$namespace = self::DEFAULT_NAMESPACE;
 			
 			// Read the annotations of the class/method
@@ -100,6 +101,7 @@
 				);
 				
 				if (!$annotations->isEmpty()) {
+					$annotationData = array_filter($annotations[0]->getParameters(), fn($e) => $e !== 'value', ARRAY_FILTER_USE_KEY);
 					$namespace = $annotations[0]->getNamespace();
 				}
 			}
@@ -113,9 +115,11 @@
 			}
 			
 			// Create and store the FileCache instance, then return it
-			return $this->cache["{$providerClass}:{$namespace}"] = $this->dependencyInjector->make($providerClass, [
-				'namespace' => $namespace,
-			]);
+			return $this->cache["{$providerClass}:{$namespace}"] = $this->dependencyInjector->make($providerClass, array_merge(
+				$annotationData, [
+					'namespace' => $namespace
+				]
+			));
 		}
 		
 		/**
