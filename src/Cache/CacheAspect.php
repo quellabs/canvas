@@ -25,9 +25,6 @@
 	 */
 	class CacheAspect implements AroundAspect {
 		
-		/** @var Discover Discovery component */
-		private Discover $discover;
-		
 		/** @var string|null Cache key template */
 		private ?string $key;
 		
@@ -36,9 +33,6 @@
 		
 		/** @var int Time to live in seconds */
 		private int $ttl;
-		
-		/** @var string Cache storage path */
-		private string $cachePath;
 		
 		/** @var int Lock timeout for cache operations */
 		private int $lockTimeout;
@@ -61,11 +55,9 @@
 			int              $lockTimeout = 5,
 			bool             $gracefulFallback = true
 		) {
-			$this->discover = new Discover();
 			$this->key = $key;
 			$this->ttl = max(0, $ttl); // Ensure non-negative TTL
 			$this->group = $group;
-			$this->cachePath = $this->discover->resolveProjectPath('/storage/cache', true);
 			$this->lockTimeout = max(1, $lockTimeout); // Ensure positive timeout
 			$this->gracefulFallback = $gracefulFallback;
 		}
@@ -91,7 +83,7 @@
 		public function around(MethodContext $context, callable $proceed): mixed {
 			try {
 				// Initialize cache with concurrency protection
-				$cache = new FileCache($this->cachePath, $this->group, $this->lockTimeout);
+				$cache = new FileCache($this->group, $this->lockTimeout);
 				
 				// Resolve a dynamic cache key
 				$cacheKey = $this->resolveCacheKey($context);
