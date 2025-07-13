@@ -45,6 +45,14 @@
 		}
 		
 		/**
+		 * Returns the class name
+		 * @return string
+		 */
+		public function getClassName(): string {
+			return get_class($this->class);
+		}
+
+		/**
 		 * Get the name of the method being called.
 		 * @return string The method name
 		 */
