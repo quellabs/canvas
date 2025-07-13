@@ -5,9 +5,9 @@
 	use Quellabs\AnnotationReader\AnnotationInterface;
 	
 	/**
-	 * CacheKey annotation class for defining cache groups in the Canvas framework
+	 * CacheContext annotation class
 	 */
-	class CacheNamespace implements AnnotationInterface {
+	class CacheContext implements AnnotationInterface {
 		
 		/** @var array All parameters passed to the annotation */
 		protected array $parameters;
@@ -18,13 +18,7 @@
 		 * @throws \InvalidArgumentException When no value is provided for the cache group
 		 */
 		public function __construct(array $parameters) {
-			// Store parameters
 			$this->parameters = $parameters;
-			
-			// Validate that a cache key value has been provided
-			if (empty($this->parameters["value"])) {
-				throw new \InvalidArgumentException("CacheNamespace annotation requires a value");
-			}
 		}
 		
 		/**
@@ -33,13 +27,5 @@
 		 */
 		public function getParameters(): array {
 			return $this->parameters;
-		}
-		
-		/**
-		 * Returns the namespace's value
-		 * @return string The cache key value
-		 */
-		public function getNamespace(): string {
-			return $this->parameters["value"];
 		}
 	}
