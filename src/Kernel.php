@@ -54,7 +54,7 @@
 			$this->dependencyInjector->register(new ConfigurationProvider($this->configuration));
 			$this->dependencyInjector->register(new DiscoverProvider($this->discover));
 			$this->dependencyInjector->register(new SignalHubProvider());
-			$this->dependencyInjector->register(new CacheInterfaceProvider($this->annotationsReader));
+			$this->dependencyInjector->register(new CacheInterfaceProvider($this->discover, $this->dependencyInjector, $this->annotationsReader));
 			$this->dependencyInjector->register(new AnnotationsReaderProvider($this->annotationsReader));
 			
 			// Initialize legacy fallback handler to null explicitly to please phpstan
@@ -473,7 +473,7 @@
 		 */
 		private function renderProductionErrorPageContent(): string {
 			return "<!DOCTYPE html>
-<html>
+<html lang='eng'>
 <head>
     <title>Server Error</title>
     <style>

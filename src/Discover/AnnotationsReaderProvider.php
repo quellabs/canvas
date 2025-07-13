@@ -39,10 +39,11 @@
 		 * Creates and returns the cache interface instance.
 		 * @param string $className The class name being requested (should be AnnotationReader::class)
 		 * @param array $dependencies Dependencies for the class (unused since we return existing instance)
+		 * @param array $metadata Metadata as passed by Discover
 		 * @param MethodContext|null $methodContext
 		 * @return AnnotationReader The cache interface implementation
 		 */
-		public function createInstance(string $className, array $dependencies, ?MethodContext $methodContext=null): AnnotationReader {
+		public function createInstance(string $className, array $dependencies, array $metadata, ?MethodContext $methodContext=null): AnnotationReader {
 			return $this->annotationReader;
 		}
 	}

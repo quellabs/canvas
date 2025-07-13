@@ -40,10 +40,11 @@
 		 * Creates and returns the Request instance.
 		 * @param string $className The class name being requested (should be Request::class)
 		 * @param array $dependencies Dependencies for the class (unused since we return existing instance)
+		 * @param array $metadata Metadata as passed by Discover
 		 * @param MethodContext|null $methodContext
 		 * @return Request The HTTP request instance (return type should be Request, not Kernel)
 		 */
-		public function createInstance(string $className, array $dependencies, ?MethodContext $methodContext=null): object {
+		public function createInstance(string $className, array $dependencies, array $metadata, ?MethodContext $methodContext=null): object {
 			// Return the pre-configured request instance
 			return $this->request;
 		}

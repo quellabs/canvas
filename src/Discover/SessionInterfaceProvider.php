@@ -39,10 +39,11 @@
 		 * Returns the session instance managed by this provider.
 		 * @param string $className The requested class name (must be SessionInterface)
 		 * @param array $dependencies Resolved dependencies (unused - session is pre-configured)
+		 * @param array $metadata Metadata as passed by Discover
 		 * @param MethodContext|null $methodContext
 		 * @return SessionInterface The session instance
 		 */
-		public function createInstance(string $className, array $dependencies, ?MethodContext $methodContext=null): object {
+		public function createInstance(string $className, array $dependencies, array $metadata, ?MethodContext $methodContext=null): object {
 			return $this->session;
 		}
 	}
