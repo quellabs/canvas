@@ -2,16 +2,15 @@
 	
 	namespace Quellabs\Canvas\Discover;
 	
-	use Quellabs\AnnotationReader\AnnotationReader;
-	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
-	use Quellabs\Canvas\Annotations\CacheGroup;
-	use Quellabs\Canvas\Annotations\CacheKey;
-	use Quellabs\Contracts\Context\MethodContext;
-	use Quellabs\Contracts\DependencyInjection\Container;
 	use Quellabs\Discover\Discover;
+	use Quellabs\Canvas\Annotations\CacheGroup;
+	use Quellabs\Contracts\Context\MethodContext;
+	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\Canvas\Cache\Foundation\FileCache;
 	use Quellabs\Canvas\Cache\Contracts\CacheInterface;
+	use Quellabs\Contracts\DependencyInjection\Container;
 	use Quellabs\DependencyInjection\Provider\ServiceProvider;
+	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	
 	/**
 	 * This class is responsible for providing a CacheInterface implementation
