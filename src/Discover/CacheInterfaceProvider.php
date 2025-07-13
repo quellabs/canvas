@@ -89,10 +89,12 @@
 		 */
 		public function createInstance(string $className, array $dependencies, array $metadata, ?MethodContext $methodContext=null): CacheInterface {
 			// Default cache key
-			$annotationData = [];
 			$namespace = self::DEFAULT_NAMESPACE;
 			
 			// Read the annotations of the class/method
+			$annotationData = [];
+			$annotationDataHash = $namespace;
+
 			if ($methodContext !== null) {
 				$annotations = $this->annotationReader->getMethodAnnotations(
 					$methodContext->getClassName(),
@@ -102,6 +104,7 @@
 				
 				if (!$annotations->isEmpty()) {
 					$annotationData = array_filter($annotations[0]->getParameters(), fn($e) => $e !== 'value', ARRAY_FILTER_USE_KEY);
+					$annotationDataHash .= ":" . md5(serialize($annotationData));
 					$namespace = $annotations[0]->getNamespace();
 				}
 			}
@@ -110,12 +113,12 @@
 			$providerClass = $this->getProviderClass($metadata['provider'] ?? null);
 			
 			// Return existing instance if already created (singleton pattern)
-			if (isset($this->cache["{$providerClass}:{$namespace}"])) {
-				return $this->cache["{$providerClass}:{$namespace}"];
+			if (isset($this->cache["{$providerClass}:{$annotationDataHash}"])) {
+				return $this->cache["{$providerClass}:{$annotationDataHash}"];
 			}
 			
 			// Create and store the FileCache instance, then return it
-			return $this->cache["{$providerClass}:{$namespace}"] = $this->dependencyInjector->make($providerClass, array_merge(
+			return $this->cache["{$providerClass}:{$annotationDataHash}"] = $this->dependencyInjector->make($providerClass, array_merge(
 				$annotationData, [
 					'namespace' => $namespace
 				]
