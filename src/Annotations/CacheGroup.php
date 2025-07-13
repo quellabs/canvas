@@ -14,7 +14,7 @@
 		
 		/**
 		 * CacheGroup constructor
-		 * @param array $parameters The annotation parameters (expects 'group' key)
+		 * @param array $parameters The annotation parameters (expects 'value' key)
 		 * @throws \InvalidArgumentException When no value is provided for the cache group
 		 */
 		public function __construct(array $parameters) {
@@ -22,7 +22,7 @@
 			$this->parameters = $parameters;
 			
 			// Validate that a cache key value has been provided
-			if (empty($this->parameters["group"])) {
+			if (empty($this->parameters["value"])) {
 				throw new \InvalidArgumentException("CacheGroup annotation requires a value");
 			}
 		}
@@ -40,6 +40,6 @@
 		 * @return string The cache key value
 		 */
 		public function getGroup(): string {
-			return $this->parameters["group"];
+			return $this->parameters["value"];
 		}
 	}
