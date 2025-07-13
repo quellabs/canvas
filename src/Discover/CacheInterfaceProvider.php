@@ -117,8 +117,8 @@
 			
 			// Create and store the FileCache instance, then return it
 			return $this->cache["{$providerClass}:{$cacheGroup}"] = $this->dependencyInjector->make($providerClass, [
-				'cachePath'  => $cachePath,
-				'cacheGroup' => $cacheGroup,
+				'cachePath' => $cachePath,
+				'group'     => $cacheGroup,
 			]);
 		}
 		
