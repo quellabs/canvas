@@ -113,7 +113,7 @@
 			}
 			
 			// Build the cache directory path: {project_root}/storage/cache/auto
-			$cachePath = $this->discover->getProjectRoot() . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'cache' . DIRECTORY_SEPARATOR . $cacheGroup;
+			$cachePath = $this->discover->getProjectRoot() . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'cache';
 			
 			// Create and store the FileCache instance, then return it
 			return $this->cache["{$providerClass}:{$cacheGroup}"] = $this->dependencyInjector->make($providerClass, [
