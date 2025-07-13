@@ -4,6 +4,7 @@
 	
 	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
+	use Quellabs\Canvas\Annotations\CacheGroup;
 	use Quellabs\Canvas\Annotations\CacheKey;
 	use Quellabs\Contracts\Context\MethodContext;
 	use Quellabs\Contracts\DependencyInjection\Container;
@@ -23,7 +24,7 @@
 		/**
 		 * The default cache key
 		 */
-		const string DEFAULT_CACHE_KEY = "default";
+		const string DEFAULT_CACHE_GROUP = "default";
 		
 		/**
 		 * Singleton instance of the cache implementation
@@ -89,18 +90,18 @@
 		 */
 		public function createInstance(string $className, array $dependencies, array $metadata, ?MethodContext $methodContext=null): CacheInterface {
 			// Default cache key
-			$cacheKey = self::DEFAULT_CACHE_KEY;
+			$cacheGroup = self::DEFAULT_CACHE_GROUP;
 			
 			// Read the annotations of the class/method
 			if ($methodContext !== null) {
 				$annotations = $this->annotationReader->getMethodAnnotations(
 					$methodContext->getClassName(),
 					$methodContext->getMethodName(),
-					CacheKey::class
+					CacheGroup::class
 				);
 				
 				if (!$annotations->isEmpty()) {
-					$cacheKey = $annotations[0]->getKey();
+					$cacheGroup = $annotations[0]->getGroup();
 				}
 			}
 			
@@ -108,15 +109,18 @@
 			$providerClass = $this->getProviderClass($metadata['provider'] ?? null);
 			
 			// Return existing instance if already created (singleton pattern)
-			if (isset($this->cache["{$providerClass}:{$cacheKey}"])) {
-				return $this->cache["{$providerClass}:{$cacheKey}"];
+			if (isset($this->cache["{$providerClass}:{$cacheGroup}"])) {
+				return $this->cache["{$providerClass}:{$cacheGroup}"];
 			}
 			
 			// Build the cache directory path: {project_root}/storage/cache/auto
-			$cachePath = $this->discover->getProjectRoot() . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'cache' . DIRECTORY_SEPARATOR . $cacheKey;
+			$cachePath = $this->discover->getProjectRoot() . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'cache' . DIRECTORY_SEPARATOR . $cacheGroup;
 			
 			// Create and store the FileCache instance, then return it
-			return $this->cache["{$providerClass}:{$cacheKey}"] = $this->dependencyInjector->make($providerClass, ['cachePath' => $cachePath]);
+			return $this->cache["{$providerClass}:{$cacheGroup}"] = $this->dependencyInjector->make($providerClass, [
+				'cachePath'  => $cachePath,
+				'cacheGroup' => $cacheGroup,
+			]);
 		}
 		
 		/**
@@ -127,13 +131,11 @@
 		private function getCacheConfig(): array {
 			// Check if the configuration file exists at the specified path
 			if (!file_exists($this->pathToConfig)) {
-				// Return an empty array if the config file doesn't exist
 				return [];
 			}
 			
 			// Verify that the configuration file is readable
 			if (!is_readable($this->pathToConfig)) {
-				// Return an empty array if the config file exists but isn't readable
 				return [];
 			}
 			
