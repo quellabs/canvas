@@ -2,10 +2,6 @@
 	
 	namespace Quellabs\Canvas;
 	
-	use Dotenv\Dotenv;
-	use Dotenv\Exception\InvalidEncodingException;
-	use Dotenv\Exception\InvalidFileException;
-	use Dotenv\Exception\InvalidPathException;
 	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\Canvas\AOP\AspectDispatcher;
 	use Quellabs\Canvas\Configuration\Configuration;
@@ -19,6 +15,7 @@
 	use Quellabs\Canvas\Legacy\LegacyBridge;
 	use Quellabs\Canvas\Legacy\LegacyHandler;
 	use Quellabs\Canvas\Routing\AnnotationResolver;
+	use Quellabs\DependencyInjection\Autowiring\MethodContext;
 	use Quellabs\DependencyInjection\Container;
 	use Quellabs\Discover\Discover;
 	use Symfony\Component\HttpFoundation\Request;
@@ -286,16 +283,12 @@
 			$aspectDispatcher = new AspectDispatcher($this->annotationsReader, $this->dependencyInjector);
 			
 			// Run the request through the aspect dispatcher
-			try {
-				return $aspectDispatcher->dispatch(
-					$request,
-					$controller,
-					$urlData["method"],
-					$urlData["variables"]
-				);
-			} catch (\ReflectionException $e) {
-				return $this->createErrorResponse($e);
-			}
+			return $aspectDispatcher->dispatch(
+				$request,
+				$controller,
+				$urlData["method"],
+				$urlData["variables"]
+			);
 		}
 		
 		/**
