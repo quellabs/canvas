@@ -15,7 +15,6 @@
 		/**
 		 * CacheNamespace constructor
 		 * @param array $parameters The annotation parameters (expects 'value' key)
-		 * @throws \InvalidArgumentException When no value is provided for the cache group
 		 */
 		public function __construct(array $parameters) {
 			$this->parameters = $parameters;

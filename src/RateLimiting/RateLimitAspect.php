@@ -85,7 +85,7 @@
 			
 			// Validate scope
 			if (!in_array($scope, self::VALID_SCOPES)) {
-				throw new \InvalidArgumentException("Invalid scope '$scope'. Valid options: " . implode(', ', $validScopes));
+				throw new \InvalidArgumentException("Invalid scope '$scope'. Valid options: " . implode(', ', self::VALID_SCOPES));
 			}
 			
 			// Validate custom scope has identifier
@@ -364,12 +364,15 @@
 				
 				// Custom identifier - allows for flexible rate limiting strategies
 				'custom' => $this->identifier,
+				
+				// Default value (will never occur, but to keep phpstan happy)
+				default => new \Exception("Invalid scope")
 			};
 
 			// Sanitize each component to prevent special character conflicts and cache key collisions
 			$scope = $this->sanitizeKeyComponent($this->scope);
 			$identifier = $this->sanitizeKeyComponent($rawIdentifier);
-			$route = $this->sanitizeKeyComponent($context->getController() . '::' . $context->getMethod());
+			$route = $this->sanitizeKeyComponent($context->getClass() . '::' . $context->getMethodName());
 			
 			// Construct the final cache key with all components
 			// This ensures unique keys for each combination of scope, identifier, and route
