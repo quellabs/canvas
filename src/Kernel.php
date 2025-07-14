@@ -5,6 +5,8 @@
 	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\Canvas\AOP\AspectDispatcher;
 	use Quellabs\Canvas\Configuration\Configuration;
+	use Quellabs\Canvas\Discover\AnnotationsReaderProvider;
+	use Quellabs\Canvas\Discover\CacheInterfaceProvider;
 	use Quellabs\Canvas\Discover\ConfigurationProvider;
 	use Quellabs\Canvas\Discover\DiscoverProvider;
 	use Quellabs\Canvas\Discover\KernelProvider;
