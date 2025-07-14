@@ -148,7 +148,7 @@
 				return $this->createRateLimitResponse($request, $result);
 			}
 			
-			// Rate limit not exceeded, allow the request to continue to the next middleware/handler
+			// Rate limit isn't exceeded, allow the request to continue to the next middleware/handler
 			return null;
 		}
 		
@@ -372,7 +372,7 @@
 			// Sanitize each component to prevent special character conflicts and cache key collisions
 			$scope = $this->sanitizeKeyComponent($this->scope);
 			$identifier = $this->sanitizeKeyComponent($rawIdentifier);
-			$route = $this->sanitizeKeyComponent($context->getClass() . '::' . $context->getMethodName());
+			$route = $this->sanitizeKeyComponent($context->getClassName() . '::' . $context->getMethodName());
 			
 			// Construct the final cache key with all components
 			// This ensures unique keys for each combination of scope, identifier, and route
