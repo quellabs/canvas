@@ -252,23 +252,41 @@
 		 * @return void
 		 */
 		private function initializeComponents(): void {
+			// Create analyzer for parsing and validating route segments (URL parts)
 			$segmentAnalyzer = new RouteSegmentAnalyzer();
+			
+			// Create compiler to convert route patterns into matchable expressions
+			// Depends on segment analyzer for proper URL parsing
 			$patternCompiler = new RoutePatternCompiler($segmentAnalyzer);
 			
+			// Initialize the file-based caching system for storing compiled routes
+			// Uses 'routes' as the cache namespace/directory
+			$fileCache = new FileCache('routes');
+			
+			// Set up route matcher to handle incoming request matching
+			// Uses instance setting for trailing slash behavior
 			$this->routeMatcher = new RouteMatcher($this->matchTrailingSlashes);
+			
+			// Create index builder for optimizing route lookup performance
+			// Requires segment analyzer for proper route categorization
 			$this->indexBuilder = new RouteIndexBuilder($segmentAnalyzer);
 			
+			// Initialize route discovery system to find and register routes
+			// Requires kernel for application context, analyzer for parsing,
+			// and compiler for pattern compilation
 			$this->routeDiscovery = new RouteDiscovery(
-				$this->kernel,
-				$segmentAnalyzer,
-				$patternCompiler
+				$this->kernel,           // Application kernel instance
+				$segmentAnalyzer,        // Route segment parsing service
+				$patternCompiler         // Route pattern compilation service
 			);
 			
-			$fileCache = new FileCache($this->cacheDirectory, 'routes');
+			// Set up cache management for storing and retrieving compiled routes
+			// Uses file cache for persistence, debug mode affects caching behavior,
+			// and controller directory for locating route definitions
 			$this->cacheManager = new RouteCacheManager(
-				$fileCache,
-				$this->debugMode,
-				$this->controllerDirectory
+				$fileCache,              // File-based cache storage
+				$this->debugMode,        // Debug mode flag (affects cache invalidation)
+				$this->controllerDirectory // Path to controller files
 			);
 		}
 		

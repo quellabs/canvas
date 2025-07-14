@@ -3,7 +3,7 @@
 	namespace Quellabs\Canvas\Discover;
 	
 	use Quellabs\Discover\Discover;
-	use Quellabs\Canvas\Annotations\CacheGroup;
+	use Quellabs\Canvas\Annotations\CacheContext;
 	use Quellabs\Contracts\Context\MethodContext;
 	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\Canvas\Cache\Foundation\FileCache;
@@ -23,7 +23,7 @@
 		/**
 		 * The default cache key
 		 */
-		const string DEFAULT_CACHE_GROUP = "default";
+		const string DEFAULT_NAMESPACE = "default";
 		
 		/**
 		 * Singleton instance of the cache implementation
@@ -89,37 +89,40 @@
 		 */
 		public function createInstance(string $className, array $dependencies, array $metadata, ?MethodContext $methodContext=null): CacheInterface {
 			// Default cache key
-			$cacheGroup = self::DEFAULT_CACHE_GROUP;
+			$namespace = self::DEFAULT_NAMESPACE;
 			
 			// Read the annotations of the class/method
+			$annotationContext = [];
+			$annotationContextHash = $namespace;
+
 			if ($methodContext !== null) {
 				$annotations = $this->annotationReader->getMethodAnnotations(
 					$methodContext->getClassName(),
 					$methodContext->getMethodName(),
-					CacheGroup::class
+					CacheContext::class
 				);
 				
 				if (!$annotations->isEmpty()) {
-					$cacheGroup = $annotations[0]->getGroup();
+					$annotationContext = $annotations[0]->getParameters();
+					$annotationContextHash .= ":" . md5(serialize($annotationContext));
+					$namespace = !empty($annotationContext['namespace']) ? $annotationContext['namespace'] : $namespace;
 				}
 			}
 			
 			// Check which kind of cache we want to create
-			$providerClass = $this->getProviderClass($metadata['provider'] ?? null);
+			$providerClass = $this->getProviderClass( $metadata['provider'] ?? $annotationContext['driver'] ?? null);
 			
 			// Return existing instance if already created (singleton pattern)
-			if (isset($this->cache["{$providerClass}:{$cacheGroup}"])) {
-				return $this->cache["{$providerClass}:{$cacheGroup}"];
+			if (isset($this->cache["{$providerClass}:{$annotationContextHash}"])) {
+				return $this->cache["{$providerClass}:{$annotationContextHash}"];
 			}
 			
-			// Build the cache directory path: {project_root}/storage/cache/auto
-			$cachePath = $this->discover->getProjectRoot() . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'cache' . DIRECTORY_SEPARATOR . $cacheGroup;
-			
 			// Create and store the FileCache instance, then return it
-			return $this->cache["{$providerClass}:{$cacheGroup}"] = $this->dependencyInjector->make($providerClass, [
-				'cachePath'  => $cachePath,
-				'cacheGroup' => $cacheGroup,
-			]);
+			return $this->cache["{$providerClass}:{$annotationContextHash}"] = $this->dependencyInjector->make($providerClass, array_merge(
+				$annotationContext, [
+					'namespace' => $namespace
+				]
+			));
 		}
 		
 		/**
