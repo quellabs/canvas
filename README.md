@@ -861,7 +861,7 @@ class ReportController extends BaseController {
     
     /**
      * @Route("/reports/user/{id:int}")
-     * @InterceptWith(CacheAspect::class, ttl=1800, context="user_reports")
+     * @InterceptWith(CacheAspect::class, namespace="user_reports", ttl=1800)
      */
     public function userReport(int $id) {
         // Each user ID gets separate cache entry
@@ -878,9 +878,9 @@ Override automatic key generation:
 ```php
 /**
  * @InterceptWith(CacheAspect::class, 
+ *     namespace="products",
  *     key="product_catalog", 
- *     ttl=7200,
- *     context="products"
+ *     ttl=7200
  * )
  */
 public function productCatalog() {
@@ -894,9 +894,9 @@ public function productCatalog() {
 ```php
 /**
  * @InterceptWith(CacheAspect::class,
- *     key=null,                                    // Auto-generate from method
+ *     namespace="api_responses",                  // Cache namespace
+ *     key=null,                                   // Auto-generate from method
  *     ttl=3600,                                   // 1 hour cache
- *     context="api_responses",                    // Cache namespace
  *     cachePath="/var/cache/canvas",              // Storage location
  *     lockTimeout=10,                             // File lock timeout
  *     gracefulFallback=true                       // Execute method if caching fails
@@ -935,34 +935,6 @@ The aspect automatically generates intelligent cache keys:
 - **Key Length Limits** - Long keys are automatically truncated and hashed
 - **Lock Timeouts** - Configurable timeouts prevent indefinite blocking
 - **Storage Efficiency** - File-based storage with automatic cleanup
-
-#### Context Usage Examples
-
-```php
-class DataController extends BaseController {
-    
-    /**
-     * @InterceptWith(CacheAspect::class, context="public_data", ttl=86400)
-     */
-    public function publicStats() {
-        // Long cache for public data (24 hours)
-    }
-    
-    /**
-     * @InterceptWith(CacheAspect::class, context="user_data", ttl=300)
-     */
-    public function userDashboard() {
-        // Short cache for user-specific data (5 minutes)
-    }
-    
-    /**
-     * @InterceptWith(CacheAspect::class, context="admin_reports", ttl=0)
-     */
-    public function adminReport() {
-        // Never expires - manual cache invalidation required
-    }
-}
-```
 
 ## Task Scheduling
 

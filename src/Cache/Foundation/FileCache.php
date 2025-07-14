@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Cache\Foundation;
 	
 	use Quellabs\Canvas\Cache\Contracts\CacheInterface;
+	use Quellabs\Discover\Discover;
 	
 	/**
 	 * File-based cache implementation with comprehensive concurrency protection
@@ -12,15 +13,6 @@
 	 * - Proper file locking to handle concurrent access
 	 * - Process-level locking for expensive operations
 	 * - Safe directory operations with race condition handling
-	 *
-	 * Cache files are stored directly in the context directory:
-	 * /cache/context/abcdef123456...cache
-	 *
-	 * Lock files are placed next to cache files:
-	 * /cache/context/abcdef123456...lock
-	 *
-	 * Where the first 2 characters of the hash create subdirectories
-	 * to prevent too many files in a single directory.
 	 */
 	class FileCache implements CacheInterface {
 		
@@ -28,20 +20,23 @@
 		private string $cachePath;
 		
 		/** @var string Cache context for namespacing */
-		private string $context;
+		private string $namespace;
 		
 		/** @var int Maximum time to wait for locks (seconds) */
 		private int $lockTimeout;
 		
+		/** @var Discover */
+		private Discover $discover;
+		
 		/**
 		 * FileCache Constructor
-		 * @param string $cachePath Base cache directory (e.g., /storage/cache)
-		 * @param string $context Cache context for namespacing (e.g., 'pages', 'data')
+		 * @param string $namespace Cache context for namespacing (e.g., 'pages', 'data')
 		 * @param int $lockTimeout Maximum time to wait for locks in seconds
 		 */
-		public function __construct(string $cachePath, string $context = 'default', int $lockTimeout = 5) {
-			$this->cachePath = rtrim($cachePath, '/');
-			$this->context = $context;
+		public function __construct(string $namespace = 'default', int $lockTimeout = 5) {
+			$this->discover = new Discover();
+			$this->cachePath = rtrim($this->discover->getProjectRoot() . DIRECTORY_SEPARATOR . "storage" . DIRECTORY_SEPARATOR . "cache");
+			$this->namespace = $namespace;
 			$this->lockTimeout = $lockTimeout;
 			
 			// Ensure cache directory exists at construction time
@@ -220,7 +215,7 @@
 		 * @return string Context directory path
 		 */
 		private function getContextPath(): string {
-			return $this->cachePath . '/' . $this->context;
+			return $this->cachePath . '/' . $this->namespace;
 		}
 		
 		/**

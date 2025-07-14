@@ -28,14 +28,11 @@
 		/** @var string|null Cache key template */
 		private ?string $key;
 		
+		/** @var string Context/namespace */
+		private string $namespace;
+		
 		/** @var int Time to live in seconds */
 		private int $ttl;
-		
-		/** @var string Cache context/namespace */
-		private string $context;
-		
-		/** @var string Cache storage path */
-		private string $cachePath;
 		
 		/** @var int Lock timeout for cache operations */
 		private int $lockTimeout;
@@ -47,25 +44,20 @@
 		 * Constructor
 		 * @param string|null $key Cache key template (null = auto-generate from method context)
 		 * @param int $ttl Time to live in seconds (0 = never expires)
-		 * @param string $context Cache context for namespacing
-		 * @param string $cachePath Base cache directory path
+		 * @param string $namespace Cache group for namespacing
 		 * @param int $lockTimeout Lock timeout in seconds for cache operations
 		 * @param bool $gracefulFallback Whether to execute method if caching fails
 		 */
 		public function __construct(
 			?string          $key = null,
 			int              $ttl = 3600,
-			string           $context = 'default',
-			string           $cachePath = '/storage/cache',
+			string           $namespace = 'default',
 			int              $lockTimeout = 5,
 			bool             $gracefulFallback = true
 		) {
-			$discover = new Discover();
-			
 			$this->key = $key;
 			$this->ttl = max(0, $ttl); // Ensure non-negative TTL
-			$this->context = $context;
-			$this->cachePath = $discover->resolveProjectPath($cachePath, true);
+			$this->namespace = $namespace;
 			$this->lockTimeout = max(1, $lockTimeout); // Ensure positive timeout
 			$this->gracefulFallback = $gracefulFallback;
 		}
@@ -76,7 +68,7 @@
 		 * This method implements the around advice pattern:
 		 * 1. Resolve the cache key from method context and arguments
 		 * 2. Check cache for existing result
-		 * 3. Execute original method if cache miss
+		 * 3. Execute the original method in case of cache miss
 		 * 4. Store result in cache for future requests
 		 * 5. Return cached or computed result
 		 *
@@ -89,11 +81,9 @@
 		 * @throws \RuntimeException If caching fails and gracefulFallback is disabled
 		 */
 		public function around(MethodContext $context, callable $proceed): mixed {
-			$cacheKey = null;
-			
 			try {
 				// Initialize cache with concurrency protection
-				$cache = new FileCache($this->cachePath, $this->context, $this->lockTimeout);
+				$cache = new FileCache($this->namespace, $this->lockTimeout);
 				
 				// Resolve a dynamic cache key
 				$cacheKey = $this->resolveCacheKey($context);
@@ -200,7 +190,7 @@
 		 * @param string $prefix Prefix for the argument (for readability)
 		 * @return string Serialized argument
 		 */
-		private function serializeArgument($argument, string $prefix): string {
+		private function serializeArgument(mixed $argument, string $prefix): string {
 			if ($argument === null) {
 				return "{$prefix}:null";
 			}
