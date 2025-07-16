@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Debugbar;
 	
 	use Quellabs\SignalHub\SignalHub;
+	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
 	
 	class Debugbar {
@@ -19,20 +20,21 @@
 		
 		/**
 		 * Inject the debugbar in the response
+		 * @param Request $request
 		 * @param Response $response
 		 * @return void
 		 */
-		public function inject(Response $response): void {
+		public function inject(Request $request, Response $response): void {
 			$content = $response->getContent();
 			$bodyPos = $this->getEndOfBodyPosition($content);
 			
 			if ($bodyPos !== false) {
-				$newContent = substr($content, 0, $bodyPos) . $this->getHtml() . substr($content, $bodyPos);
+				$newContent = substr($content, 0, $bodyPos) . $this->getHtml($request) . substr($content, $bodyPos);
 				$response->setContent($newContent);
 			}
 		}
 		
-		private function getHtml(): string {
+		private function getHtml(Request $request): string {
 			return <<<BODY
 <!-- Canvas Debug Bar -->
 <div id="canvas-debug-bar" class="canvas-debug-bar minimized">
@@ -63,7 +65,7 @@
 </script>
 
 <script>
-    {$this->getDataScript()}
+    {$this->getDataScript($request)}
 </script>
 BODY;
 		}
@@ -607,12 +609,295 @@ BODY;
 			    word-break: break-all;
 			    font-family: 'Consolas', 'Monaco', monospace;
 			}
+			
+.canvas-debug-bar .canvas-debug-bar-files-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.canvas-debug-bar .canvas-debug-bar-file-item {
+    background: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 12px;
+}
+
+.canvas-debug-bar .canvas-debug-bar-file-item.invalid {
+    border-color: #dc3545;
+    background: #f8d7da;
+}
+
+.canvas-debug-bar .canvas-debug-bar-file-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.canvas-debug-bar .canvas-debug-bar-file-name {
+    color: #0066cc;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-weight: 500;
+}
+
+.canvas-debug-bar .canvas-debug-bar-file-size {
+    color: #666666;
+    font-size: 11px;
+    background: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.canvas-debug-bar .canvas-debug-bar-file-error {
+    color: white;
+    background: #dc3545;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.canvas-debug-bar .canvas-debug-bar-file-details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.canvas-debug-bar .canvas-debug-bar-file-detail {
+    display: flex;
+    font-size: 12px;
+}
+
+.canvas-debug-bar .canvas-debug-bar-error {
+    color: #dc3545;
+    font-weight: 500;
+}
         }
 CSS;
 		}
 		
-		private function getDataScript(): string {
-			$jsonData = json_encode($this->collector->getEvents(), JSON_HEX_TAG | JSON_HEX_AMP);
+		private function getRequestData(Request $request): array {
+			return [
+				'method'    => $request->getMethod(),
+				'uri'       => $request->getRequestUri(),
+				'url'       => $request->getUri(),
+				'ip'        => $request->getClientIp(),
+				'userAgent' => $request->headers->get('User-Agent', ''),
+				'referer'   => $request->headers->get('Referer'),
+				'headers'   => $this->getFilteredHeaders($request),
+				'query'     => $request->query->all(),           // GET parameters
+				'request'   => $request->request->all(),       // POST parameters
+				'files'     => $this->getFileData($request),     // Uploaded files
+				'cookies'   => $request->cookies->all(),       // Cookies
+				'session'   => $request->hasSession() ? $this->getFilteredSession($request) : [],
+			];
+		}
+		
+		private function getFilteredSession(Request $request): array {
+			if (!$request->hasSession()) {
+				return [];
+			}
+			
+			$sessionData = $request->getSession()->all();
+			
+			// Simple list of keys to exclude
+			$excludeKeys = [
+				'password', 'token', 'csrf', 'secret', 'key', 'auth'
+			];
+			
+			$filtered = [];
+			
+			foreach ($sessionData as $key => $value) {
+				// Skip if key contains sensitive words
+				$skip = false;
+				foreach ($excludeKeys as $excludeKey) {
+					if (stripos($key, $excludeKey) !== false) {
+						$skip = true;
+						break;
+					}
+				}
+				
+				if (!$skip) {
+					// Limit string length and don't show objects
+					if (is_string($value) && strlen($value) > 100) {
+						$filtered[$key] = substr($value, 0, 100) . '...';
+					} elseif (is_array($value) || is_scalar($value)) {
+						$filtered[$key] = $value;
+					} else {
+						$filtered[$key] = '[object]';
+					}
+				}
+			}
+			
+			return $filtered;
+		}
+		
+		private function getFilteredHeaders(Request $request): array {
+			$headers = $request->headers->all();
+			
+			// Headers to exclude for security/privacy reasons
+			$sensitiveHeaders = [
+				'authorization',
+				'cookie',
+				'x-api-key',
+				'x-auth-token',
+				'x-access-token',
+				'bearer',
+				'php-auth-user',
+				'php-auth-pw',
+				'php-auth-digest',
+				'www-authenticate',
+				'proxy-authorization',
+				'x-forwarded-authorization',
+			];
+			
+			// Headers that can contain sensitive data in values
+			$headerPatternsToFilter = [
+				'/^x-.*-key$/i',
+				'/^x-.*-token$/i',
+				'/^x-.*-secret$/i',
+				'/.*-auth.*/i',
+			];
+			
+			$filtered = [];
+			
+			foreach ($headers as $name => $values) {
+				$lowerName = strtolower($name);
+				
+				// Skip explicitly sensitive headers
+				if (in_array($lowerName, $sensitiveHeaders)) {
+					continue;
+				}
+				
+				// Skip headers matching sensitive patterns
+				$skipHeader = false;
+				foreach ($headerPatternsToFilter as $pattern) {
+					if (preg_match($pattern, $lowerName)) {
+						$skipHeader = true;
+						break;
+					}
+				}
+				
+				if ($skipHeader) {
+					continue;
+				}
+				
+				// Symfony headers are arrays, but we usually want the first value
+				// Some headers like Accept might have multiple values, so we join them
+				if (is_array($values)) {
+					if (count($values) === 1) {
+						$filtered[$name] = $values[0];
+					} else {
+						$filtered[$name] = implode(', ', $values);
+					}
+				} else {
+					$filtered[$name] = $values;
+				}
+			}
+			
+			return $filtered;
+		}
+		
+		private function getEventData(Request $request): array {
+			$data = [
+				'stats'   => ['time' => 0, 'memory' => 0, 'queryTime' => 0],
+				'cache'   => [],
+				'aspects' => [],
+				'queries' => [],
+			];
+			
+			foreach ($this->collector->getEvents() as $event) {
+				switch ($event['signal']) {
+					case 'debug.canvas.query':
+						$data['route'] = array_merge($event['data'], ['legacyFile' => '']);
+						$data['request'] = $this->getRequestData($request);
+						$data['stats']['time'] += $event['data']['execution_time_ms'];
+						$data['stats']['memory'] += $event['data']['memory_used_bytes'];
+						break;
+					
+					case 'debug.objectquel.query':
+						$data['queries'][] = $event['data'];
+						$data['stats']['queryTime'] += $event['data']['execution_time_ms'];
+						break;
+				}
+			}
+			
+			return $data;
+		}
+		
+		private function getFileData(Request $request): array {
+			$files = [];
+			
+			// Get all uploaded files from the request
+			$uploadedFiles = $request->files->all();
+			
+			// Process files recursively (handles nested file inputs)
+			$this->processFileInputs($uploadedFiles, $files);
+			
+			return $files;
+		}
+		
+		private function processFileInputs($fileInputs, array &$files, string $prefix = ''): void {
+			foreach ($fileInputs as $name => $file) {
+				$fullName = $prefix ? $prefix . '[' . $name . ']' : $name;
+				
+				if (is_array($file)) {
+					// Handle array of files (e.g., multiple file uploads)
+					$this->processFileInputs($file, $files, $fullName);
+				} elseif ($file instanceof \Symfony\Component\HttpFoundation\File\UploadedFile) {
+					// Process single uploaded file
+					$files[$fullName] = $this->extractFileInfo($file);
+				}
+			}
+		}
+		
+		private function extractFileInfo(\Symfony\Component\HttpFoundation\File\UploadedFile $file): array {
+			return [
+				'originalName'  => $file->getClientOriginalName(),
+				'mimeType'      => $file->getClientMimeType(),
+				'size'          => $file->getSize(),
+				'sizeFormatted' => $this->formatFileSize($file->getSize()),
+				'error'         => $file->getError(),
+				'errorMessage'  => $this->getUploadErrorMessage($file->getError()),
+				'isValid'       => $file->isValid(),
+				'extension'     => $file->getClientOriginalExtension(),
+				'tempPath'      => $file->getRealPath(), // Temporary file path
+			];
+		}
+		
+		private function formatFileSize(?int $bytes): string {
+			if ($bytes === null || $bytes === 0) {
+				return '0 B';
+			}
+			
+			$units = ['B', 'KB', 'MB', 'GB', 'TB'];
+			$power = floor(log($bytes, 1024));
+			$power = min($power, count($units) - 1);
+			
+			$size = $bytes / pow(1024, $power);
+			$formattedSize = round($size, 2);
+			
+			return $formattedSize . ' ' . $units[$power];
+		}
+		
+		private function getUploadErrorMessage(int $error): string {
+			return match ($error) {
+				UPLOAD_ERR_OK => 'No error',
+				UPLOAD_ERR_INI_SIZE => 'File exceeds upload_max_filesize directive',
+				UPLOAD_ERR_FORM_SIZE => 'File exceeds MAX_FILE_SIZE directive',
+				UPLOAD_ERR_PARTIAL => 'File was only partially uploaded',
+				UPLOAD_ERR_NO_FILE => 'No file was uploaded',
+				UPLOAD_ERR_NO_TMP_DIR => 'Missing temporary folder',
+				UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk',
+				UPLOAD_ERR_EXTENSION => 'Upload stopped by extension',
+				default => 'Unknown upload error',
+			};
+		}
+		
+		
+		private function getDataScript(Request $request): string {
+			$jsonData = json_encode($this->getEventData($request), JSON_HEX_TAG | JSON_HEX_AMP);
 			
 			return <<<JS
         // Inject debug data and render
@@ -751,39 +1036,11 @@ window.CanvasDebugBar = {
 	                </div>
 	            </div>
 	
-	            \${Object.keys(request.headers).length > 0 ? `
-	            <div class="canvas-debug-bar-panel-section">
-	                <h3>Request Headers</h3>
-	                <div class="canvas-debug-bar-headers-list">
-	                    \${Object.entries(request.headers).map(([name, value]) => `
-	                        <div class="canvas-debug-bar-header-item">
-	                            <span class="canvas-debug-bar-header-name">\${name}:</span>
-	                            <span class="canvas-debug-bar-header-value">\${this.escapeHtml(value)}</span>
-	                        </div>
-	                    `).join('')}
-	                </div>
-	            </div>
-	            ` : ''}
-	
-	            \${Object.keys(request.query).length > 0 ? `
-	            <div class="canvas-debug-bar-panel-section">
-	                <h3>Query Parameters</h3>
-	                <div class="canvas-debug-bar-params-list">
-	                    \${Object.entries(request.query).map(([name, value]) => `
-	                        <div class="canvas-debug-bar-param-item">
-	                            <span class="canvas-debug-bar-param-name">\${name}:</span>
-	                            <span class="canvas-debug-bar-param-value">\${this.escapeHtml(JSON.stringify(value))}</span>
-	                        </div>
-	                    `).join('')}
-	                </div>
-	            </div>
-	            ` : ''}
-	
-	            \${Object.keys(request.post).length > 0 ? `
+				\${Object.keys(request.request).length > 0 ? `
 	            <div class="canvas-debug-bar-panel-section">
 	                <h3>POST Data</h3>
 	                <div class="canvas-debug-bar-params-list">
-	                    \${Object.entries(request.post).map(([name, value]) => `
+	                    \${Object.entries(request.request).map(([name, value]) => `
 	                        <div class="canvas-debug-bar-param-item">
 	                            <span class="canvas-debug-bar-param-name">\${name}:</span>
 	                            <span class="canvas-debug-bar-param-value">\${this.escapeHtml(JSON.stringify(value))}</span>
@@ -793,14 +1050,51 @@ window.CanvasDebugBar = {
 	            </div>
 	            ` : ''}
 	
-	            \${request.session && Object.keys(request.session).length > 0 ? `
+				\${Object.keys(request.files).length > 0 ? `
+				<div class="canvas-debug-bar-panel-section">
+				    <h3>Uploaded Files</h3>
+				    <div class="canvas-debug-bar-files-list">
+				        \${Object.entries(request.files).map(([name, file]) => `
+				            <div class="canvas-debug-bar-file-item \${file.isValid ? 'valid' : 'invalid'}">
+				                <div class="canvas-debug-bar-file-header">
+				                    <span class="canvas-debug-bar-file-name">\${name}</span>
+				                    <span class="canvas-debug-bar-file-size">\${file.sizeFormatted}</span>
+				                    \${!file.isValid ? `<span class="canvas-debug-bar-file-error">ERROR</span>` : ''}
+				                </div>
+				                <div class="canvas-debug-bar-file-details">
+				                    <div class="canvas-debug-bar-file-detail">
+				                        <span class="canvas-debug-bar-label">Original Name:</span>
+				                        <span class="canvas-debug-bar-value">\${this.escapeHtml(file.originalName || 'N/A')}</span>
+				                    </div>
+				                    <div class="canvas-debug-bar-file-detail">
+				                        <span class="canvas-debug-bar-label">MIME Type:</span>
+				                        <span class="canvas-debug-bar-value">\${file.mimeType || 'Unknown'}</span>
+				                    </div>
+				                    <div class="canvas-debug-bar-file-detail">
+				                        <span class="canvas-debug-bar-label">Extension:</span>
+				                        <span class="canvas-debug-bar-value">\${file.extension || 'None'}</span>
+				                    </div>
+				                    \${!file.isValid ? `
+				                    <div class="canvas-debug-bar-file-detail">
+				                        <span class="canvas-debug-bar-label">Error:</span>
+				                        <span class="canvas-debug-bar-value canvas-debug-bar-error">\${file.errorMessage}</span>
+				                    </div>
+				                    ` : ''}
+				                </div>
+				            </div>
+				        `).join('')}
+				    </div>
+				</div>
+				` : ''}
+				
+	            \${Object.keys(request.cookies).length > 0 ? `
 	            <div class="canvas-debug-bar-panel-section">
-	                <h3>Session Data</h3>
+	                <h3>Cookies</h3>
 	                <div class="canvas-debug-bar-params-list">
-	                    \${Object.entries(request.session).map(([name, value]) => `
+	                    \${Object.entries(request.cookies).map(([name, value]) => `
 	                        <div class="canvas-debug-bar-param-item">
 	                            <span class="canvas-debug-bar-param-name">\${name}:</span>
-	                            <span class="canvas-debug-bar-param-value">\${this.escapeHtml(JSON.stringify(value))}</span>
+	                            <span class="canvas-debug-bar-param-value">\${this.escapeHtml(value)}</span>
 	                        </div>
 	                    `).join('')}
 	                </div>
