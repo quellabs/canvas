@@ -2,17 +2,22 @@
 
 [![Packagist](https://img.shields.io/packagist/v/quellabs/canvas.svg)](https://packagist.org/packages/quellabs/canvas)
 
-A modern, lightweight PHP framework that gets out of your way. Write clean controllers with route annotations, query your database with an intuitive ORM, and let contextual containers handle the complexity. **Built to work seamlessly alongside your existing PHP codebase** - modernize incrementally without breaking what already works.
+**Canvas** is a lightweight, modern PHP framework built for real-world projects. Whether you’re starting fresh or
+modernizing legacy code, Canvas offers a clean architecture with annotation-based routing, contextual dependency
+injection, and an intuitive ORM. No magic, no bloat — just the tools you actually need.
 
-## What Makes Canvas Different
+## 🔧 Key Features
 
-- **🔄 Legacy-First Integration** - Drop into any existing PHP app without breaking existing URLs
-- **🎯 Annotation-Based Routing** - Define routes directly in controllers with `@Route` annotations
-- **🗄️ ObjectQuel ORM** - Query databases using intuitive, natural PHP syntax
-- **📦 Contextual Containers** - Work with interfaces; Canvas resolves implementations by context
-- **⚡ Aspect-Oriented Programming** - Add crosscutting concerns without cluttering business logic
-- **🔔 Event-Driven Architecture** - Qt-style signals and slots for decoupled component communication
-- **⏰ Task Scheduling** - Cron-based background task execution with multiple timeout strategies
+- 🧩 **Legacy-First Integration** – Drop into existing PHP projects without rewriting routes or structure
+- 📌 **Annotation-Based Routing** – Define clean, intuitive routes directly on controller methods
+- 📦 **Contextual Dependency Injection** – Use interfaces; Canvas resolves the right implementation per context
+- 🗄️ **ObjectQuel ORM** – Query your database with a readable, PHP-native syntax inspired by QUEL
+- ⚙️ **Aspect-Oriented Programming** – Add behaviors like validation, CSRF, and caching via reusable aspects
+- 🔔 **Event-Driven Signals** – Decoupled service communication with Qt-style signal/slot architecture
+- ⏰ **Task Scheduling** – Cron-style background jobs with timeouts and safe concurrent handling
+- 🧼 **Validation & Sanitization** – Clean and verify request data using declarative rules and aspects
+- 🔐 **Secure by Default** – Built-in CSRF protection, security headers, and input hardening
+- 🧠 **No Magic** – Everything is explicit, traceable, and designed for developers who like control
 
 ## Quick Start
 
@@ -893,7 +898,6 @@ public function productCatalog() {
  *     namespace="api_responses",                  // Cache namespace
  *     key=null,                                   // Auto-generate from method
  *     ttl=3600,                                   // 1 hour cache
- *     cachePath="/var/cache/canvas",              // Storage location
  *     lockTimeout=10,                             // File lock timeout
  *     gracefulFallback=true                       // Execute method if caching fails
  * )
@@ -906,8 +910,7 @@ public function expensiveOperation($param1, $param2) {
 **Parameters:**
 - `key` - Custom cache key template, null for auto-generation (default: `null`)
 - `ttl` - Time to live in seconds, 0 for never expires (default: `3600`)
-- `context` - Cache namespace for organization (default: `default`)
-- `cachePath` - Base cache directory path (default: `/storage/cache`)
+- `namespace` - Cache namespace for organization (default: `default`)
 - `lockTimeout` - File lock timeout in seconds (default: `5`)
 - `gracefulFallback` - Execute method if caching fails (default: `true`)
 
