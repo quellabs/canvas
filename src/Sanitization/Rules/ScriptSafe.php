@@ -27,17 +27,36 @@
 				return $value;
 			}
 			
-			// Remove javascript: protocols (e.g., javascript:alert('xss'))
-			// This prevents execution of JavaScript in href attributes and similar contexts
-			$value = preg_replace('/javascript:/i', '', $value);
-			
 			// Remove event handlers (e.g., onclick="malicious()", onload="evil()")
 			// Matches "on" followed by word characters and optional whitespace, then "="
-			$value = preg_replace('/on\w+\s*=/i', '', $value);
-			
-			// Remove script tags and all content between them
-			// Uses a complex regex to handle nested tags and multiline content
-			// 'm' flag enables multiline matching, 'i' flag makes it case-insensitive
-			return preg_replace('/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/mi', '', $value);
+			$value = preg_replace_callback(
+				'/<([^>]+)>/i',
+				function($matches) {
+                    // Fetch content within < and >
+					$tagContent = $matches[1];
+					
+					// Remove javascript: protocols (e.g., javascript:alert('xss'))
+					// This prevents execution of JavaScript in href attributes and similar contexts
+					$tagContent = preg_replace('/javascript:/i', '', $tagContent);
+					
+					// Remove event handlers within this tag
+					$tagContent = preg_replace('/\s+on\w+\s*=\s*"[^"]*"/i', '', $tagContent);
+					$tagContent = preg_replace('/\s+on\w+\s*=\s*\'[^\']*\'/i', '', $tagContent);
+					$tagContent = preg_replace('/\s+on\w+\s*=\s*[^\s>]+/i', '', $tagContent);
+					
+                    // Return new content
+					return '<' . $tagContent . '>';
+				},
+				$value
+			);
+            
+            // Remove script tags and their content
+			$value = preg_replace('/<\s*script[^>]*>.*?<\s*\/\s*script\s*>/is', '', $value);
+
+            // Remove any remaining self-closing script tags
+			$value = preg_replace('/<\s*script[^>]*\/?>/i', '', $value);
+
+            // Remove any orphaned closing script tags
+			return preg_replace('/<\s*\/\s*script\s*>/i', '', $value);
 		}
 	}
