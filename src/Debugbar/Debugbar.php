@@ -8,14 +8,14 @@
 	
 	class Debugbar {
 		
-		private DebugEventCollector $collector;
+		private DebugDataProcessor $dataProcessor;
 		
 		/**
-		 * DebugbarAspect
+		 * Debugbar constructor
 		 * @param DebugEventCollector $collector
 		 */
 		public function __construct(DebugEventCollector $collector) {
-			$this->collector = $collector;
+			$this->dataProcessor = new DebugDataProcessor($collector);
 		}
 		
 		/**
@@ -677,227 +677,8 @@ BODY;
 CSS;
 		}
 		
-		private function getRequestData(Request $request): array {
-			return [
-				'method'    => $request->getMethod(),
-				'uri'       => $request->getRequestUri(),
-				'url'       => $request->getUri(),
-				'ip'        => $request->getClientIp(),
-				'userAgent' => $request->headers->get('User-Agent', ''),
-				'referer'   => $request->headers->get('Referer'),
-				'headers'   => $this->getFilteredHeaders($request),
-				'query'     => $request->query->all(),           // GET parameters
-				'request'   => $request->request->all(),       // POST parameters
-				'files'     => $this->getFileData($request),     // Uploaded files
-				'cookies'   => $request->cookies->all(),       // Cookies
-				'session'   => $request->hasSession() ? $this->getFilteredSession($request) : [],
-			];
-		}
-		
-		private function getFilteredSession(Request $request): array {
-			if (!$request->hasSession()) {
-				return [];
-			}
-			
-			$sessionData = $request->getSession()->all();
-			
-			// Simple list of keys to exclude
-			$excludeKeys = [
-				'password', 'token', 'csrf', 'secret', 'key', 'auth'
-			];
-			
-			$filtered = [];
-			
-			foreach ($sessionData as $key => $value) {
-				// Skip if key contains sensitive words
-				$skip = false;
-				foreach ($excludeKeys as $excludeKey) {
-					if (stripos($key, $excludeKey) !== false) {
-						$skip = true;
-						break;
-					}
-				}
-				
-				if (!$skip) {
-					// Limit string length and don't show objects
-					if (is_string($value) && strlen($value) > 100) {
-						$filtered[$key] = substr($value, 0, 100) . '...';
-					} elseif (is_array($value) || is_scalar($value)) {
-						$filtered[$key] = $value;
-					} else {
-						$filtered[$key] = '[object]';
-					}
-				}
-			}
-			
-			return $filtered;
-		}
-		
-		private function getFilteredHeaders(Request $request): array {
-			$headers = $request->headers->all();
-			
-			// Headers to exclude for security/privacy reasons
-			$sensitiveHeaders = [
-				'authorization',
-				'cookie',
-				'x-api-key',
-				'x-auth-token',
-				'x-access-token',
-				'bearer',
-				'php-auth-user',
-				'php-auth-pw',
-				'php-auth-digest',
-				'www-authenticate',
-				'proxy-authorization',
-				'x-forwarded-authorization',
-			];
-			
-			// Headers that can contain sensitive data in values
-			$headerPatternsToFilter = [
-				'/^x-.*-key$/i',
-				'/^x-.*-token$/i',
-				'/^x-.*-secret$/i',
-				'/.*-auth.*/i',
-			];
-			
-			$filtered = [];
-			
-			foreach ($headers as $name => $values) {
-				$lowerName = strtolower($name);
-				
-				// Skip explicitly sensitive headers
-				if (in_array($lowerName, $sensitiveHeaders)) {
-					continue;
-				}
-				
-				// Skip headers matching sensitive patterns
-				$skipHeader = false;
-				foreach ($headerPatternsToFilter as $pattern) {
-					if (preg_match($pattern, $lowerName)) {
-						$skipHeader = true;
-						break;
-					}
-				}
-				
-				if ($skipHeader) {
-					continue;
-				}
-				
-				// Symfony headers are arrays, but we usually want the first value
-				// Some headers like Accept might have multiple values, so we join them
-				if (is_array($values)) {
-					if (count($values) === 1) {
-						$filtered[$name] = $values[0];
-					} else {
-						$filtered[$name] = implode(', ', $values);
-					}
-				} else {
-					$filtered[$name] = $values;
-				}
-			}
-			
-			return $filtered;
-		}
-		
-		private function getEventData(Request $request): array {
-			$data = [
-				'stats'   => ['time' => 0, 'memory' => 0, 'queryTime' => 0],
-				'cache'   => [],
-				'aspects' => [],
-				'queries' => [],
-			];
-			
-			foreach ($this->collector->getEvents() as $event) {
-				switch ($event['signal']) {
-					case 'debug.canvas.query':
-						$data['route'] = array_merge($event['data'], ['legacyFile' => '']);
-						$data['request'] = $this->getRequestData($request);
-						$data['stats']['time'] += $event['data']['execution_time_ms'];
-						$data['stats']['memory'] += $event['data']['memory_used_bytes'];
-						break;
-					
-					case 'debug.objectquel.query':
-						$data['queries'][] = $event['data'];
-						$data['stats']['queryTime'] += $event['data']['execution_time_ms'];
-						break;
-				}
-			}
-			
-			return $data;
-		}
-		
-		private function getFileData(Request $request): array {
-			$files = [];
-			
-			// Get all uploaded files from the request
-			$uploadedFiles = $request->files->all();
-			
-			// Process files recursively (handles nested file inputs)
-			$this->processFileInputs($uploadedFiles, $files);
-			
-			return $files;
-		}
-		
-		private function processFileInputs($fileInputs, array &$files, string $prefix = ''): void {
-			foreach ($fileInputs as $name => $file) {
-				$fullName = $prefix ? $prefix . '[' . $name . ']' : $name;
-				
-				if (is_array($file)) {
-					// Handle array of files (e.g., multiple file uploads)
-					$this->processFileInputs($file, $files, $fullName);
-				} elseif ($file instanceof \Symfony\Component\HttpFoundation\File\UploadedFile) {
-					// Process single uploaded file
-					$files[$fullName] = $this->extractFileInfo($file);
-				}
-			}
-		}
-		
-		private function extractFileInfo(\Symfony\Component\HttpFoundation\File\UploadedFile $file): array {
-			return [
-				'originalName'  => $file->getClientOriginalName(),
-				'mimeType'      => $file->getClientMimeType(),
-				'size'          => $file->getSize(),
-				'sizeFormatted' => $this->formatFileSize($file->getSize()),
-				'error'         => $file->getError(),
-				'errorMessage'  => $this->getUploadErrorMessage($file->getError()),
-				'isValid'       => $file->isValid(),
-				'extension'     => $file->getClientOriginalExtension(),
-				'tempPath'      => $file->getRealPath(), // Temporary file path
-			];
-		}
-		
-		private function formatFileSize(?int $bytes): string {
-			if ($bytes === null || $bytes === 0) {
-				return '0 B';
-			}
-			
-			$units = ['B', 'KB', 'MB', 'GB', 'TB'];
-			$power = floor(log($bytes, 1024));
-			$power = min($power, count($units) - 1);
-			
-			$size = $bytes / pow(1024, $power);
-			$formattedSize = round($size, 2);
-			
-			return $formattedSize . ' ' . $units[$power];
-		}
-		
-		private function getUploadErrorMessage(int $error): string {
-			return match ($error) {
-				UPLOAD_ERR_OK => 'No error',
-				UPLOAD_ERR_INI_SIZE => 'File exceeds upload_max_filesize directive',
-				UPLOAD_ERR_FORM_SIZE => 'File exceeds MAX_FILE_SIZE directive',
-				UPLOAD_ERR_PARTIAL => 'File was only partially uploaded',
-				UPLOAD_ERR_NO_FILE => 'No file was uploaded',
-				UPLOAD_ERR_NO_TMP_DIR => 'Missing temporary folder',
-				UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk',
-				UPLOAD_ERR_EXTENSION => 'Upload stopped by extension',
-				default => 'Unknown upload error',
-			};
-		}
-		
-		
 		private function getDataScript(Request $request): string {
-			$jsonData = json_encode($this->getEventData($request), JSON_HEX_TAG | JSON_HEX_AMP);
+			$jsonData = json_encode($this->dataProcessor->getDebugData($request), JSON_HEX_TAG | JSON_HEX_AMP);
 			
 			return <<<JS
         // Inject debug data and render
@@ -1212,7 +993,7 @@ JS;
 		/**
 		 * Returns the position of the </body> tag
 		 * @param string $content
-		 * @return int
+		 * @return false|int
 		 */
 		private function getEndOfBodyPosition(string $content): false|int {
 			return strpos($content, "</body>");
