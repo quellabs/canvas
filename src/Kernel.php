@@ -157,7 +157,11 @@
 			
 			try {
 				// Init the debug bar
-				$debugCollector = new DebugEventCollector($this->getSignalHub());
+				if ($this->configuration->get('debug_mode', false)) {
+					$debugCollector = new DebugEventCollector($this->getSignalHub());
+				} else {
+					$debugCollector = null;
+				}
 				
 				// Initialize URL resolver with annotation-based routing capabilities
 				$urlResolver = new AnnotationResolver($this);
@@ -168,27 +172,30 @@
 					$urlData = $urlResolver->resolve($request);
 					$response = $this->executeCanvasRoute($request, $urlData);
 					
-					// Send signal for performance monitoring
-					$end = microtime(true);
-					$memoryEnd = memory_get_usage(true);
-					$peakMemoryEnd = memory_get_peak_usage(true);
-					
-					$this->canvasQuerySignal->emit([
-						'request'           => $request,
-						'legacy_path'       => false,
-						'http_methods'      => $urlData['http_methods'],
-						'controller'        => $urlData['controller'],
-						'method'            => $urlData['method'],
-						'pattern'           => $urlData['route']->getRoute(),
-						'parameters'        => $urlData['variables'],
-						'execution_time_ms' => ($end - $start) * 1000,
-						'memory_used_bytes' => $memoryEnd - $memoryStart,
-						'peak_memory_bytes' => $peakMemoryEnd - $peakMemoryStart,
-					]);
-					
-					// Inject the debugBar
-					$debugBar = new Debugbar\Debugbar($debugCollector);
-					$debugBar->inject($request, $response);
+					// Inject the debugBar if debug mode is enabled
+					if ($debugCollector) {
+						// Send signal for performance monitoring
+						$end = microtime(true);
+						$memoryEnd = memory_get_usage(true);
+						$peakMemoryEnd = memory_get_peak_usage(true);
+						
+						$this->canvasQuerySignal->emit([
+							'request'           => $request,
+							'legacy_path'       => false,
+							'http_methods'      => $urlData['http_methods'],
+							'controller'        => $urlData['controller'],
+							'method'            => $urlData['method'],
+							'pattern'           => $urlData['route']->getRoute(),
+							'parameters'        => $urlData['variables'],
+							'execution_time_ms' => ($end - $start) * 1000,
+							'memory_used_bytes' => $memoryEnd - $memoryStart,
+							'peak_memory_bytes' => $peakMemoryEnd - $peakMemoryStart,
+						]);
+
+						// Inject the bar
+						$debugBar = new Debugbar\Debugbar($debugCollector);
+						$debugBar->inject($request, $response);
+					}
 					
 					// Return response
 					return $response;
