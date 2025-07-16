@@ -4,6 +4,7 @@
 	
 	use Quellabs\SignalHub\Signal;
 	use Quellabs\SignalHub\SignalHub;
+	use Symfony\Component\HttpFoundation\Request;
 	
 	/**
 	 * This class automatically listens for debug-related signals and stores

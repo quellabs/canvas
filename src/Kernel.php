@@ -148,6 +148,8 @@
 		public function handle(Request $request): Response {
 			// Start time for performance monitoring
 			$start = microtime(true);
+			$memoryStart = memory_get_usage(true);
+			$peakMemoryStart = memory_get_peak_usage(true);
 			
 			// Prepare request dependencies and register with dependency injector
 			// This involves setting up request-scoped services and context
@@ -155,7 +157,7 @@
 			
 			try {
 				// Init the debug bar
-				$debugCollector  = new DebugEventCollector($this->getSignalHub());
+				$debugCollector = new DebugEventCollector($this->getSignalHub());
 				
 				// Initialize URL resolver with annotation-based routing capabilities
 				$urlResolver = new AnnotationResolver($this);
@@ -167,20 +169,27 @@
 					$response = $this->executeCanvasRoute($request, $urlData);
 					
 					// Send signal for performance monitoring
+					$end = microtime(true);
+					$memoryEnd = memory_get_usage(true);
+					$peakMemoryEnd = memory_get_peak_usage(true);
+					
 					$this->canvasQuerySignal->emit([
+						'request'           => $request,
 						'legacy_path'       => false,
 						'http_methods'      => $urlData['http_methods'],
 						'controller'        => $urlData['controller'],
 						'method'            => $urlData['method'],
-						'route'             => $urlData['route'],
+						'pattern'           => $urlData['route']->getRoute(),
 						'parameters'        => $urlData['variables'],
-						'execution_time_ms' => (microtime(true) - $start) * 1000,
+						'execution_time_ms' => ($end - $start) * 1000,
+						'memory_used_bytes' => $memoryEnd - $memoryStart,
+						'peak_memory_bytes' => $peakMemoryEnd - $peakMemoryStart,
 					]);
 					
 					// Inject the debugBar
 					$debugBar = new Debugbar\Debugbar($debugCollector);
-					$debugBar->inject($response);
-
+					$debugBar->inject($request, $response);
+					
 					// Return response
 					return $response;
 					
@@ -239,16 +248,16 @@
 		public function __debugInfo(): array {
 			return [
 				// Project root directory path
-				'project_root'         => $this->discover->getProjectRoot(),
+				'project_root'   => $this->discover->getProjectRoot(),
 				
 				// Current debug mode setting (boolean from configuration)
-				'debug_mode'           => $this->configuration->getAs('debug_mode', 'bool', false),
+				'debug_mode'     => $this->configuration->getAs('debug_mode', 'bool', false),
 				
 				// Whether legacy features are enabled
-				'legacy_enabled'       => $this->legacyEnabled,
+				'legacy_enabled' => $this->legacyEnabled,
 				
 				// List of all available configuration keys (for inspecting what's configured)
-				'config_keys'          => array_keys($this->configuration->all()),
+				'config_keys'    => array_keys($this->configuration->all()),
 			];
 		}
 		
