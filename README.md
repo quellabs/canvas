@@ -519,13 +519,15 @@ Canvas includes essential sanitization rules focused on security and data cleani
 ### Text Sanitization
 - **`Trim`** - Remove leading and trailing whitespace
 - **`StripTags`** - Remove HTML tags (with optional allowlist for safe tags)
-- **`WhitespaceNormalize`** - Convert multiple consecutive whitespace characters to single spaces
 
 ### Security Sanitization
-- **`HtmlEscape`** - Convert HTML special characters to entities for XSS prevention
 - **`ScriptSafe`** - Remove or neutralize dangerous script-related content
 - **`SqlSafe`** - Remove characters commonly used in SQL injection attempts
+- **`NormalizeLineEndings`** - Converts all line ending to a consistent Unix-style LF format
 - **`RemoveControlChars`** - Remove control characters that can cause display issues
+- **`RemoveNullBytes`** - Removes null bytes (0x00) to prevent null byte injection attacks
+- **`RemoveZeroWidth`** - Removes invisible Unicode characters
+- **`RemoveStyleAttributes`** - Removes all style attributes from HTML elements
 
 ### URL and Path Sanitization
 - **`EmailSafe`** - Remove characters not allowed in email addresses
@@ -575,15 +577,12 @@ class ProductSanitization implements SanitizationInterface {
     public function getRules(): array {
         return [
             'title' => [
-                new Trim(),                    // 1. Remove whitespace
+                new Trim(),                   // 1. Remove whitespace
                 new StripTags(),              // 2. Remove HTML
-                new WhitespaceNormalize()     // 3. Normalize internal whitespace
             ],
             'description' => [
                 new Trim(),
-                new StripTags(['p', 'br', 'strong', 'em', 'ul', 'ol', 'li']),
-                new HtmlEscape(),             // Escape any remaining HTML
-                new WhitespaceNormalize()     // Convert multiple spaces to single
+                new StripTags(['p', 'br', 'strong', 'em', 'ul', 'ol', 'li'])
             ],
             'slug' => [
                 new Trim(),
@@ -604,27 +603,24 @@ namespace App\Sanitization\Rules;
 
 use Quellabs\Canvas\Sanitization\Contracts\SanitizationRuleInterface;
 
-class RemoveNullBytes implements SanitizationRuleInterface {
+class CleanPhoneNumber implements SanitizationRuleInterface {
     
     public function sanitize(mixed $value): mixed {
         if (!is_string($value)) {
             return $value;
         }
         
-        // Remove null bytes that can cause security issues
-        return str_replace("\0", '', $value);
-    }
-}
-
-class RemoveInvisibleChars implements SanitizationRuleInterface {
-    
-    public function sanitize(mixed $value): mixed {
-        if (!is_string($value)) {
-            return $value;
+        // Remove all non-numeric characters except + for international prefix
+        // Keeps: digits and leading + sign
+        // Removes: spaces, hyphens, parentheses, dots, etc.
+        $cleaned = preg_replace('/[^0-9+]/', '', $value);
+        
+        // Ensure + only appears at the beginning
+        if (str_contains($cleaned, '+')) {
+            $cleaned = '+' . str_replace('+', '', $cleaned);
         }
         
-        // Remove invisible Unicode characters that can cause display issues
-        return preg_replace('/[\x{200B}-\x{200D}\x{FEFF}]/u', '', $value);
+        return $cleaned;
     }
 }
 ```
@@ -686,7 +682,7 @@ class ContactController extends BaseController {
         }
         
         // Token available in template via request attributes
-        return $this->render('contact.twig', [
+        return $this->render('contact.tpl', [
             'csrf_token' => $request->attributes->get('csrf_token'),
             'csrf_token_name' => $request->attributes->get('csrf_token_name')
         ]);
@@ -779,7 +775,7 @@ class SecureController extends BaseController {
      */
     public function dashboard() {
         // Response automatically includes security headers
-        return $this->render('admin/dashboard.twig');
+        return $this->render('admin/dashboard.tpl');
     }
 }
 ```
