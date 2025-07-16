@@ -5,6 +5,7 @@
 	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\Canvas\AOP\AspectDispatcher;
 	use Quellabs\Canvas\Configuration\Configuration;
+	use Quellabs\Canvas\Debugbar\DebugEventCollector;
 	use Quellabs\Canvas\Discover\AnnotationsReaderProvider;
 	use Quellabs\Canvas\Discover\CacheInterfaceProvider;
 	use Quellabs\Canvas\Discover\ConfigurationProvider;
@@ -153,6 +154,9 @@
 			$providers = $this->prepareRequest($request);
 			
 			try {
+				// Init the debug bar
+				$debugCollector  = new DebugEventCollector($this->getSignalHub());
+				
 				// Initialize URL resolver with annotation-based routing capabilities
 				$urlResolver = new AnnotationResolver($this);
 				
@@ -165,10 +169,17 @@
 					// Send signal for performance monitoring
 					$this->canvasQuerySignal->emit([
 						'legacy_path'       => false,
+						'http_methods'      => $urlData['http_methods'],
 						'controller'        => $urlData['controller'],
 						'method'            => $urlData['method'],
+						'route'             => $urlData['route'],
+						'parameters'        => $urlData['variables'],
 						'execution_time_ms' => (microtime(true) - $start) * 1000,
 					]);
+					
+					// Inject the debugBar
+					$debugBar = new Debugbar\Debugbar($debugCollector);
+					$debugBar->inject($response);
 
 					// Return response
 					return $response;

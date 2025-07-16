@@ -2,54 +2,27 @@
 	
 	namespace Quellabs\Canvas\Debugbar;
 	
-	use Quellabs\Contracts\AOP\AfterAspect;
-	use Quellabs\Contracts\AOP\MethodContext;
 	use Quellabs\SignalHub\SignalHub;
 	use Symfony\Component\HttpFoundation\Response;
 	
-	class DebugbarAspect implements AfterAspect {
+	class Debugbar {
 		
-		private array $debugData = [];
+		private DebugEventCollector $collector;
 		
 		/**
 		 * DebugbarAspect
-		 * @param SignalHub $signalHub
-		 * @throws \Exception
+		 * @param DebugEventCollector $collector
 		 */
-		public function __construct(SignalHub $signalHub) {
-			$this->debugData['stats'] = [
-				'time'   => 10,
-				'memory' => 10,
-			];
-			
-			$this->debugData['cache'] = [];
-			$this->debugData['aspects'] = [];
-			$this->debugData['cache']['operations'] = [];
-			
-			if ($signalHub->getSignal('debug.objectquel.query') !== null) {
-				$signalHub->getSignal('debug.objectquel.query')->connect([$this, 'collectObjectQuel']);
-			}
-			
-			if ($signalHub->getSignal('debug.canvas.query') !== null) {
-				$signalHub->getSignal('debug.canvas.query')->connect([$this, 'collectCanvas']);
-			}
-		}
-		
-		public function collectObjectQuel(array $data): void {
-			$this->debugData['queries'][] = $data;
-		}
-		
-		public function collectCanvas(array $data): void {
-			$this->debugData['request'][] = $data;
+		public function __construct(DebugEventCollector $collector) {
+			$this->collector = $collector;
 		}
 		
 		/**
 		 * Inject the debugbar in the response
-		 * @param MethodContext $context
 		 * @param Response $response
 		 * @return void
 		 */
-		public function after(MethodContext $context, Response $response): void {
+		public function inject(Response $response): void {
 			$content = $response->getContent();
 			$bodyPos = $this->getEndOfBodyPosition($content);
 			
@@ -602,12 +575,44 @@ BODY;
             .canvas-debug-bar .canvas-debug-bar-timeline-legend {
                 gap: 8px;
             }
+            
+			/* Add to your CSS */
+			.canvas-debug-bar .canvas-debug-bar-headers-list,
+			.canvas-debug-bar .canvas-debug-bar-params-list {
+			    display: flex;
+			    flex-direction: column;
+			    gap: 4px;
+			    max-height: 200px;
+			    overflow-y: auto;
+			}
+			
+			.canvas-debug-bar .canvas-debug-bar-header-item,
+			.canvas-debug-bar .canvas-debug-bar-param-item {
+			    display: flex;
+			    padding: 4px 0;
+			    border-bottom: 1px solid #f0f0f0;
+			    font-size: 12px;
+			}
+			
+			.canvas-debug-bar .canvas-debug-bar-header-name,
+			.canvas-debug-bar .canvas-debug-bar-param-name {
+			    min-width: 150px;
+			    color: #666666;
+			    font-weight: 500;
+			}
+			
+			.canvas-debug-bar .canvas-debug-bar-header-value,
+			.canvas-debug-bar .canvas-debug-bar-param-value {
+			    color: #333333;
+			    word-break: break-all;
+			    font-family: 'Consolas', 'Monaco', monospace;
+			}
         }
 CSS;
 		}
 		
 		private function getDataScript(): string {
-			$jsonData = json_encode($this->debugData, JSON_HEX_TAG | JSON_HEX_AMP);
+			$jsonData = json_encode($this->collector->getEvents(), JSON_HEX_TAG | JSON_HEX_AMP);
 			
 			return <<<JS
         // Inject debug data and render
@@ -662,6 +667,7 @@ window.CanvasDebugBar = {
     renderTabs: function() {
         const tabsContainer = document.getElementById('debug-tabs');
         const tabs = [
+            { id: 'request', label: `Request`, icon: `🗄️️` },
             { id: 'queries', label: `Database (\${this . data . queries . length})`, icon: '🗄️' },
         ];
         
@@ -676,10 +682,134 @@ window.CanvasDebugBar = {
     renderPanels: function() {
         const panelsContainer = document.getElementById('debug-panels');
         panelsContainer.innerHTML = `
+            \${this . renderRequestPanel()}
             \${this . renderQueriesPanel()}
         `;
     },
     
+	renderRequestPanel: function() {
+	    const request = this.data.request;
+	    const route = this.data.route;
+	    
+	    return `
+	        <div id="panel-request" class="canvas-debug-bar-debug-panel active">
+	            <div class="canvas-debug-bar-panel-section">
+	                <h3>Route Information</h3>
+	                <div class="canvas-debug-bar-info-grid">
+	                    <div class="canvas-debug-bar-info-item">
+	                        <span class="canvas-debug-bar-label">Controller:</span>
+	                        <span class="canvas-debug-bar-value">\${route.controller || 'N/A'}</span>
+	                    </div>
+	                    <div class="canvas-debug-bar-info-item">
+	                        <span class="canvas-debug-bar-label">Method:</span>
+	                        <span class="canvas-debug-bar-value">\${route.method || 'N/A'}</span>
+	                    </div>
+	                    <div class="canvas-debug-bar-info-item">
+	                        <span class="canvas-debug-bar-label">Route Pattern:</span>
+	                        <span class="canvas-debug-bar-value">\${route.pattern || 'N/A'}</span>
+	                    </div>
+	                    <div class="canvas-debug-bar-info-item">
+	                        <span class="canvas-debug-bar-label">Route Parameters:</span>
+	                        <span class="canvas-debug-bar-value">\${this.formatRouteParams(route.parameters)}</span>
+	                    </div>
+	                    \${route.legacy ? `
+	                    <div class="canvas-debug-bar-info-item">
+	                        <span class="canvas-debug-bar-label">Legacy File:</span>
+	                        <span class="canvas-debug-bar-value">\${route.legacyFile}</span>
+	                    </div>
+	                    ` : ''}
+	                </div>
+	            </div>
+	            
+	            <div class="canvas-debug-bar-panel-section">
+	                <h3>Request Details</h3>
+	                <div class="canvas-debug-bar-info-grid">
+	                    <div class="canvas-debug-bar-info-item">
+	                        <span class="canvas-debug-bar-label">HTTP Method:</span>
+	                        <span class="canvas-debug-bar-value">\${request.method}</span>
+	                    </div>
+	                    <div class="canvas-debug-bar-info-item">
+	                        <span class="canvas-debug-bar-label">URI:</span>
+	                        <span class="canvas-debug-bar-value">\${request.uri}</span>
+	                    </div>
+	                    <div class="canvas-debug-bar-info-item">
+	                        <span class="canvas-debug-bar-label">Full URL:</span>
+	                        <span class="canvas-debug-bar-value">\${request.url}</span>
+	                    </div>
+	                    <div class="canvas-debug-bar-info-item">
+	                        <span class="canvas-debug-bar-label">Client IP:</span>
+	                        <span class="canvas-debug-bar-value">\${request.ip}</span>
+	                    </div>
+	                    <div class="canvas-debug-bar-info-item">
+	                        <span class="canvas-debug-bar-label">User Agent:</span>
+	                        <span class="canvas-debug-bar-value" title="\${request.userAgent}">\${this.truncate(request.userAgent, 60)}</span>
+	                    </div>
+	                    <div class="canvas-debug-bar-info-item">
+	                        <span class="canvas-debug-bar-label">Referer:</span>
+	                        <span class="canvas-debug-bar-value">\${request.referer || 'None'}</span>
+	                    </div>
+	                </div>
+	            </div>
+	
+	            \${Object.keys(request.headers).length > 0 ? `
+	            <div class="canvas-debug-bar-panel-section">
+	                <h3>Request Headers</h3>
+	                <div class="canvas-debug-bar-headers-list">
+	                    \${Object.entries(request.headers).map(([name, value]) => `
+	                        <div class="canvas-debug-bar-header-item">
+	                            <span class="canvas-debug-bar-header-name">\${name}:</span>
+	                            <span class="canvas-debug-bar-header-value">\${this.escapeHtml(value)}</span>
+	                        </div>
+	                    `).join('')}
+	                </div>
+	            </div>
+	            ` : ''}
+	
+	            \${Object.keys(request.query).length > 0 ? `
+	            <div class="canvas-debug-bar-panel-section">
+	                <h3>Query Parameters</h3>
+	                <div class="canvas-debug-bar-params-list">
+	                    \${Object.entries(request.query).map(([name, value]) => `
+	                        <div class="canvas-debug-bar-param-item">
+	                            <span class="canvas-debug-bar-param-name">\${name}:</span>
+	                            <span class="canvas-debug-bar-param-value">\${this.escapeHtml(JSON.stringify(value))}</span>
+	                        </div>
+	                    `).join('')}
+	                </div>
+	            </div>
+	            ` : ''}
+	
+	            \${Object.keys(request.post).length > 0 ? `
+	            <div class="canvas-debug-bar-panel-section">
+	                <h3>POST Data</h3>
+	                <div class="canvas-debug-bar-params-list">
+	                    \${Object.entries(request.post).map(([name, value]) => `
+	                        <div class="canvas-debug-bar-param-item">
+	                            <span class="canvas-debug-bar-param-name">\${name}:</span>
+	                            <span class="canvas-debug-bar-param-value">\${this.escapeHtml(JSON.stringify(value))}</span>
+	                        </div>
+	                    `).join('')}
+	                </div>
+	            </div>
+	            ` : ''}
+	
+	            \${request.session && Object.keys(request.session).length > 0 ? `
+	            <div class="canvas-debug-bar-panel-section">
+	                <h3>Session Data</h3>
+	                <div class="canvas-debug-bar-params-list">
+	                    \${Object.entries(request.session).map(([name, value]) => `
+	                        <div class="canvas-debug-bar-param-item">
+	                            <span class="canvas-debug-bar-param-name">\${name}:</span>
+	                            <span class="canvas-debug-bar-param-value">\${this.escapeHtml(JSON.stringify(value))}</span>
+	                        </div>
+	                    `).join('')}
+	                </div>
+	            </div>
+	            ` : ''}
+	        </div>
+	    `;
+	},
+	
 	renderQueriesPanel: function() {
 	    const formatParameters = (params) => {
 	        if (!params || Object.keys(params).length === 0) {
@@ -765,7 +895,21 @@ window.CanvasDebugBar = {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
-    }
+    },
+    
+	// Helper methods to add to the CanvasDebugBar object:
+	formatRouteParams: function(params) {
+	    if (!params || Object.keys(params).length === 0) {
+	        return 'None';
+	    }
+     
+	    return Object.entries(params).map(([key, value]) => `\${key}: \${value}`).join(', ');
+	},
+	
+	truncate: function(str, length) {
+	    if (!str) return '';
+	    return str.length > length ? str.substring(0, length) + '...' : str;
+	}
 };
 JS;
 		
