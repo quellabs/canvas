@@ -20,12 +20,18 @@
 	use Quellabs\DependencyInjection\Autowiring\MethodContext;
 	use Quellabs\DependencyInjection\Container;
 	use Quellabs\Discover\Discover;
+	use Quellabs\SignalHub\HasSignals;
+	use Quellabs\SignalHub\Signal;
+	use Quellabs\SignalHub\SignalHubLocator;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
 	use Symfony\Component\HttpFoundation\Session\Session;
 	
 	class Kernel {
 		
+		use HasSignals;
+		
+		private Signal $canvasQuerySignal; // Signal for performance measuring
 		private Discover $discover; // Service discovery
 		private AnnotationReader $annotationsReader; // Annotation reading
 		private Configuration $configuration;
@@ -39,6 +45,10 @@
 		 * @param array $configuration
 		 */
 		public function __construct(array $configuration = []) {
+			// Connect SignalHub to this class
+			$this->setSignalHub(SignalHubLocator::getInstance());
+			$this->canvasQuerySignal = $this->createSignal(['array'], 'debug.canvas.query');
+			
 			// Register Discovery service
 			$this->discover = new Discover();
 			
@@ -135,6 +145,9 @@
 		 * @return Response HTTP response to be sent back to the client
 		 */
 		public function handle(Request $request): Response {
+			// Start time for performance monitoring
+			$start = microtime(true);
+			
 			// Prepare request dependencies and register with dependency injector
 			// This involves setting up request-scoped services and context
 			$providers = $this->prepareRequest($request);
@@ -147,7 +160,19 @@
 				// This maps the URL to controller class, method name, and parameters
 				try {
 					$urlData = $urlResolver->resolve($request);
-					return $this->executeCanvasRoute($request, $urlData);
+					$response = $this->executeCanvasRoute($request, $urlData);
+					
+					// Send signal for performance monitoring
+					$this->canvasQuerySignal->emit([
+						'legacy_path'       => false,
+						'controller'        => $urlData['controller'],
+						'method'            => $urlData['method'],
+						'execution_time_ms' => (microtime(true) - $start) * 1000,
+					]);
+
+					// Return response
+					return $response;
+					
 				} catch (RouteNotFoundException $e) {
 					// Route isn't found in primary resolver - fall through to legacy handling
 				}
