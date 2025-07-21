@@ -14,7 +14,7 @@
 	 * a unified debug interface.
 	 */
 	class DebugRegistry {
-
+		
 		/**
 		 * @var DebugEventCollector Collects all debug events during request processing
 		 */
@@ -93,7 +93,7 @@
 			foreach ($this->panels as $panel) {
 				// Generate JavaScript function name from panel name (e.g., 'database' -> 'renderDatabasePanel')
 				$functionName = 'render' . ucfirst($panel->getName()) . 'Panel';
-			
+				
 				// Collect panel-specific JS
 				$jsTemplates[$panel->getName()] = [
 					'function' => $functionName,
@@ -173,7 +173,7 @@
 			foreach ($jsTemplates as $panelName => $template) {
 				$jsFunctions[] = "window.{$template['function']} = function(data) {\n{$template['code']}\n};";
 			}
-
+			
 			$jsFunctionsCode = implode("\n\n", $jsFunctions);
 			
 			// Create template function name mapping for the client-side renderer
@@ -206,11 +206,13 @@
 
 <style>
 	{$this->getBaseCss()}
+	{$this->getCommonComponentsCss()}
 	{$cssContent}
 </style>
 
 <script>
 	{$this->getBaseJs()}
+	{$this->getCommonHelpers()}
 	{$jsFunctionsCode}
 
 	// Initialize debug bar when DOM is ready
@@ -374,6 +376,325 @@ HTML;
     font-weight: 600;
 }
 CSS;
+		}
+		
+		/**
+		 * Get common component CSS that can be reused across panels
+		 *
+		 * @return string CSS for reusable components like tables, grids, badges
+		 */
+		private function getCommonComponentsCss(): string {
+			return <<<CSS
+/* Common Components - Reusable across all panels */
+
+/* Parameter/Data Tables - Used for query params, route params, cookies, etc. */
+.canvas-debug-params-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+    font-size: 12px;
+    background: #ffffff;
+    border: 1px solid #dee2e6;
+}
+
+.canvas-debug-params-table th {
+    background: #e9ecef;
+    padding: 6px 10px;
+    text-align: left;
+    font-weight: 600;
+    border: 1px solid #dee2e6;
+    color: #495057;
+}
+
+.canvas-debug-params-table td {
+    padding: 6px 10px;
+    border: 1px solid #dee2e6;
+    vertical-align: top;
+}
+
+.canvas-debug-param-key {
+    font-weight: 500;
+    color: #495057;
+    background: #f8f9fa;
+}
+
+.canvas-debug-param-value {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 11px;
+    word-break: break-all;
+}
+
+/* Info Grid - Used for displaying key-value pairs in a responsive grid */
+.canvas-debug-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 8px;
+}
+
+.canvas-debug-info-item {
+    display: flex;
+    padding: 8px 0;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.canvas-debug-info-item .canvas-debug-label {
+    min-width: 120px;
+    color: #666666;
+    font-weight: 500;
+}
+
+.canvas-debug-info-item .canvas-debug-value {
+    color: #333333;
+    word-break: break-all;
+}
+
+/* Time/Performance Badges */
+.canvas-debug-time-badge {
+    background: #28a745;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: bold;
+    min-width: 45px;
+    text-align: center;
+}
+
+.canvas-debug-time-badge.slow {
+    background: #ffc107;
+    color: #212529;
+}
+
+.canvas-debug-time-badge.very-slow {
+    background: #dc3545;
+}
+
+/* Status Badges */
+.canvas-debug-status-badge {
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.canvas-debug-status-badge.success {
+    background: #d4edda;
+    color: #155724;
+}
+
+.canvas-debug-status-badge.error {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.canvas-debug-status-badge.warning {
+    background: #fff3cd;
+    color: #856404;
+}
+
+/* Code Blocks - For SQL, templates, etc. */
+.canvas-debug-code {
+    background: #ffffff;
+    color: #d63384;
+    padding: 8px;
+    border-radius: 3px;
+    display: block;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    border: 1px solid #e0e0e0;
+    overflow-x: auto;
+}
+
+/* Item Lists - For queries, files, etc. */
+.canvas-debug-item-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.canvas-debug-item {
+    background: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 12px;
+}
+
+.canvas-debug-item.error {
+    border-color: #dc3545;
+    background: #f8d7da;
+}
+
+.canvas-debug-item-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.canvas-debug-item-content {
+    margin-top: 8px;
+}
+
+/* Expandable Sections */
+.canvas-debug-expandable {
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    margin-bottom: 8px;
+}
+
+.canvas-debug-expandable-header {
+    background: #f8f9fa;
+    padding: 8px 12px;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.canvas-debug-expandable-header:hover {
+    background: #e9ecef;
+}
+
+.canvas-debug-expandable-content {
+    padding: 12px;
+    border-top: 1px solid #e0e0e0;
+    display: none;
+}
+
+.canvas-debug-expandable.expanded .canvas-debug-expandable-content {
+    display: block;
+}
+
+/* Utility Classes */
+.canvas-debug-text-muted {
+    color: #6c757d;
+    font-style: italic;
+}
+
+.canvas-debug-text-small {
+    font-size: 11px;
+}
+
+.canvas-debug-text-mono {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.canvas-debug-text-break {
+    word-break: break-all;
+}
+
+.canvas-debug-mb-0 { margin-bottom: 0; }
+.canvas-debug-mb-1 { margin-bottom: 4px; }
+.canvas-debug-mb-2 { margin-bottom: 8px; }
+.canvas-debug-mb-3 { margin-bottom: 12px; }
+CSS;
+		}
+		
+		/**
+		 * Get common JavaScript helper functions
+		 *
+		 * @return string JavaScript helper functions for use in panel templates
+		 */
+		private function getCommonHelpers(): string {
+			return <<<JS
+/**
+ * Common helper functions for debug panels
+ */
+window.CanvasDebugHelpers = {
+    /**
+     * Format parameters into a standardized table
+     */
+    formatParamsTable: function(params, emptyMessage = 'No parameters') {
+        if (!params || Object.keys(params).length === 0) {
+            return `<em class="canvas-debug-text-muted">\${emptyMessage}</em>`;
+        }
+        
+        const rows = Object.entries(params).map(([key, value]) => `
+            <tr>
+                <td class="canvas-debug-param-key">\${escapeHtml(key)}</td>
+                <td class="canvas-debug-param-value">\${escapeHtml(JSON.stringify(value))}</td>
+            </tr>
+        `).join('');
+        
+        return `
+            <table class="canvas-debug-params-table">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    \${rows}
+                </tbody>
+            </table>
+        `;
+    },
+
+    /**
+     * Format time with appropriate badge styling
+     */
+    formatTimeBadge: function(timeMs) {
+        let cssClass = 'canvas-debug-time-badge';
+        if (timeMs > 1000) {
+            cssClass += ' very-slow';
+        } else if (timeMs > 100) {
+            cssClass += ' slow';
+        }
+        
+        return `<span class="\${cssClass}">\${timeMs}ms</span>`;
+    },
+
+    /**
+     * Truncate long strings with ellipsis
+     */
+    truncate: function(str, length = 60) {
+        if (!str) return '';
+        return str.length > length ? str.substring(0, length) + '...' : str;
+    },
+
+    /**
+     * Format route parameters for display
+     */
+    formatRouteParams: function(params) {
+        if (!params || Object.keys(params).length === 0) {
+            return '<em class="canvas-debug-text-muted">None</em>';
+        }
+        return Object.entries(params)
+            .map(([key, value]) => `\${key}: \${value}`)
+            .join(', ');
+    },
+
+    /**
+     * Create an expandable section
+     */
+    createExpandable: function(title, content, expanded = false) {
+        const expandedClass = expanded ? 'expanded' : '';
+        return `
+            <div class="canvas-debug-expandable \${expandedClass}">
+                <div class="canvas-debug-expandable-header" onclick="this.parentElement.classList.toggle('expanded')">
+                    <span>▶</span>
+                    <span>\${title}</span>
+                </div>
+                <div class="canvas-debug-expandable-content">
+                    \${content}
+                </div>
+            </div>
+        `;
+    }
+};
+
+// Make helpers globally available
+window.formatParamsTable = window.CanvasDebugHelpers.formatParamsTable;
+window.formatTimeBadge = window.CanvasDebugHelpers.formatTimeBadge;
+window.truncateText = window.CanvasDebugHelpers.truncate;
+window.formatRouteParams = window.CanvasDebugHelpers.formatRouteParams;
+window.createExpandable = window.CanvasDebugHelpers.createExpandable;
+JS;
 		}
 		
 		/**
