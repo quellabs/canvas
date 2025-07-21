@@ -2,9 +2,11 @@
 	
 	namespace Quellabs\Canvas\Debugbar\Helpers;
 	
+	use Quellabs\Canvas\Configuration\Configuration;
 	use Quellabs\Canvas\Debugbar\DebugEventCollector;
 	use Quellabs\Canvas\Debugbar\Panels\QueryPanel;
 	use Quellabs\Canvas\Debugbar\Panels\RequestPanel;
+	use Quellabs\Contracts\Configuration\ConfigurationInterface;
 	use Quellabs\Contracts\Debugbar\DebugEventCollectorInterface;
 	use Quellabs\Contracts\Debugbar\DebugPanelInterface;
 	use Symfony\Component\HttpFoundation\Request;
@@ -31,12 +33,12 @@
 		/**
 		 * Initialize the debug registry with an event collector
 		 * @param DebugEventCollector $eventCollector Service for collecting debug events
-		 * @param array|null $config
+		 * @param ConfigurationInterface $config
 		 */
-		public function __construct(DebugEventCollectorInterface $eventCollector, ?array $config=null) {
+		public function __construct(DebugEventCollectorInterface $eventCollector, ConfigurationInterface $config) {
 			$this->eventCollector = $eventCollector;
 			
-			if (empty($config)) {
+			if (empty($config->get('panels', []))) {
 				$this->initializeDefaultPanels();
 			} else {
 				$this->initializePanels($config);
@@ -118,10 +120,10 @@
 		
 		/**
 		 * Initialize panels based on configuration
-		 * @param array $config Array where key = panel name, value = class name
+		 * @param Configuration $config Array where key = panel name, value = class name
 		 * @return void
 		 */
-		private function initializePanels(array $config): void {
+		private function initializePanels(ConfigurationInterface $config): void {
 			foreach ($config as $panelName => $className) {
 				try {
 					// Validate that the class exists

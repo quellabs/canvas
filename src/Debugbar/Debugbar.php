@@ -2,8 +2,10 @@
 	
 	namespace Quellabs\Canvas\Debugbar;
 	
+	use Quellabs\Canvas\Configuration\Configuration;
 	use Quellabs\Canvas\Debugbar\Helpers\DebugRegistry;
 	use Quellabs\Canvas\Debugbar\Helpers\HtmlAnalyzer;
+	use Quellabs\Contracts\Configuration\ConfigurationInterface;
 	use Quellabs\Contracts\Debugbar\DebugEventCollectorInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
@@ -23,9 +25,9 @@
 		/**
 		 * Initialize the debugbar with required dependencies.
 		 * @param DebugEventCollectorInterface $eventCollector The event collector for gathering debug data
-		 * @param array|null $config
+		 * @param ConfigurationInterface $config
 		 */
-		public function __construct(DebugEventCollectorInterface $eventCollector, ?array $config=null) {
+		public function __construct(DebugEventCollectorInterface $eventCollector, ConfigurationInterface $config) {
 			$this->htmlAnalyzer = new HtmlAnalyzer();
 			$this->registry = new DebugRegistry($eventCollector, $config);
 		}

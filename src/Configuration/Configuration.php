@@ -2,13 +2,15 @@
 	
 	namespace Quellabs\Canvas\Configuration;
 	
+	use Quellabs\Contracts\Configuration\ConfigurationInterface;
+	
 	/**
 	 * Configuration management class for handling application settings
 	 *
 	 * This class provides a centralized way to manage configuration data with
 	 * support for type casting, default values, and dynamic configuration updates.
 	 */
-	class Configuration {
+	class Configuration implements ConfigurationInterface {
 
 		/** @var array The internal configuration storage array */
 		private array $config;
@@ -133,7 +135,7 @@
 				return array_map('trim', explode(',', $value));
 			}
 			
-			// Return arrays as-is, wrap other types in array
+			// Return arrays as-is, wrap other types in an array
 			return is_array($value) ? $value : [$value];
 		}
 	}
