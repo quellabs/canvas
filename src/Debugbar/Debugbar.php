@@ -3,8 +3,6 @@
 	namespace Quellabs\Canvas\Debugbar;
 	
 	use Quellabs\Canvas\Debugbar\Helpers\HtmlAnalyzer;
-	use Quellabs\Canvas\Debugbar\Panels\QueryPanel;
-	use Quellabs\Canvas\Debugbar\Panels\RequestPanel;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
 	
@@ -20,20 +18,14 @@
 		/** @var HtmlAnalyzer Helper for analyzing and manipulating HTML content */
 		private HtmlAnalyzer $htmlAnalyzer;
 		
-		/** @var DebugEventCollector Collects debugging events and data */
-		private DebugEventCollector $eventCollector;
-		
 		/**
 		 * Initialize the debugbar with required dependencies.
 		 * @param DebugEventCollector $eventCollector The event collector for gathering debug data
+		 * @param array|null $config
 		 */
-		public function __construct(DebugEventCollector $eventCollector) {
-			$this->eventCollector = $eventCollector;
+		public function __construct(DebugEventCollector $eventCollector, ?array $config=null) {
 			$this->htmlAnalyzer = new HtmlAnalyzer();
-			$this->registry = new DebugRegistry($eventCollector);
-			
-			// Initialize default panels (request info, database queries, etc.)
-			$this->initializeDefaultPanels();
+			$this->registry = new DebugRegistry($eventCollector, $config);
 		}
 		
 		/**
@@ -55,18 +47,6 @@
 			
 			// Inject the debug HTML into the response content
 			$this->injectHtml($response, $content, $debugHtml);
-		}
-		
-		/**
-		 * Register the default debug panels that come with the debugbar.
-		 * These provide basic debugging information like request details and database queries.
-		 */
-		protected function initializeDefaultPanels(): void {
-			// Panel for displaying request information (headers, parameters, etc.)
-			$this->registry->addPanel(new RequestPanel($this->eventCollector));
-			
-			// Panel for displaying database queries and performance metrics
-			$this->registry->addPanel(new QueryPanel($this->eventCollector));
 		}
 		
 		/**
