@@ -1,9 +1,12 @@
 <?php
 	
-	namespace Quellabs\Canvas\Debugbar;
+	namespace Quellabs\Canvas\Debugbar\Helpers;
 	
+	use Quellabs\Canvas\Debugbar\DebugEventCollector;
 	use Quellabs\Canvas\Debugbar\Panels\QueryPanel;
 	use Quellabs\Canvas\Debugbar\Panels\RequestPanel;
+	use Quellabs\Contracts\Debugbar\DebugEventCollectorInterface;
+	use Quellabs\Contracts\Debugbar\DebugPanelInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	
 	/**
@@ -30,7 +33,7 @@
 		 * @param DebugEventCollector $eventCollector Service for collecting debug events
 		 * @param array|null $config
 		 */
-		public function __construct(DebugEventCollector $eventCollector, ?array $config=null) {
+		public function __construct(DebugEventCollectorInterface $eventCollector, ?array $config=null) {
 			$this->eventCollector = $eventCollector;
 			
 			if (empty($config)) {

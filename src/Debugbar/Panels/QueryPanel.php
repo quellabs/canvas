@@ -3,7 +3,7 @@
 	namespace Quellabs\Canvas\Debugbar\Panels;
 	
 	use Quellabs\Canvas\Debugbar\DebugEventCollector;
-	use Quellabs\Canvas\Debugbar\DebugPanelInterface;
+	use Quellabs\Contracts\Debugbar\DebugPanelInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	
 	/**
@@ -107,9 +107,6 @@
 		
 		/**
 		 * Generate JavaScript template for rendering query data in the browser.
-		 *
-		 * Uses common components for consistent styling with other panels.
-		 *
 		 * @return string JavaScript template code
 		 */
 		public function getJsTemplate(): string {
@@ -147,16 +144,11 @@ JS;
 		
 		/**
 		 * Generate CSS styles for the query panel interface.
-		 *
-		 * Now much simpler since we use common components from DebugRegistry.
-		 *
 		 * @return string CSS stylesheet
 		 */
 		public function getCss(): string {
 			return <<<'CSS'
-/* Query-specific styles - most styling now comes from common components */
-
-/* Override code block styling for SQL syntax highlighting */
+/* Override code block styling for ObjectQuel syntax highlighting */
 .canvas-debug-item .canvas-debug-code {
     background: #f8f9fa;
     color: #d63384;
