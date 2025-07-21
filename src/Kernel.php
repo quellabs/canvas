@@ -5,7 +5,7 @@
 	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\Canvas\AOP\AspectDispatcher;
 	use Quellabs\Canvas\Configuration\Configuration;
-	use Quellabs\Canvas\Debugbar\DebugEventCollector;
+	use Quellabs\Canvas\Debugbar\Helpers\DebugEventCollector;
 	use Quellabs\Canvas\Discover\AnnotationsReaderProvider;
 	use Quellabs\Canvas\Discover\CacheInterfaceProvider;
 	use Quellabs\Canvas\Discover\ConfigurationProvider;
@@ -18,7 +18,6 @@
 	use Quellabs\Canvas\Legacy\LegacyBridge;
 	use Quellabs\Canvas\Legacy\LegacyHandler;
 	use Quellabs\Canvas\Routing\AnnotationResolver;
-	use Quellabs\DependencyInjection\Autowiring\MethodContext;
 	use Quellabs\DependencyInjection\Container;
 	use Quellabs\Discover\Discover;
 	use Quellabs\SignalHub\HasSignals;

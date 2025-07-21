@@ -1,10 +1,9 @@
 <?php
 	
-	namespace Quellabs\Canvas\Debugbar;
+	namespace Quellabs\Canvas\Debugbar\Helpers;
 	
 	use Quellabs\SignalHub\Signal;
 	use Quellabs\SignalHub\SignalHub;
-	use Symfony\Component\HttpFoundation\Request;
 	
 	/**
 	 * This class automatically listens for debug-related signals and stores
