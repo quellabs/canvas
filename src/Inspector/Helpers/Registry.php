@@ -1,14 +1,14 @@
 <?php
 	
-	namespace Quellabs\Canvas\Debugbar\Helpers;
+	namespace Quellabs\Canvas\Inspector\Helpers;
 	
 	use Quellabs\Canvas\Configuration\Configuration;
-	use Quellabs\Canvas\Debugbar\DebugEventCollector;
-	use Quellabs\Canvas\Debugbar\Panels\QueryPanel;
-	use Quellabs\Canvas\Debugbar\Panels\RequestPanel;
+	use Quellabs\Canvas\Inspector\EventCollector;
+	use Quellabs\Canvas\Inspector\Panels\QueryPanel;
+	use Quellabs\Canvas\Inspector\Panels\RequestPanel;
 	use Quellabs\Contracts\Configuration\ConfigurationInterface;
-	use Quellabs\Contracts\Debugbar\DebugEventCollectorInterface;
-	use Quellabs\Contracts\Debugbar\DebugPanelInterface;
+	use Quellabs\Contracts\Inspector\EventCollectorInterface;
+	use Quellabs\Contracts\Inspector\InspectorPanelInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	
 	/**
@@ -18,24 +18,24 @@
 	 * managing multiple debug panels and orchestrating their rendering into
 	 * a unified debug interface.
 	 */
-	class DebugRegistry {
+	class Registry {
 		
 		/**
-		 * @var DebugEventCollector Collects all debug events during request processing
+		 * @var EventCollector Collects all debug events during request processing
 		 */
-		private DebugEventCollector $eventCollector;
+		private EventCollector $eventCollector;
 		
 		/**
-		 * @var DebugPanelInterface[] Array of registered panels indexed by name
+		 * @var InspectorPanelInterface[] Array of registered panels indexed by name
 		 */
 		private array $panels = [];
 		
 		/**
 		 * Initialize the debug registry with an event collector
-		 * @param DebugEventCollector $eventCollector Service for collecting debug events
+		 * @param EventCollector $eventCollector Service for collecting debug events
 		 * @param ConfigurationInterface $config
 		 */
-		public function __construct(DebugEventCollectorInterface $eventCollector, ConfigurationInterface $config) {
+		public function __construct(EventCollectorInterface $eventCollector, ConfigurationInterface $config) {
 			$this->eventCollector = $eventCollector;
 			
 			if (empty($config->get('panels', []))) {
@@ -47,9 +47,9 @@
 		
 		/**
 		 * Register a new debug panel
-		 * @param DebugPanelInterface $panel The panel to add to the registry
+		 * @param InspectorPanelInterface $panel The panel to add to the registry
 		 */
-		public function addPanel(DebugPanelInterface $panel): void {
+		public function addPanel(InspectorPanelInterface $panel): void {
 			$this->panels[$panel->getName()] = $panel;
 		}
 		
@@ -132,7 +132,7 @@
 					}
 					
 					// Validate that the class implements the required interface
-					if (!in_array(DebugPanelInterface::class, class_implements($className))) {
+					if (!in_array(InspectorPanelInterface::class, class_implements($className))) {
 						throw new \InvalidArgumentException("Panel class '{$className}' must implement DebugPanelInterface");
 					}
 					

@@ -5,7 +5,7 @@
 	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\Canvas\AOP\AspectDispatcher;
 	use Quellabs\Canvas\Configuration\Configuration;
-	use Quellabs\Canvas\Debugbar\DebugEventCollector;
+	use Quellabs\Canvas\Inspector\EventCollector;
 	use Quellabs\Canvas\Discover\AnnotationsReaderProvider;
 	use Quellabs\Canvas\Discover\CacheInterfaceProvider;
 	use Quellabs\Canvas\Discover\ConfigurationProvider;
@@ -35,7 +35,7 @@
 		private Discover $discover; // Service discovery
 		private AnnotationReader $annotationsReader; // Annotation reading
 		private Configuration $configuration;
-		private Configuration $debugbar_configuration;
+		private Configuration $inspector_configuration;
 		private ?array $contents_of_app_php = null;
 		private bool $legacyEnabled;
 		private ?LegacyHandler $legacyFallbackHandler;
@@ -55,7 +55,7 @@
 			
 			// Store the configuration array
 			$this->configuration = new Configuration(array_merge($this->getConfigFile("app.php"), $configuration));
-			$this->debugbar_configuration = new Configuration($this->getConfigFile("debugbar.php"));
+			$this->inspector_configuration = new Configuration($this->getConfigFile("inspector.php"));
 			
 			// Register Annotations Reader
 			$this->annotationsReader = $this->createAnnotationReader();
@@ -158,10 +158,10 @@
 			try {
 				// Init the debug bar
 				$debugMode = $this->configuration->get('debug_mode', false);
-				$debugBarEnabled = $this->debugbar_configuration->get('enabled', false);
+				$debugBarEnabled = $this->inspector_configuration->get('enabled', false);
 				
 				if ($debugMode && $debugBarEnabled) {
-					$debugCollector = new DebugEventCollector($this->getSignalHub());
+					$debugCollector = new EventCollector($this->getSignalHub());
 				} else {
 					$debugCollector = null;
 				}
@@ -194,7 +194,7 @@
 						]);
 
 						// Inject the bar
-						$debugBar = new Debugbar\Debugbar($debugCollector, $this->debugbar_configuration);
+						$debugBar = new Inspector\Inspector($debugCollector, $this->inspector_configuration);
 						$debugBar->inject($request, $response);
 					}
 					
