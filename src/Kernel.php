@@ -158,7 +158,7 @@
 			try {
 				// Init the debug bar
 				$debugMode = $this->configuration->get('debug_mode', false);
-				$debugBarEnabled = $this->$this->debugbar_configuration->get('enabled', false);
+				$debugBarEnabled = $this->debugbar_configuration->get('enabled', false);
 				
 				if ($debugMode && $debugBarEnabled) {
 					$debugCollector = new DebugEventCollector($this->getSignalHub());
@@ -194,7 +194,7 @@
 						]);
 
 						// Inject the bar
-						$debugBar = new Debugbar\Debugbar($debugCollector);
+						$debugBar = new Debugbar\Debugbar($debugCollector, $this->debugbar_configuration);
 						$debugBar->inject($request, $response);
 					}
 					
