@@ -191,10 +191,17 @@
 			return <<<HTML
 <!-- Canvas Debug Bar -->
 <div id="canvas-debug-bar" class="canvas-debug-bar minimized">
-    <!-- Header with logo and statistics -->
+    <!-- Header with logo, arrow, statistics, and controls -->
     <div class="canvas-debug-bar-header" onclick="CanvasDebugBar.toggle()">
+        <span class="canvas-debug-bar-arrow" id="debug-bar-arrow">▲</span>
         <div class="canvas-debug-bar-logo">Canvas Debug</div>
         <div class="canvas-debug-bar-stats" id="debug-stats"></div>
+        <div class="canvas-debug-bar-controls">
+            <label class="canvas-debug-remain-open" onclick="event.stopPropagation()">
+                <input type="checkbox" id="canvas-debug-remain-open" onchange="CanvasDebugBar.toggleRemainOpen()">
+                <span>Remain Open</span>
+            </label>
+        </div>
     </div>
     
     <!-- Main content area with tabs and panels -->
@@ -245,7 +252,6 @@ HTML;
     border-top: 1px solid #e0e0e0;
     box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
     z-index: 999999;
-    transition: all 0.3s ease;
     max-height: 80vh;
     overflow: hidden;
 }
@@ -272,6 +278,15 @@ HTML;
 
 .canvas-debug-bar-header:hover {
     background: #f0f0f0;
+}
+
+/* Arrow indicator */
+.canvas-debug-bar-arrow {
+    font-size: 12px;
+    margin-right: 8px;
+    display: inline-block;
+    color: #0066cc;
+    font-weight: bold;
 }
 
 /* Logo/branding */
@@ -301,6 +316,41 @@ HTML;
 }
 
 .canvas-debug-bar-stat-value {
+    color: #0066cc;
+    font-weight: 500;
+}
+
+/* Controls section */
+.canvas-debug-bar-controls {
+    display: flex;
+    align-items: center;
+    margin-left: 20px;
+}
+
+/* Remain open checkbox styling */
+.canvas-debug-remain-open {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #666666;
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 8px;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+}
+
+.canvas-debug-remain-open:hover {
+    background: #e9ecef;
+}
+
+.canvas-debug-remain-open input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.canvas-debug-remain-open input[type="checkbox"]:checked + span {
     color: #0066cc;
     font-weight: 500;
 }
@@ -712,13 +762,13 @@ JS;
  * - Tab switching and panel display
  * - Statistics rendering
  * - Panel content rendering via templates
+ * - Persistent state management
  */
 window.CanvasDebugBar = {
     data: null,
     
     /**
      * Initialize the debug bar with data from the server
-     *
      * @param {Object} debugData Data containing stats, panels, and templates
      */
     init: function(debugData) {
@@ -726,6 +776,7 @@ window.CanvasDebugBar = {
         this.renderStats();
         this.renderTabs();
         this.renderPanels();
+        this.restoreState();
     },
     
     /**
@@ -790,12 +841,90 @@ window.CanvasDebugBar = {
      */
     toggle: function() {
         const debugBar = document.getElementById('canvas-debug-bar');
-        debugBar.classList.toggle('minimized');
+        const isMinimized = debugBar.classList.contains('minimized');
+        
+        if (isMinimized) {
+            debugBar.classList.remove('minimized');
+            this.saveState({ expanded: true });
+        } else {
+            debugBar.classList.add('minimized');
+            this.saveState({ expanded: false });
+        }
+        
+        this.updateArrow();
+    },
+    
+    /**
+     * Toggle the "remain open" functionality
+     */
+    toggleRemainOpen: function() {
+        const checkbox = document.getElementById('canvas-debug-remain-open');
+        this.saveState({ remainOpen: checkbox.checked });
+    },
+    
+    /**
+     * Update the arrow direction based on current state
+     */
+    updateArrow: function() {
+        const arrow = document.getElementById('debug-bar-arrow');
+        const debugBar = document.getElementById('canvas-debug-bar');
+        
+        if (debugBar.classList.contains('minimized')) {
+            arrow.textContent = '▲';  // Point up when minimized (indicating it can expand up)
+        } else {
+            arrow.textContent = '▼';  // Point down when expanded (indicating it can minimize down)
+        }
+    },
+    
+    /**
+     * Save debug bar state to localStorage
+     * @param {Object} state State object to save
+     */
+    saveState: function(state) {
+        try {
+            const currentState = this.getState();
+            const newState = Object.assign(currentState, state);
+            localStorage.setItem('canvas-debug-bar-state', JSON.stringify(newState));
+        } catch (e) {
+            // Fail silently if localStorage is not available
+            console.warn('Canvas Debug Bar: Unable to save state to localStorage');
+        }
+    },
+    
+    /**
+     * Get current debug bar state from localStorage
+     * @return {Object} Current state object
+     */
+    getState: function() {
+        try {
+            const state = localStorage.getItem('canvas-debug-bar-state');
+            return state ? JSON.parse(state) : { expanded: false, remainOpen: false };
+        } catch (e) {
+            return { expanded: false, remainOpen: false };
+        }
+    },
+    
+    /**
+     * Restore debug bar state from localStorage
+     */
+    restoreState: function() {
+        const state = this.getState();
+        const debugBar = document.getElementById('canvas-debug-bar');
+        const checkbox = document.getElementById('canvas-debug-remain-open');
+        
+        // Restore remain open checkbox
+        checkbox.checked = state.remainOpen || false;
+        
+        // Restore expanded state only if "remain open" is checked
+        if (state.remainOpen && state.expanded) {
+            debugBar.classList.remove('minimized');
+        }
+        
+        this.updateArrow();
     },
     
     /**
      * Switch to a specific tab/panel
-     *
      * @param {string} tabName Name of the tab to show
      */
     showTab: function(tabName) {
@@ -810,6 +939,7 @@ window.CanvasDebugBar = {
         
         // Show selected panel
         const panel = document.getElementById(`panel-\${tabName}`);
+
         if (panel) {
             panel.classList.add('active');
         }
@@ -820,7 +950,6 @@ window.CanvasDebugBar = {
     
     /**
      * Format statistic labels for display (convert snake_case to Title Case)
-     *
      * @param {string} key The statistic key to format
      * @return {string} Formatted label
      */
@@ -830,7 +959,6 @@ window.CanvasDebugBar = {
     
     /**
      * Escape HTML characters to prevent XSS
-     *
      * @param {string} text Text to escape
      * @return {string} HTML-escaped text
      */
