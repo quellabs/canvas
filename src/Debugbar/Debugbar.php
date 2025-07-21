@@ -26,14 +26,162 @@
 		 */
 		public function inject(Request $request, Response $response): void {
 			$content = $response->getContent();
+			
+			// Only inject into HTML responses
+			if (!$this->isHtmlResponse($response, $content)) {
+				return;
+			}
+			
 			$bodyPos = $this->getEndOfBodyPosition($content);
 			
 			if ($bodyPos !== false) {
+				// Body tag exists, inject before </body>
 				$newContent = substr($content, 0, $bodyPos) . $this->getHtml($request) . substr($content, $bodyPos);
 				$response->setContent($newContent);
+			} else {
+				// No body tag found, try to add one
+				$this->injectWithoutBodyTag($request, $response, $content);
 			}
 		}
 		
+		/**
+		 * Inject debugbar when no body tag is present
+		 * @param Request $request
+		 * @param Response $response
+		 * @param string $content
+		 * @return void
+		 */
+		private function injectWithoutBodyTag(Request $request, Response $response, string $content): void {
+			$debugHtml = $this->getHtml($request);
+			
+			// Try to find </html> tag
+			$htmlEndPos = strripos($content, '</html>');
+			if ($htmlEndPos !== false) {
+				// Insert before </html>
+				$newContent = substr($content, 0, $htmlEndPos) . $debugHtml . substr($content, $htmlEndPos);
+				$response->setContent($newContent);
+				return;
+			}
+			
+			// Try to find </head> tag and add body
+			$headEndPos = strripos($content, '</head>');
+			if ($headEndPos !== false) {
+				$bodyContent = "\n<body>" . $debugHtml . "</body>\n</html>";
+				$newContent = substr($content, 0, $headEndPos + 7) . $bodyContent . substr($content, $headEndPos + 7);
+				$response->setContent($newContent);
+				return;
+			}
+			
+			// If it looks like HTML but has no structure, wrap it
+			if ($this->looksLikeHtml($content)) {
+				$newContent = sprintf("
+					<!DOCTYPE html>
+					<html>
+					<head>
+						<title>Debug</title>
+					</head>
+					<body>
+						%s
+						%s
+					</body>
+					</html>
+				",
+					$content,
+					$debugHtml
+				);
+				
+				$response->setContent(trim($newContent));
+				
+				// Update Content-Type if not set
+				if (!$response->headers->has('Content-Type')) {
+					$response->headers->set('Content-Type', 'text/html; charset=UTF-8');
+				}
+			}
+		}
+		
+		/**
+		 * Check if the response is HTML content
+		 * @param Response $response
+		 * @param string $content
+		 * @return bool
+		 */
+		private function isHtmlResponse(Response $response, string $content): bool {
+			// Check Content-Type header first
+			$contentType = $response->headers->get('Content-Type', '');
+			
+			// If explicitly set to non-HTML, don't inject
+			if (preg_match('/application\/(json|xml|pdf|octet-stream)|text\/(plain|css|javascript)/', $contentType)) {
+				return false;
+			}
+			
+			// If explicitly HTML, inject
+			if (str_contains($contentType, 'text/html')) {
+				return true;
+			}
+			
+			// If no Content-Type set, analyze content
+			return $this->looksLikeHtml($content);
+		}
+		
+		/**
+		 * Analyze content to determine if it looks like HTML
+		 * @param string $content
+		 * @return bool
+		 */
+		private function looksLikeHtml(string $content): bool {
+			// Empty content - not HTML
+			if (trim($content) === '') {
+				return false;
+			}
+			
+			// Check for common non-HTML patterns first
+			$trimmed = trim($content);
+			
+			// JSON response
+			if ((str_starts_with($trimmed, '{') && str_ends_with($trimmed, '}')) ||
+				(str_starts_with($trimmed, '[') && str_ends_with($trimmed, ']'))) {
+				return false;
+			}
+			
+			// XML response
+			if (str_starts_with($trimmed, '<?xml')) {
+				return false;
+			}
+			
+			// Look for HTML indicators
+			$htmlIndicators = [
+				'<!DOCTYPE html',
+				'<!doctype html',
+				'<html',
+				'<head>',
+				'<body>',
+				'<div',
+				'<span',
+				'<p>',
+				'<h1>', '<h2>', '<h3>', '<h4>', '<h5>', '<h6>',
+				'<title>',
+				'<meta',
+				'<link',
+				'<script',
+				'<style'
+			];
+			
+			$contentLower = strtolower($content);
+			
+			foreach ($htmlIndicators as $indicator) {
+				if (str_contains($contentLower, $indicator)) {
+					return true;
+				}
+			}
+			
+			return false;
+		}
+		
+		/**
+		 * Generate debug bar body
+		 * @param Request $request
+		 * @return string
+		 */
 		private function getHtml(Request $request): string {
 			return <<<BODY
 <!-- Canvas Debug Bar -->
