@@ -772,16 +772,16 @@ window.CanvasDebugBar = {
                 <span class="canvas-debug-bar-stat-value">\${stats . time}ms</span>
             </span>
             <span class="canvas-debug-bar-stat">
-                <span class="canvas-debug-bar-stat-label">Memory:</span>
-                <span class="canvas-debug-bar-stat-value">\${stats . memory}</span>
+                <span class="canvas-debug-bar-stat-label">Templates:</span>
+                <span class="canvas-debug-bar-stat-value">\${stats.templateTime}ms</span>
             </span>
             <span class="canvas-debug-bar-stat">
                 <span class="canvas-debug-bar-stat-label">Queries:</span>
                 <span class="canvas-debug-bar-stat-value">\${this . data . queries . length}</span>
             </span>
             <span class="canvas-debug-bar-stat">
-                <span class="canvas-debug-bar-stat-label">Cache:</span>
-                <span class="canvas-debug-bar-stat-value">\${this . data . cache . hits} hits</span>
+                <span class="canvas-debug-bar-stat-label">Memory:</span>
+                <span class="canvas-debug-bar-stat-value">\${stats.memory}</span>
             </span>
         `;
     },

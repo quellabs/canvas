@@ -36,7 +36,7 @@
 		 * Get performance statistics
 		 */
 		private function getStats(): array {
-			$stats = ['time' => 0, 'memory' => 0, 'queryTime' => 0];
+			$stats = ['time' => 0, 'memory' => 0, 'queryTime' => 0, 'templateTime' => 0];
 			
 			foreach ($this->collector->getEvents() as $event) {
 				switch ($event['signal']) {
@@ -48,9 +48,19 @@
 					case 'debug.objectquel.query':
 						$stats['queryTime'] += $event['data']['execution_time_ms'] ?? 0;
 						break;
+
+					case 'debug.template.query':
+						$stats['templateTime'] += $event['data']['execution_time_ms'] ?? 0;
+						break;
 				}
 			}
 			
+			// Round stats
+			$stats['time'] = round($stats['time'], 2);
+			$stats['queryTime'] = round($stats['queryTime'], 2);
+			$stats['templateTime'] = round($stats['templateTime'], 2);
+			
+			// Return
 			return $stats;
 		}
 		
