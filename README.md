@@ -2,7 +2,7 @@
 
 [![Packagist](https://img.shields.io/packagist/v/quellabs/canvas.svg)](https://packagist.org/packages/quellabs/canvas)
 
-**Canvas** is a lightweight, modern PHP framework built for real-world projects. Whether you’re starting fresh or
+**Canvas** is a lightweight, modern PHP framework built for real-world projects. Whether you're starting fresh or
 modernizing legacy code, Canvas offers a clean architecture with annotation-based routing, contextual dependency
 injection, and an intuitive ORM. No magic, no bloat — just the tools you actually need.
 
@@ -17,6 +17,7 @@ injection, and an intuitive ORM. No magic, no bloat — just the tools you actua
 - ⏰ **Task Scheduling** – Cron-style background jobs with timeouts and safe concurrent handling
 - 🧼 **Validation & Sanitization** – Clean and verify request data using declarative rules and aspects
 - 🔐 **Secure by Default** – Built-in CSRF protection, security headers, and input hardening
+- 🐛 **Powerful Debug Bar** – Visual debugging interface with database queries, request analysis, and custom panels
 - 🧠 **No Magic** – Everything is explicit, traceable, and designed for developers who like control
 
 ## Quick Start
@@ -140,6 +141,291 @@ $techPosts = $this->em->executeQuery("
 - **Parameter Binding**: Safe parameter substitution prevents SQL injection
 - **Relationship Traversal**: Easily query across entity relationships with `via` keyword
 - **Flexible Sorting**: Multi-column sorting with `sort by field1 asc, field2 desc`
+
+## Debug Bar
+
+Canvas includes a powerful visual debug bar that appears at the bottom of your web pages during development.
+It provides essential insights into your application's performance, database queries, request data, and more.
+
+### Enabling the Debug Bar
+
+The debug bar is controlled by your application configuration:
+
+```php
+// config/app.php
+return [
+    'debug_mode' => true,  // Must be true for debug features
+    'debug_bar'  => true,  // Enables the visual debug bar
+    // ... other config
+];
+```
+
+**Important**: The debug bar only appears on HTML responses and automatically hides in production environments.
+
+### Built-in Debug Panels
+
+Canvas ships with essential debug panels that provide immediate value:
+
+#### Request Panel 🌐
+
+Displays comprehensive request information:
+- **Route Information**: Controller, method, route pattern, and parameters
+- **Request Details**: HTTP method, URI, IP address, user agent
+- **POST Data**: Form submissions and request body content
+- **File Uploads**: Details about uploaded files including validation status
+- **Cookies**: All cookies sent with the request
+
+#### Database Panel 🗄️
+
+Shows database query analysis:
+- **Query List**: All executed database queries with syntax highlighting
+- **Performance Metrics**: Execution time for each query with color-coded performance indicators
+- **Parameter Binding**: Bound parameters for each query to help debug issues
+- **Total Statistics**: Overall query count and cumulative execution time
+
+### Debug Bar Features
+
+#### Performance Statistics
+The debug bar header shows key performance metrics at a glance:
+- **Execution Time**: Total request processing time
+- **Query Count**: Number of database queries executed
+- **Query Time**: Total time spent on database operations
+
+#### Interactive Interface
+- **Minimizable**: Click the header to expand/collapse the debug bar
+- **Tabbed Navigation**: Switch between different debug panels
+- **Remain Open**: Checkbox to keep the debug bar expanded across page loads
+- **Responsive Design**: Works well on desktop and mobile screens
+
+#### Smart HTML Injection
+The debug bar intelligently injects itself into your HTML responses:
+- **Optimal Placement**: Automatically finds the best location (before `</body>`)
+- **Fallback Strategies**: Works even with malformed HTML
+- **Safe Injection**: Won't break existing page functionality
+
+### Creating Custom Debug Panels
+
+Extend the debug bar with custom panels for your specific debugging needs:
+
+```php
+<?php
+namespace App\Debug;
+
+use Quellabs\Canvas\Debugbar\DebugEventCollector;use Quellabs\Contracts\Debugbar\DebugPanelInterface;use Symfony\Component\HttpFoundation\Request;
+
+class CachePanel implements DebugPanelInterface {
+    
+    private DebugEventCollector $collector;
+    private array $cacheEvents = [];
+    
+    public function __construct(DebugEventCollector $collector) {
+        $this->collector = $collector;
+    }
+    
+    public function getSignalPatterns(): array {
+        return ['debug.cache.*']; // Listen for cache-related events
+    }
+    
+    public function processEvents(): void {
+        $this->cacheEvents = $this->collector->getEventsBySignals($this->getSignalPatterns());
+    }
+    
+    public function getName(): string {
+        return 'cache';
+    }
+    
+    public function getTabLabel(): string {
+        return 'Cache (' . count($this->cacheEvents) . ')';
+    }
+    
+    public function getIcon(): string {
+        return '💾';
+    }
+    
+    public function getData(Request $request): array {
+        return [
+            'events' => $this->cacheEvents,
+            'hits' => array_filter($this->cacheEvents, fn($e) => $e['type'] === 'hit'),
+            'misses' => array_filter($this->cacheEvents, fn($e) => $e['type'] === 'miss')
+        ];
+    }
+    
+    public function getStats(): array {
+        $hits = count(array_filter($this->cacheEvents, fn($e) => $e['type'] === 'hit'));
+        $total = count($this->cacheEvents);
+        
+        return [
+            'cache_hit_ratio' => $total > 0 ? round(($hits / $total) * 100) . '%' : 'N/A'
+        ];
+    }
+    
+    public function getJsTemplate(): string {
+        return <<<'JS'
+return `
+    <div class="debug-panel-section">
+        <h3>Cache Operations (${data.events.length} total)</h3>
+        <div class="canvas-debug-info-grid">
+            <div class="canvas-debug-info-item">
+                <span class="canvas-debug-label">Hits:</span>
+                <span class="canvas-debug-value">${data.hits.length}</span>
+            </div>
+            <div class="canvas-debug-info-item">
+                <span class="canvas-debug-label">Misses:</span>
+                <span class="canvas-debug-value">${data.misses.length}</span>
+            </div>
+        </div>
+        
+        <div class="canvas-debug-item-list">
+            ${data.events.map(event => `
+                <div class="canvas-debug-item ${event.type === 'miss' ? 'error' : ''}">
+                    <div class="canvas-debug-item-header">
+                        <span class="canvas-debug-status-badge ${event.type === 'hit' ? 'success' : 'error'}">
+                            ${event.type.toUpperCase()}
+                        </span>
+                        <span class="canvas-debug-text-mono">${escapeHtml(event.key)}</span>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    </div>
+`;
+JS;
+    }
+    
+    public function getCss(): string {
+        return <<<'CSS'
+/* Custom styles for cache panel */
+.canvas-debug-item.cache-miss {
+    border-left: 4px solid #dc3545;
+}
+
+.canvas-debug-item.cache-hit {
+    border-left: 4px solid #28a745;
+}
+CSS;
+    }
+}
+```
+
+#### Registering Custom Panels
+
+Configure custom panels in your application config:
+
+```php
+// config/app.php
+return [
+    'debug_bar_panels' => [
+        'cache' => \App\Debug\CachePanel::class,
+        'security' => \App\Debug\SecurityPanel::class,
+        'mail' => \App\Debug\MailPanel::class,
+    ],
+    // ... other config
+];
+```
+
+### Debug Event System
+
+The debug bar uses Canvas's signal system to collect debugging information:
+
+#### Emitting Debug Events
+
+Emit debug events from your services:
+
+```php
+<?php
+namespace App\Services;
+
+use Quellabs\SignalHub\HasSignals;
+
+class CacheService {
+    use HasSignals;
+    
+    public function get(string $key): mixed {
+        $startTime = microtime(true);
+        
+        $value = $this->backend->get($key);
+        $executionTime = (microtime(true) - $startTime) * 1000;
+        
+        // Emit debug event for cache operations
+        $this->emit('debug.cache.get', [
+            'key' => $key,
+            'type' => $value !== null ? 'hit' : 'miss',
+            'execution_time_ms' => round($executionTime, 2)
+        ]);
+        
+        return $value;
+    }
+}
+```
+
+#### Common Debug Signals
+
+Canvas uses standardized signal patterns:
+- `debug.objectquel.query` - Database queries with performance data
+- `debug.canvas.query` - Route and controller execution information
+- `debug.cache.*` - Cache operations (hits, misses, writes)
+- `debug.security.*` - Security-related events (CSRF, authentication)
+- `debug.validation.*` - Form validation results
+
+### Debug Bar JavaScript API
+
+The debug bar provides a client-side JavaScript API for advanced interactions:
+
+```javascript
+// Access debug bar data
+const debugData = window.CanvasDebugBar.data;
+
+// Programmatically switch panels
+window.CanvasDebugBar.showTab('queries');
+
+// Check if debug bar is expanded
+const isExpanded = !document.getElementById('canvas-debug-bar').classList.contains('minimized');
+
+// Access helper functions in custom panels
+const formattedTable = window.formatParamsTable(data, 'No data');
+const timeBadge = window.formatTimeBadge(executionTime);
+```
+
+### Best Practices
+
+#### Development Workflow
+1. **Enable debug bar** during development for immediate feedback
+2. **Monitor query counts** to identify N+1 problems
+3. **Check execution times** for performance bottlenecks
+4. **Review request data** to debug form submissions and routing issues
+
+#### Performance Optimization
+- Debug bar automatically disables in production
+- Minimal overhead when disabled
+- Efficient event collection system
+- Lazy-loaded panel rendering
+
+#### Security Considerations
+- Never enable debug bar in production environments
+- Sensitive data is automatically sanitized in panel displays
+- Debug events are memory-only and not persisted
+
+### Troubleshooting
+
+#### Debug Bar Not Appearing
+Check these common issues:
+1. Ensure `debug_mode` and `debug_bar` are both `true` in config
+2. Verify the response is HTML (debug bar only works with HTML responses)
+3. Check that the response contains a closing `</body>` or `</html>` tag
+4. Ensure no JavaScript errors are preventing the bar from initializing
+
+#### Performance Impact
+The debug bar is designed for development use:
+- **Development**: Minimal impact, designed for real-time debugging
+- **Production**: Zero impact when disabled
+- **Memory Usage**: Events are stored in memory only during request processing
+
+#### Browser Compatibility
+The debug bar supports all modern browsers:
+- Chrome/Edge 80+
+- Firefox 75+
+- Safari 13+
+- Mobile browsers with responsive design
 
 ## Route Validation & Parameters
 
@@ -1575,6 +1861,7 @@ Canvas provides a powerful asset publishing system to deploy configuration files
 - **Flexibility**: Contextual containers and composable aspects
 - **Event-Driven**: Decoupled components with type-safe signal system
 - **Task Scheduling**: Robust background job processing with multiple execution strategies
+- **Powerful Debugging**: Visual debug bar with database queries, request analysis, and extensible panels
 - **Growth**: Scales from simple sites to complex applications
 
 ## Contributing

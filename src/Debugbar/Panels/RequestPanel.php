@@ -3,8 +3,8 @@
 	namespace Quellabs\Canvas\Debugbar\Panels;
 	
 	use Quellabs\Canvas\Debugbar\DebugEventCollector;
-	use Quellabs\Canvas\Debugbar\DebugPanelInterface;
 	use Quellabs\Canvas\Debugbar\Helpers\RequestExtractor;
+	use Quellabs\Contracts\Debugbar\DebugPanelInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	
 	/**

@@ -2,6 +2,7 @@
 	
 	namespace Quellabs\Canvas\Debugbar;
 	
+	use Quellabs\Contracts\Debugbar\DebugEventCollectorInterface;
 	use Quellabs\SignalHub\Signal;
 	use Quellabs\SignalHub\SignalHub;
 	
@@ -9,7 +10,7 @@
 	 * This class automatically listens for debug-related signals and stores
 	 * their data with timestamps for debugging purposes.
 	 */
-	class DebugEventCollector {
+	class DebugEventCollector implements DebugEventCollectorInterface {
 		
 		/**
 		 * Array to store collected debug events
