@@ -155,7 +155,10 @@
 			
 			try {
 				// Init the debug bar
-				if ($this->configuration->get('debug_mode', false)) {
+				$debugMode = $this->configuration->get('debug_mode', false);
+				$debugBarEnabled = $this->configuration->get('debug_bar', false);
+				
+				if ($debugMode && $debugBarEnabled) {
 					$debugCollector = new DebugEventCollector($this->getSignalHub());
 				} else {
 					$debugCollector = null;
