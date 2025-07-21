@@ -68,55 +68,74 @@
 		 * @return array Filtered headers safe for debugging/logging
 		 */
 		private function getFilteredHeaders(): array {
+			// Get all headers from the current request
 			$headers = $this->request->headers->all();
 			
 			// Explicit list of headers to exclude for security/privacy reasons
+			// These are common header names that typically contain sensitive information
 			$sensitiveHeaders = [
-				'authorization', 'cookie', 'x-api-key', 'x-auth-token', 'x-access-token',
-				'bearer', 'php-auth-user', 'php-auth-pw', 'php-auth-digest',
-				'www-authenticate', 'proxy-authorization', 'x-forwarded-authorization',
+				'authorization',              // Standard HTTP auth header
+				'cookie',                    // Session cookies and auth tokens
+				'x-api-key',                 // API authentication keys
+				'x-auth-token',              // Custom auth tokens
+				'x-access-token',            // Access tokens
+				'bearer',                    // Bearer token headers
+				'php-auth-user',             // PHP basic auth username
+				'php-auth-pw',               // PHP basic auth password
+				'php-auth-digest',           // PHP digest authentication
+				'www-authenticate',          // Server auth challenge
+				'proxy-authorization',       // Proxy authentication
+				'x-forwarded-authorization', // Forwarded auth headers
 			];
 			
 			// Regular expression patterns to catch additional sensitive headers
+			// This catches headers that follow common naming patterns for sensitive data
 			$headerPatternsToFilter = [
-				'/^x-.*-key$/i',      // Headers ending with '-key'
-				'/^x-.*-token$/i',    // Headers ending with '-token'
-				'/^x-.*-secret$/i',   // Headers ending with '-secret'
-				'/.*-auth.*/i',       // Any header containing 'auth'
+				'/^x-.*-key$/i',      // Headers ending with '-key' (e.g., x-client-key)
+				'/^x-.*-token$/i',    // Headers ending with '-token' (e.g., x-csrf-token)
+				'/^x-.*-secret$/i',   // Headers ending with '-secret' (e.g., x-api-secret)
+				'/.*-auth.*/i',       // Any header containing 'auth' (e.g., custom-auth-header)
 			];
 			
-			// Process each header
+			// Initialize array to store filtered (safe) headers
 			$filtered = [];
 			
+			// Process each header from the request
 			foreach ($headers as $name => $values) {
+				// Convert header name to lowercase for case-insensitive comparison
 				$lowerName = strtolower($name);
 				
-				// Skip explicitly sensitive headers
+				// Skip explicitly sensitive headers by checking against our blacklist
 				if (in_array($lowerName, $sensitiveHeaders)) {
-					continue;
+					continue; // Skip this header - it's on our sensitive list
 				}
 				
-				// Skip headers matching sensitive patterns
+				// Skip headers matching sensitive patterns using regex
 				$skipHeader = false;
+				
+				// Check each pattern to see if this header matches
 				foreach ($headerPatternsToFilter as $pattern) {
 					if (preg_match($pattern, $lowerName)) {
-						$skipHeader = true;
-						break;
+						$skipHeader = true; // Mark for skipping
+						break; // No need to check remaining patterns
 					}
 				}
 				
+				// If header matched a sensitive pattern, skip it
 				if ($skipHeader) {
 					continue;
 				}
 				
 				// Handle array values - convert to string for easier display
-				if (is_array($values)) {
-					$filtered[$name] = count($values) === 1 ? $values[0] : implode(', ', $values);
+				// HTTP headers can have multiple values, so we need to handle both cases
+				if (count($values) === 1) {
+					$filtered[$name] = $values[0]; // Single value - use it directly
 				} else {
-					$filtered[$name] = $values;
+					$filtered[$name] = implode(', ', $values); // Multiple values - join them with comma separator
 				}
 			}
 			
+			// Return the filtered headers array (safe for logging/debugging)
 			return $filtered;
 		}
 		
@@ -183,11 +202,11 @@
 		
 		/**
 		 * Recursively process file inputs to handle nested file arrays
-		 * @param mixed $fileInputs The file inputs to process (can be nested arrays)
+		 * @param array $fileInputs The file inputs to process (can be nested arrays)
 		 * @param array &$files Reference to the array being built with file data
 		 * @param string $prefix Current prefix for nested file names
 		 */
-		private function processFileInputs($fileInputs, array &$files, string $prefix = ''): void {
+		private function processFileInputs(array $fileInputs, array &$files, string $prefix = ''): void {
 			foreach ($fileInputs as $name => $file) {
 				// Build the full input name (handling nested structures like files[docs][pdf])
 				$fullName = $prefix ? $prefix . '[' . $name . ']' : $name;
@@ -252,7 +271,7 @@
 		}
 		
 		/**
-		 * Get human-readable error message for file upload errors
+		 * Get a human-readable error message for file upload errors
 		 * @param int $error PHP upload error constant
 		 * @return string Human-readable error description
 		 */
