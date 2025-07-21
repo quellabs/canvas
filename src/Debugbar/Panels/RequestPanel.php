@@ -19,7 +19,7 @@
 	 * @package Quellabs\Canvas\Debugbar\Panels
 	 */
 	class RequestPanel implements DebugPanelInterface {
-
+		
 		/** @var DebugEventCollector Event collector for gathering debug information */
 		private DebugEventCollector $collector;
 		
@@ -122,152 +122,124 @@
 		/**
 		 * Get the JavaScript template for rendering the panel content
 		 *
-		 * Returns a JavaScript string that generates the HTML for the panel.
-		 * The template includes:
-		 * - Helper functions for formatting route parameters and truncating strings
-		 * - Route information section
-		 * - Request details section
-		 * - POST data section (if present)
-		 * - Uploaded files section (if present)
-		 * - Cookies section (if present)
+		 * Now uses common components for consistent styling and shows route parameters in a table.
 		 *
 		 * @return string JavaScript template code
 		 */
 		public function getJsTemplate(): string {
 			return <<<JS
-// Helper function to format route parameters for display
-const formatRouteParams = (params) => {
-    if (!params || Object.keys(params).length === 0) {
-        return 'None';
-    }
-    return Object.entries(params)
-        .map(([key, value]) => `\${key}: \${value}`)
-        .join(', ');
-};
-
-// Helper function to truncate long strings
-const truncate = (str, length) => {
-    if (!str) return '';
-    return str.length > length ? str.substring(0, length) + '...' : str;
-};
-
 // Extract data from the panel data object
 const request = data.request;
 const route = data.route;
 
-// Generate the complete HTML template
+// Generate the complete HTML template using common components
 return `
     <div id="panel-request" class="canvas-debug-bar-debug-panel">
         <!-- Route Information Section -->
-        <div class="canvas-debug-bar-panel-section">
+        <div class="debug-panel-section">
             <h3>Route Information</h3>
-            <div class="canvas-debug-bar-info-grid">
-                <div class="canvas-debug-bar-info-item">
-                    <span class="canvas-debug-bar-label">Controller:</span>
-                    <span class="canvas-debug-bar-value">\${route.controller || 'N/A'}</span>
+            <div class="canvas-debug-info-grid">
+                <div class="canvas-debug-info-item">
+                    <span class="canvas-debug-label">Controller:</span>
+                    <span class="canvas-debug-value">\${route.controller || 'N/A'}</span>
                 </div>
-                <div class="canvas-debug-bar-info-item">
-                    <span class="canvas-debug-bar-label">Method:</span>
-                    <span class="canvas-debug-bar-value">\${route.method || 'N/A'}</span>
+                <div class="canvas-debug-info-item">
+                    <span class="canvas-debug-label">Method:</span>
+                    <span class="canvas-debug-value">\${route.method || 'N/A'}</span>
                 </div>
-                <div class="canvas-debug-bar-info-item">
-                    <span class="canvas-debug-bar-label">Route Pattern:</span>
-                    <span class="canvas-debug-bar-value">\${route.pattern || 'N/A'}</span>
+                <div class="canvas-debug-info-item">
+                    <span class="canvas-debug-label">Route Pattern:</span>
+                    <span class="canvas-debug-value">\${route.pattern || 'N/A'}</span>
                 </div>
-                <div class="canvas-debug-bar-info-item">
-                    <span class="canvas-debug-bar-label">Route Parameters:</span>
-                    <span class="canvas-debug-bar-value">\${formatRouteParams(route.parameters)}</span>
-                </div>
-                <!-- Show legacy file info only if this is a legacy route -->
                 \${route.legacy ? `
-                <div class="canvas-debug-bar-info-item">
-                    <span class="canvas-debug-bar-label">Legacy File:</span>
-                    <span class="canvas-debug-bar-value">\${route.legacyFile}</span>
+                <div class="canvas-debug-info-item">
+                    <span class="canvas-debug-label">Legacy File:</span>
+                    <span class="canvas-debug-value">\${route.legacyFile}</span>
                 </div>
                 ` : ''}
             </div>
         </div>
         
         <!-- Request Details Section -->
-        <div class="canvas-debug-bar-panel-section">
+        <div class="debug-panel-section">
             <h3>Request Details</h3>
-            <div class="canvas-debug-bar-info-grid">
-                <div class="canvas-debug-bar-info-item">
-                    <span class="canvas-debug-bar-label">HTTP Method:</span>
-                    <span class="canvas-debug-bar-value">\${request.method}</span>
+            <div class="canvas-debug-info-grid">
+                <div class="canvas-debug-info-item">
+                    <span class="canvas-debug-label">HTTP Method:</span>
+                    <span class="canvas-debug-value">\${request.method}</span>
                 </div>
-                <div class="canvas-debug-bar-info-item">
-                    <span class="canvas-debug-bar-label">URI:</span>
-                    <span class="canvas-debug-bar-value">\${request.uri}</span>
+                <div class="canvas-debug-info-item">
+                    <span class="canvas-debug-label">URI:</span>
+                    <span class="canvas-debug-value">\${request.uri}</span>
                 </div>
-                <div class="canvas-debug-bar-info-item">
-                    <span class="canvas-debug-bar-label">Full URL:</span>
-                    <span class="canvas-debug-bar-value">\${request.url}</span>
+                <div class="canvas-debug-info-item">
+                    <span class="canvas-debug-label">Full URL:</span>
+                    <span class="canvas-debug-value">\${request.url}</span>
                 </div>
-                <div class="canvas-debug-bar-info-item">
-                    <span class="canvas-debug-bar-label">Client IP:</span>
-                    <span class="canvas-debug-bar-value">\${request.ip}</span>
+                <div class="canvas-debug-info-item">
+                    <span class="canvas-debug-label">Client IP:</span>
+                    <span class="canvas-debug-value">\${request.ip}</span>
                 </div>
-                <div class="canvas-debug-bar-info-item">
-                    <span class="canvas-debug-bar-label">User Agent:</span>
-                    <span class="canvas-debug-bar-value" title="\${request.userAgent}">\${truncate(request.userAgent, 60)}</span>
+                <div class="canvas-debug-info-item">
+                    <span class="canvas-debug-label">User Agent:</span>
+                    <span class="canvas-debug-value" title="\${request.userAgent}">\${truncateText(request.userAgent, 60)}</span>
                 </div>
-                <div class="canvas-debug-bar-info-item">
-                    <span class="canvas-debug-bar-label">Referer:</span>
-                    <span class="canvas-debug-bar-value">\${request.referer || 'None'}</span>
+                <div class="canvas-debug-info-item">
+                    <span class="canvas-debug-label">Referer:</span>
+                    <span class="canvas-debug-value">\${request.referer || 'None'}</span>
                 </div>
             </div>
         </div>
 
-        <!-- POST Data Section (only shown if POST data exists) -->
-        \${Object.keys(request.request).length > 0 ? `
-        <div class="canvas-debug-bar-panel-section">
-            <h3>POST Data</h3>
-            <div class="canvas-debug-bar-params-list">
-                \${Object.entries(request.request).map(([name, value]) => `
-                    <div class="canvas-debug-bar-param-item">
-                        <span class="canvas-debug-bar-param-name">\${name}:</span>
-                        <span class="canvas-debug-bar-param-value">\${escapeHtml(JSON.stringify(value))}</span>
-                    </div>
-                `).join('')}
-            </div>
+        <!-- Route Parameters Table -->
+        \${route.parameters && Object.keys(route.parameters).length > 0 ? `
+        <div class="debug-panel-section">
+            <h3>Route parameters</h3>
+            \${formatParamsTable(route.parameters, 'No route parameters')}
         </div>
         ` : ''}
 
-        <!-- Uploaded Files Section (only shown if files were uploaded) -->
+        <!-- POST Data Section -->
+        \${Object.keys(request.request).length > 0 ? `
+        <div class="debug-panel-section">
+            <h3>POST Data</h3>
+            \${formatParamsTable(request.request, 'No POST data')}
+        </div>
+        ` : ''}
+
+        <!-- Uploaded Files Section -->
         \${Object.keys(request.files).length > 0 ? `
-        <div class="canvas-debug-bar-panel-section">
+        <div class="debug-panel-section">
             <h3>Uploaded Files</h3>
-            <div class="canvas-debug-bar-files-list">
+            <div class="canvas-debug-item-list">
                 \${Object.entries(request.files).map(([name, file]) => `
-                    <div class="canvas-debug-bar-file-item \${file.isValid ? 'valid' : 'invalid'}">
-                        <!-- File header with name, size, and error indicator -->
-                        <div class="canvas-debug-bar-file-header">
-                            <span class="canvas-debug-bar-file-name">\${name}</span>
-                            <span class="canvas-debug-bar-file-size">\${file.sizeFormatted}</span>
-                            \${!file.isValid ? `<span class="canvas-debug-bar-file-error">ERROR</span>` : ''}
+                    <div class="canvas-debug-item \${file.isValid ? '' : 'error'}">
+                        <div class="canvas-debug-item-header">
+                            <span class="canvas-debug-text-mono">\${name}</span>
+                            <span class="canvas-debug-text-small canvas-debug-text-muted">\${file.sizeFormatted}</span>
+                            \${!file.isValid ? `<span class="canvas-debug-status-badge error">ERROR</span>` : ''}
                         </div>
-                        <!-- Detailed file information -->
-                        <div class="canvas-debug-bar-file-details">
-                            <div class="canvas-debug-bar-file-detail">
-                                <span class="canvas-debug-bar-label">Original Name:</span>
-                                <span class="canvas-debug-bar-value">\${escapeHtml(file.originalName || 'N/A')}</span>
+                        <div class="canvas-debug-item-content">
+                            <div class="canvas-debug-info-grid">
+                                <div class="canvas-debug-info-item">
+                                    <span class="canvas-debug-label">Original Name:</span>
+                                    <span class="canvas-debug-value">\${escapeHtml(file.originalName || 'N/A')}</span>
+                                </div>
+                                <div class="canvas-debug-info-item">
+                                    <span class="canvas-debug-label">MIME Type:</span>
+                                    <span class="canvas-debug-value">\${file.mimeType || 'Unknown'}</span>
+                                </div>
+                                <div class="canvas-debug-info-item">
+                                    <span class="canvas-debug-label">Extension:</span>
+                                    <span class="canvas-debug-value">\${file.extension || 'None'}</span>
+                                </div>
+                                \${!file.isValid ? `
+                                <div class="canvas-debug-info-item">
+                                    <span class="canvas-debug-label">Error:</span>
+                                    <span class="canvas-debug-value canvas-debug-text-error">\${file.errorMessage}</span>
+                                </div>
+                                ` : ''}
                             </div>
-                            <div class="canvas-debug-bar-file-detail">
-                                <span class="canvas-debug-bar-label">MIME Type:</span>
-                                <span class="canvas-debug-bar-value">\${file.mimeType || 'Unknown'}</span>
-                            </div>
-                            <div class="canvas-debug-bar-file-detail">
-                                <span class="canvas-debug-bar-label">Extension:</span>
-                                <span class="canvas-debug-bar-value">\${file.extension || 'None'}</span>
-                            </div>
-                            <!-- Show error message for invalid files -->
-                            \${!file.isValid ? `
-                            <div class="canvas-debug-bar-file-detail">
-                                <span class="canvas-debug-bar-label">Error:</span>
-                                <span class="canvas-debug-bar-value canvas-debug-bar-error">\${file.errorMessage}</span>
-                            </div>
-                            ` : ''}
                         </div>
                     </div>
                 `).join('')}
@@ -275,18 +247,11 @@ return `
         </div>
         ` : ''}
         
-        <!-- Cookies Section (only shown if cookies exist) -->
+        <!-- Cookies Section -->
         \${Object.keys(request.cookies).length > 0 ? `
-        <div class="canvas-debug-bar-panel-section">
+        <div class="debug-panel-section">
             <h3>Cookies</h3>
-            <div class="canvas-debug-bar-params-list">
-                \${Object.entries(request.cookies).map(([name, value]) => `
-                    <div class="canvas-debug-bar-param-item">
-                        <span class="canvas-debug-bar-param-name">\${name}:</span>
-                        <span class="canvas-debug-bar-param-value">\${escapeHtml(value)}</span>
-                    </div>
-                `).join('')}
-            </div>
+            \${formatParamsTable(request.cookies, 'No cookies')}
         </div>
         ` : ''}
     </div>
@@ -297,146 +262,29 @@ JS;
 		/**
 		 * Get the CSS styles for the panel
 		 *
-		 * Returns CSS rules for styling the request panel including:
-		 * - Grid layout for info items
-		 * - Styling for parameter lists
-		 * - File upload styling with error states
-		 * - Responsive design considerations
+		 * Much simpler now since most styling comes from common components.
 		 *
 		 * @return string CSS stylesheet
 		 */
 		public function getCss(): string {
 			return <<<CSS
-/* Grid layout for displaying request information */
-.canvas-debug-bar-info-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 8px;
-}
-
-/* Individual info item styling */
-.canvas-debug-bar-info-item {
-    display: flex;
-    padding: 8px 0;
-    border-bottom: 1px solid #e0e0e0;
-}
-
-/* Label styling within info items */
-.canvas-debug-bar-info-item .canvas-debug-bar-label {
-    min-width: 120px;
-    color: #666666;
-    font-weight: 500;
-}
-
-/* Value styling within info items */
-.canvas-debug-bar-info-item .canvas-debug-bar-value {
-    color: #333333;
-    word-break: break-all;
-}
-
-/* Container for parameter lists (POST data, cookies) */
-.canvas-debug-bar-params-list {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    max-height: 200px;
-    overflow-y: auto;
-}
-
-/* Individual parameter item */
-.canvas-debug-bar-param-item {
-    display: flex;
-    padding: 4px 0;
-    border-bottom: 1px solid #f0f0f0;
-    font-size: 12px;
-}
-
-/* Parameter name styling */
-.canvas-debug-bar-param-name {
-    min-width: 150px;
-    color: #666666;
-    font-weight: 500;
-}
-
-/* Parameter value styling with monospace font */
-.canvas-debug-bar-param-value {
-    color: #333333;
-    word-break: break-all;
-    font-family: 'Consolas', 'Monaco', monospace;
-}
-
-/* Container for uploaded files list */
-.canvas-debug-bar-files-list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-/* Individual file item styling */
-.canvas-debug-bar-file-item {
-    background: #f8f9fa;
-    border: 1px solid #e0e0e0;
-    border-radius: 4px;
-    padding: 12px;
-}
-
-/* Invalid file styling (red border and background) */
-.canvas-debug-bar-file-item.invalid {
-    border-color: #dc3545;
-    background: #f8d7da;
-}
-
-/* File header with name, size, and error indicator */
-.canvas-debug-bar-file-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 8px;
-}
-
-/* File name styling */
-.canvas-debug-bar-file-name {
-    color: #0066cc;
-    font-family: 'Consolas', 'Monaco', monospace;
-    font-weight: 500;
-}
-
-/* File size badge */
-.canvas-debug-bar-file-size {
-    color: #666666;
-    font-size: 11px;
-    background: #e9ecef;
-    padding: 2px 6px;
-    border-radius: 3px;
-}
-
-/* Error badge for invalid files */
-.canvas-debug-bar-file-error {
-    color: white;
-    background: #dc3545;
-    font-size: 10px;
-    font-weight: bold;
-    padding: 2px 6px;
-    border-radius: 3px;
-}
-
-/* Container for file detail items */
-.canvas-debug-bar-file-details {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-/* Individual file detail item */
-.canvas-debug-bar-file-detail {
-    display: flex;
-    font-size: 12px;
-}
-
-/* Error text styling */
-.canvas-debug-bar-error {
+/* Error text styling for file upload errors */
+.canvas-debug-text-error {
     color: #dc3545;
     font-weight: 500;
+}
+
+/* Ensure proper spacing in file upload sections */
+.canvas-debug-item-content .canvas-debug-info-grid {
+    margin-top: 8px;
+}
+
+/* Section headers within panels */
+.debug-panel-section h4 {
+    margin: 12px 0 8px 0;
+    color: #495057;
+    font-size: 13px;
+    font-weight: 600;
 }
 CSS;
 		}
