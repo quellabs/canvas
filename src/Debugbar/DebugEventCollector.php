@@ -1,6 +1,6 @@
 <?php
 	
-	namespace Quellabs\Canvas\Debugbar\Helpers;
+	namespace Quellabs\Canvas\Debugbar;
 	
 	use Quellabs\SignalHub\Signal;
 	use Quellabs\SignalHub\SignalHub;

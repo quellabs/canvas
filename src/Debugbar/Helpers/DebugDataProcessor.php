@@ -2,6 +2,7 @@
 	
 	namespace Quellabs\Canvas\Debugbar\Helpers;
 	
+	use Quellabs\Canvas\Debugbar\DebugEventCollector;
 	use Symfony\Component\HttpFoundation\File\UploadedFile;
 	use Symfony\Component\HttpFoundation\Request;
 	

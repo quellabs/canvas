@@ -3,7 +3,6 @@
 	namespace Quellabs\Canvas\Debugbar;
 	
 	use Quellabs\Canvas\Debugbar\Helpers\DebugDataProcessor;
-	use Quellabs\Canvas\Debugbar\Helpers\DebugEventCollector;
 	use Quellabs\Canvas\Debugbar\Helpers\HtmlAnalyzer;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
