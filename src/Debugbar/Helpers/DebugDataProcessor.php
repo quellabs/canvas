@@ -1,9 +1,9 @@
 <?php
 	
-	namespace Quellabs\Canvas\Debugbar;
+	namespace Quellabs\Canvas\Debugbar\Helpers;
 	
-	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\File\UploadedFile;
+	use Symfony\Component\HttpFoundation\Request;
 	
 	class DebugDataProcessor {
 		

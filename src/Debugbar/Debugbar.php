@@ -2,13 +2,16 @@
 	
 	namespace Quellabs\Canvas\Debugbar;
 	
-	use Quellabs\SignalHub\SignalHub;
+	use Quellabs\Canvas\Debugbar\Helpers\DebugDataProcessor;
+	use Quellabs\Canvas\Debugbar\Helpers\DebugEventCollector;
+	use Quellabs\Canvas\Debugbar\Helpers\HtmlAnalyzer;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
 	
 	class Debugbar {
 		
 		private DebugDataProcessor $dataProcessor;
+		private HtmlAnalyzer $htmlAnalyzer;
 		
 		/**
 		 * Debugbar constructor
@@ -16,6 +19,7 @@
 		 */
 		public function __construct(DebugEventCollector $collector) {
 			$this->dataProcessor = new DebugDataProcessor($collector);
+			$this->htmlAnalyzer = new HtmlAnalyzer();
 		}
 		
 		/**
@@ -28,11 +32,11 @@
 			$content = $response->getContent();
 			
 			// Only inject into HTML responses
-			if (!$this->isHtmlResponse($response, $content)) {
+			if (!$this->htmlAnalyzer->isHtmlResponse($response, $content)) {
 				return;
 			}
 			
-			$bodyPos = $this->getEndOfBodyPosition($content);
+			$bodyPos = $this->htmlAnalyzer->getEndOfBodyPosition($content);
 			
 			if ($bodyPos !== false) {
 				// Body tag exists, inject before </body>
@@ -73,7 +77,7 @@
 			}
 			
 			// If it looks like HTML but has no structure, wrap it
-			if ($this->looksLikeHtml($content)) {
+			if ($this->htmlAnalyzer->looksLikeHtml($content)) {
 				$newContent = sprintf("
 					<!DOCTYPE html>
 					<html>
@@ -97,84 +101,6 @@
 					$response->headers->set('Content-Type', 'text/html; charset=UTF-8');
 				}
 			}
-		}
-		
-		/**
-		 * Check if the response is HTML content
-		 * @param Response $response
-		 * @param string $content
-		 * @return bool
-		 */
-		private function isHtmlResponse(Response $response, string $content): bool {
-			// Check Content-Type header first
-			$contentType = $response->headers->get('Content-Type', '');
-			
-			// If explicitly set to non-HTML, don't inject
-			if (preg_match('/application\/(json|xml|pdf|octet-stream)|text\/(plain|css|javascript)/', $contentType)) {
-				return false;
-			}
-			
-			// If explicitly HTML, inject
-			if (str_contains($contentType, 'text/html')) {
-				return true;
-			}
-			
-			// If no Content-Type set, analyze content
-			return $this->looksLikeHtml($content);
-		}
-		
-		/**
-		 * Analyze content to determine if it looks like HTML
-		 * @param string $content
-		 * @return bool
-		 */
-		private function looksLikeHtml(string $content): bool {
-			// Empty content - not HTML
-			if (trim($content) === '') {
-				return false;
-			}
-			
-			// Check for common non-HTML patterns first
-			$trimmed = trim($content);
-			
-			// JSON response
-			if ((str_starts_with($trimmed, '{') && str_ends_with($trimmed, '}')) ||
-				(str_starts_with($trimmed, '[') && str_ends_with($trimmed, ']'))) {
-				return false;
-			}
-			
-			// XML response
-			if (str_starts_with($trimmed, '<?xml')) {
-				return false;
-			}
-			
-			// Look for HTML indicators
-			$htmlIndicators = [
-				'<!DOCTYPE html',
-				'<!doctype html',
-				'<html',
-				'<head>',
-				'<body>',
-				'<div',
-				'<span',
-				'<p>',
-				'<h1>', '<h2>', '<h3>', '<h4>', '<h5>', '<h6>',
-				'<title>',
-				'<meta',
-				'<link',
-				'<script',
-				'<style'
-			];
-			
-			$contentLower = strtolower($content);
-			
-			foreach ($htmlIndicators as $indicator) {
-				if (str_contains($contentLower, $indicator)) {
-					return true;
-				}
-			}
-			
-			return false;
 		}
 		
 		/**
@@ -224,604 +150,587 @@ BODY;
 		 */
 		private function getCss(): string {
 			return <<<CSS
-        .canvas-debug-bar {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: #ffffff;
-            color: #333333;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            font-size: 13px;
-            border-top: 1px solid #e0e0e0;
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-            z-index: 999999;
-            transition: all 0.3s ease;
-            max-height: 80vh;
-            overflow: hidden;
-        }
+    .canvas-debug-bar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: #ffffff;
+        color: #333333;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-size: 13px;
+        border-top: 1px solid #e0e0e0;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        z-index: 999999;
+        transition: all 0.3s ease;
+        max-height: 80vh;
+        overflow: hidden;
+    }
 
-        .canvas-debug-bar.minimized {
-            max-height: 40px;
-        }
+    .canvas-debug-bar.minimized {
+        max-height: 40px;
+    }
 
-        .canvas-debug-bar.minimized .canvas-debug-bar-debug-content {
-            display: none;
-        }
+    .canvas-debug-bar.minimized .canvas-debug-bar-debug-content {
+        display: none;
+    }
 
-        /* Debug Header */
-        .canvas-debug-bar .canvas-debug-bar-debug-header {
-            display: flex;
-            align-items: center;
-            padding: 10px 16px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #e0e0e0;
-            cursor: pointer;
-            user-select: none;
-        }
+    /* Debug Header */
+    .canvas-debug-bar .canvas-debug-bar-debug-header {
+        display: flex;
+        align-items: center;
+        padding: 10px 16px;
+        background: #f8f9fa;
+        border-bottom: 1px solid #e0e0e0;
+        cursor: pointer;
+        user-select: none;
+    }
 
-        .canvas-debug-bar .canvas-debug-bar-debug-header:hover {
-            background: #f0f0f0;
-        }
+    .canvas-debug-bar .canvas-debug-bar-debug-header:hover {
+        background: #f0f0f0;
+    }
 
-        .canvas-debug-bar .canvas-debug-bar-debug-logo {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-weight: 600;
-            color: #0066cc;
-        }
+    .canvas-debug-bar .canvas-debug-bar-debug-logo {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        color: #0066cc;
+    }
 
+    .canvas-debug-bar .canvas-debug-bar-debug-stats {
+        display: flex;
+        gap: 20px;
+        margin-left: auto;
+        margin-right: 20px;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-stat {
+        display: flex;
+        gap: 4px;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-stat-label {
+        color: #666666;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-stat-value {
+        color: #0066cc;
+        font-weight: 500;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-debug-toggle {
+        transition: transform 0.3s ease;
+    }
+
+    .canvas-debug-bar:not(.minimized) .canvas-debug-bar-debug-toggle {
+        transform: rotate(180deg);
+    }
+
+    /* Debug Content */
+    .canvas-debug-bar .canvas-debug-bar-debug-content {
+        display: flex;
+        flex-direction: column;
+        height: 400px;
+    }
+
+    /* Tabs */
+    .canvas-debug-bar .canvas-debug-bar-debug-tabs {
+        display: flex;
+        background: #f8f9fa;
+        border-bottom: 1px solid #e0e0e0;
+        overflow-x: auto;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-debug-tab {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 12px 16px;
+        background: none;
+        border: none;
+        color: #666666;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.2s ease;
+        font-size: 13px;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-debug-tab:hover {
+        background: #e9ecef;
+        color: #333333;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-debug-tab.active {
+        background: #ffffff;
+        color: #0066cc;
+        border-bottom: 2px solid #0066cc;
+    }
+
+    /* Panels */
+    .canvas-debug-bar .canvas-debug-bar-debug-panels {
+        flex: 1;
+        overflow: hidden;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-debug-panel {
+        display: none;
+        height: 100%;
+        overflow-y: auto;
+        padding: 16px;
+        background: #ffffff;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-debug-panel.active {
+        display: block;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-panel-section {
+        margin-bottom: 24px;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-panel-section h3 {
+        margin: 0 0 12px 0;
+        color: #333333;
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    /* Info Grid */
+    .canvas-debug-bar .canvas-debug-bar-info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 8px;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-info-item {
+        display: flex;
+        padding: 8px 0;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-info-item .canvas-debug-bar-label {
+        min-width: 120px;
+        color: #666666;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-info-item .canvas-debug-bar-value {
+        color: #333333;
+        word-break: break-all;
+    }
+
+    /* Query List */
+    .canvas-debug-bar .canvas-debug-bar-query-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-query-item {
+        background: #f8f9fa;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        padding: 12px;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-query-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 8px;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-query-time {
+        background: #28a745;
+        color: white;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: bold;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-query-type {
+        background: #007bff;
+        color: white;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: bold;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-query-connection {
+        color: #666666;
+        font-size: 11px;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-query-sql code {
+        background: #f8f9fa;
+        color: #d63384;
+        padding: 8px;
+        border-radius: 3px;
+        display: block;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 12px;
+        line-height: 1.4;
+        white-space: pre-wrap;
+        border: 1px solid #e0e0e0;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-query-params {
+        margin-top: 8px;
+        color: #666666;
+        font-size: 12px;
+    }
+
+    /* Cache Items */
+    .canvas-debug-bar .canvas-debug-bar-cache-stats {
+        display: flex;
+        gap: 24px;
+        margin-bottom: 16px;
+        padding: 12px;
+        background: #f8f9fa;
+        border-radius: 4px;
+        border: 1px solid #e0e0e0;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-cache-stat {
+        display: flex;
+        gap: 8px;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-cache-label {
+        color: #666666;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-cache-value {
+        color: #0066cc;
+        font-weight: 500;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-cache-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-cache-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 12px;
+        background: #f8f9fa;
+        border-radius: 4px;
+        border: 1px solid #e0e0e0;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-cache-type {
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: bold;
+        min-width: 40px;
+        text-align: center;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-cache-item.hit .canvas-debug-bar-cache-type {
+        background: #28a745;
+        color: white;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-cache-item.miss .canvas-debug-bar-cache-type {
+        background: #dc3545;
+        color: white;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-cache-key {
+        flex: 1;
+        color: #333333;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 12px;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-cache-time {
+        color: #666666;
+        font-size: 11px;
+    }
+
+    /* Signal Items */
+    .canvas-debug-bar .canvas-debug-bar-signal-list,
+    .canvas-debug-bar .canvas-debug-bar-aspect-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-signal-item,
+    .canvas-debug-bar .canvas-debug-bar-aspect-item {
+        background: #f8f9fa;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        padding: 12px;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-signal-header,
+    .canvas-debug-bar .canvas-debug-bar-aspect-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 6px;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-signal-name,
+    .canvas-debug-bar .canvas-debug-bar-aspect-name {
+        color: #0066cc;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 12px;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-signal-time,
+    .canvas-debug-bar .canvas-debug-bar-aspect-time {
+        background: #fd7e14;
+        color: white;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: bold;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-aspect-type {
+        background: #6f42c1;
+        color: white;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: bold;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-signal-details,
+    .canvas-debug-bar .canvas-debug-bar-aspect-details {
+        color: #666666;
+        font-size: 12px;
+    }
+
+    /* Timeline */
+    .canvas-debug-bar .canvas-debug-bar-timeline {
+        display: flex;
+        height: 40px;
+        margin-bottom: 16px;
+        border-radius: 4px;
+        overflow: hidden;
+        border: 1px solid #e0e0e0;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-timeline-item {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 4px;
+        color: white;
+        font-size: 11px;
+        font-weight: bold;
+        position: relative;
+        min-width: 60px;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-timeline-label {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-timeline-time {
+        font-size: 10px;
+        opacity: 0.9;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-timeline-legend {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-timeline-legend span {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: #666666;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-legend-color {
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+    }
+
+    /* Scrollbar Styling */
+    .canvas-debug-bar .canvas-debug-bar-debug-panel::-webkit-scrollbar,
+    .canvas-debug-bar .canvas-debug-bar-debug-tabs::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-debug-panel::-webkit-scrollbar-track,
+    .canvas-debug-bar .canvas-debug-bar-debug-tabs::-webkit-scrollbar-track {
+        background: #f8f9fa;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-debug-panel::-webkit-scrollbar-thumb,
+    .canvas-debug-bar .canvas-debug-bar-debug-tabs::-webkit-scrollbar-thumb {
+        background: #ced4da;
+        border-radius: 4px;
+    }
+
+    .canvas-debug-bar .canvas-debug-bar-debug-panel::-webkit-scrollbar-thumb:hover,
+    .canvas-debug-bar .canvas-debug-bar-debug-tabs::-webkit-scrollbar-thumb:hover {
+        background: #adb5bd;
+    }
+    
+	.canvas-debug-bar-params-table {
+	    width: 100%;
+	    border-collapse: collapse;
+	    margin-top: 8px;
+	    font-size: 12px;
+	    background: #f8f9fa;
+	}
+	
+	.canvas-debug-bar-params-table th {
+	    background: #e9ecef;
+	    padding: 6px 10px;
+	    text-align: left;
+	    font-weight: 600;
+	    border: 1px solid #dee2e6;
+	    color: #495057;
+	}
+	
+	.canvas-debug-bar-params-table td {
+	    padding: 6px 10px;
+	    border: 1px solid #dee2e6;
+	    vertical-align: top;
+	}
+	
+	.canvas-debug-bar-query-params strong {
+	    display: block;
+	    margin-bottom: 5px;
+	    color: #495057;
+	}
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
         .canvas-debug-bar .canvas-debug-bar-debug-stats {
-            display: flex;
-            gap: 20px;
-            margin-left: auto;
-            margin-right: 20px;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-stat {
-            display: flex;
-            gap: 4px;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-stat-label {
-            color: #666666;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-stat-value {
-            color: #0066cc;
-            font-weight: 500;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-debug-toggle {
-            transition: transform 0.3s ease;
-        }
-
-        .canvas-debug-bar:not(.minimized) .canvas-debug-bar-debug-toggle {
-            transform: rotate(180deg);
-        }
-
-        /* Debug Content */
-        .canvas-debug-bar .canvas-debug-bar-debug-content {
-            display: flex;
-            flex-direction: column;
-            height: 400px;
-        }
-
-        /* Tabs */
-        .canvas-debug-bar .canvas-debug-bar-debug-tabs {
-            display: flex;
-            background: #f8f9fa;
-            border-bottom: 1px solid #e0e0e0;
-            overflow-x: auto;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-debug-tab {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 12px 16px;
-            background: none;
-            border: none;
-            color: #666666;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: all 0.2s ease;
-            font-size: 13px;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-debug-tab:hover {
-            background: #e9ecef;
-            color: #333333;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-debug-tab.active {
-            background: #ffffff;
-            color: #0066cc;
-            border-bottom: 2px solid #0066cc;
-        }
-
-        /* Panels */
-        .canvas-debug-bar .canvas-debug-bar-debug-panels {
-            flex: 1;
-            overflow: hidden;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-debug-panel {
             display: none;
-            height: 100%;
-            overflow-y: auto;
-            padding: 16px;
-            background: #ffffff;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-debug-panel.active {
-            display: block;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-panel-section {
-            margin-bottom: 24px;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-panel-section h3 {
-            margin: 0 0 12px 0;
-            color: #333333;
-            font-size: 14px;
-            font-weight: 600;
-        }
-
-        /* Info Grid */
-        .canvas-debug-bar .canvas-debug-bar-info-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 8px;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-info-item {
-            display: flex;
-            padding: 8px 0;
-            border-bottom: 1px solid #e0e0e0;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-info-item .canvas-debug-bar-label {
-            min-width: 120px;
-            color: #666666;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-info-item .canvas-debug-bar-value {
-            color: #333333;
-            word-break: break-all;
-        }
-
-        /* Query List */
-        .canvas-debug-bar .canvas-debug-bar-query-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-query-item {
-            background: #f8f9fa;
-            border: 1px solid #e0e0e0;
-            border-radius: 4px;
-            padding: 12px;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-query-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 8px;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-query-time {
-            background: #28a745;
-            color: white;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 11px;
-            font-weight: bold;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-query-type {
-            background: #007bff;
-            color: white;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 11px;
-            font-weight: bold;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-query-connection {
-            color: #666666;
-            font-size: 11px;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-query-sql code {
-            background: #f8f9fa;
-            color: #d63384;
-            padding: 8px;
-            border-radius: 3px;
-            display: block;
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 12px;
-            line-height: 1.4;
-            white-space: pre-wrap;
-            border: 1px solid #e0e0e0;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-query-params {
-            margin-top: 8px;
-            color: #666666;
-            font-size: 12px;
-        }
-
-        /* Cache Items */
-        .canvas-debug-bar .canvas-debug-bar-cache-stats {
-            display: flex;
-            gap: 24px;
-            margin-bottom: 16px;
-            padding: 12px;
-            background: #f8f9fa;
-            border-radius: 4px;
-            border: 1px solid #e0e0e0;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-cache-stat {
-            display: flex;
-            gap: 8px;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-cache-label {
-            color: #666666;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-cache-value {
-            color: #0066cc;
-            font-weight: 500;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-cache-list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-cache-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 8px 12px;
-            background: #f8f9fa;
-            border-radius: 4px;
-            border: 1px solid #e0e0e0;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-cache-type {
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 11px;
-            font-weight: bold;
-            min-width: 40px;
-            text-align: center;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-cache-item.hit .canvas-debug-bar-cache-type {
-            background: #28a745;
-            color: white;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-cache-item.miss .canvas-debug-bar-cache-type {
-            background: #dc3545;
-            color: white;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-cache-key {
-            flex: 1;
-            color: #333333;
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 12px;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-cache-time {
-            color: #666666;
-            font-size: 11px;
-        }
-
-        /* Signal Items */
-        .canvas-debug-bar .canvas-debug-bar-signal-list,
-        .canvas-debug-bar .canvas-debug-bar-aspect-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-signal-item,
-        .canvas-debug-bar .canvas-debug-bar-aspect-item {
-            background: #f8f9fa;
-            border: 1px solid #e0e0e0;
-            border-radius: 4px;
-            padding: 12px;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-signal-header,
-        .canvas-debug-bar .canvas-debug-bar-aspect-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 6px;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-signal-name,
-        .canvas-debug-bar .canvas-debug-bar-aspect-name {
-            color: #0066cc;
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 12px;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-signal-time,
-        .canvas-debug-bar .canvas-debug-bar-aspect-time {
-            background: #fd7e14;
-            color: white;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 11px;
-            font-weight: bold;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-aspect-type {
-            background: #6f42c1;
-            color: white;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 11px;
-            font-weight: bold;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-signal-details,
-        .canvas-debug-bar .canvas-debug-bar-aspect-details {
-            color: #666666;
-            font-size: 12px;
-        }
-
-        /* Timeline */
-        .canvas-debug-bar .canvas-debug-bar-timeline {
-            display: flex;
-            height: 40px;
-            margin-bottom: 16px;
-            border-radius: 4px;
-            overflow: hidden;
-            border: 1px solid #e0e0e0;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-timeline-item {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            padding: 4px;
-            color: white;
-            font-size: 11px;
-            font-weight: bold;
-            position: relative;
-            min-width: 60px;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-timeline-label {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-timeline-time {
-            font-size: 10px;
-            opacity: 0.9;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-timeline-legend {
-            display: flex;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-timeline-legend span {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 12px;
-            color: #666666;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-legend-color {
-            width: 12px;
-            height: 12px;
-            border-radius: 2px;
-        }
-
-        /* Scrollbar Styling */
-        .canvas-debug-bar .canvas-debug-bar-debug-panel::-webkit-scrollbar,
-        .canvas-debug-bar .canvas-debug-bar-debug-tabs::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-debug-panel::-webkit-scrollbar-track,
-        .canvas-debug-bar .canvas-debug-bar-debug-tabs::-webkit-scrollbar-track {
-            background: #f8f9fa;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-debug-panel::-webkit-scrollbar-thumb,
-        .canvas-debug-bar .canvas-debug-bar-debug-tabs::-webkit-scrollbar-thumb {
-            background: #ced4da;
-            border-radius: 4px;
-        }
-
-        .canvas-debug-bar .canvas-debug-bar-debug-panel::-webkit-scrollbar-thumb:hover,
-        .canvas-debug-bar .canvas-debug-bar-debug-tabs::-webkit-scrollbar-thumb:hover {
-            background: #adb5bd;
         }
         
-		.canvas-debug-bar-params-table {
-		    width: 100%;
-		    border-collapse: collapse;
-		    margin-top: 8px;
-		    font-size: 12px;
-		    background: #f8f9fa;
-		}
-		
-		.canvas-debug-bar-params-table th {
-		    background: #e9ecef;
-		    padding: 6px 10px;
-		    text-align: left;
-		    font-weight: 600;
-		    border: 1px solid #dee2e6;
-		    color: #495057;
-		}
-		
-		.canvas-debug-bar-params-table td {
-		    padding: 6px 10px;
-		    border: 1px solid #dee2e6;
-		    vertical-align: top;
-		}
-		
-		.canvas-debug-bar-param-key {
-		    font-weight: 500;
-		    color: #007bff;
-		    background: #f8f9fa;
-		    width: 30%;
-		}
-		
-		.canvas-debug-bar-param-value {
-		    font-family: 'Courier New', monospace;
-		    color: #212529;
-		    word-break: break-word;
-		}
-		
-		.canvas-debug-bar-query-params {
-		    margin-top: 10px;
-		}
-		
-		.canvas-debug-bar-query-params strong {
-		    display: block;
-		    margin-bottom: 5px;
-		    color: #495057;
-		}
-
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            .canvas-debug-bar .canvas-debug-bar-debug-stats {
-                display: none;
-            }
-            
-            .canvas-debug-bar .canvas-debug-bar-info-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .canvas-debug-bar .canvas-debug-bar-cache-stats {
-                flex-direction: column;
-                gap: 8px;
-            }
-            
-            .canvas-debug-bar .canvas-debug-bar-timeline-legend {
-                gap: 8px;
-            }
-            
-			/* Add to your CSS */
-			.canvas-debug-bar .canvas-debug-bar-headers-list,
-			.canvas-debug-bar .canvas-debug-bar-params-list {
-			    display: flex;
-			    flex-direction: column;
-			    gap: 4px;
-			    max-height: 200px;
-			    overflow-y: auto;
-			}
-			
-			.canvas-debug-bar .canvas-debug-bar-header-item,
-			.canvas-debug-bar .canvas-debug-bar-param-item {
-			    display: flex;
-			    padding: 4px 0;
-			    border-bottom: 1px solid #f0f0f0;
-			    font-size: 12px;
-			}
-			
-			.canvas-debug-bar .canvas-debug-bar-header-name,
-			.canvas-debug-bar .canvas-debug-bar-param-name {
-			    min-width: 150px;
-			    color: #666666;
-			    font-weight: 500;
-			}
-			
-			.canvas-debug-bar .canvas-debug-bar-header-value,
-			.canvas-debug-bar .canvas-debug-bar-param-value {
-			    color: #333333;
-			    word-break: break-all;
-			    font-family: 'Consolas', 'Monaco', monospace;
-			}
-			
-.canvas-debug-bar .canvas-debug-bar-files-list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.canvas-debug-bar .canvas-debug-bar-file-item {
-    background: #f8f9fa;
-    border: 1px solid #e0e0e0;
-    border-radius: 4px;
-    padding: 12px;
-}
-
-.canvas-debug-bar .canvas-debug-bar-file-item.invalid {
-    border-color: #dc3545;
-    background: #f8d7da;
-}
-
-.canvas-debug-bar .canvas-debug-bar-file-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 8px;
-}
-
-.canvas-debug-bar .canvas-debug-bar-file-name {
-    color: #0066cc;
-    font-family: 'Consolas', 'Monaco', monospace;
-    font-weight: 500;
-}
-
-.canvas-debug-bar .canvas-debug-bar-file-size {
-    color: #666666;
-    font-size: 11px;
-    background: #e9ecef;
-    padding: 2px 6px;
-    border-radius: 3px;
-}
-
-.canvas-debug-bar .canvas-debug-bar-file-error {
-    color: white;
-    background: #dc3545;
-    font-size: 10px;
-    font-weight: bold;
-    padding: 2px 6px;
-    border-radius: 3px;
-}
-
-.canvas-debug-bar .canvas-debug-bar-file-details {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.canvas-debug-bar .canvas-debug-bar-file-detail {
-    display: flex;
-    font-size: 12px;
-}
-
-.canvas-debug-bar .canvas-debug-bar-error {
-    color: #dc3545;
-    font-weight: 500;
-}
+        .canvas-debug-bar .canvas-debug-bar-info-grid {
+            grid-template-columns: 1fr;
         }
+        
+        .canvas-debug-bar .canvas-debug-bar-cache-stats {
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .canvas-debug-bar .canvas-debug-bar-timeline-legend {
+            gap: 8px;
+        }
+        
+		/* Add to your CSS */
+		.canvas-debug-bar .canvas-debug-bar-headers-list,
+		.canvas-debug-bar .canvas-debug-bar-params-list {
+		    display: flex;
+		    flex-direction: column;
+		    gap: 4px;
+		    max-height: 200px;
+		    overflow-y: auto;
+		}
+		
+		.canvas-debug-bar .canvas-debug-bar-header-item,
+		.canvas-debug-bar .canvas-debug-bar-param-item {
+		    display: flex;
+		    padding: 4px 0;
+		    border-bottom: 1px solid #f0f0f0;
+		    font-size: 12px;
+		}
+		
+		.canvas-debug-bar .canvas-debug-bar-header-name,
+		.canvas-debug-bar .canvas-debug-bar-param-name {
+		    min-width: 150px;
+		    color: #666666;
+		    font-weight: 500;
+		}
+		
+		.canvas-debug-bar .canvas-debug-bar-header-value,
+		.canvas-debug-bar .canvas-debug-bar-param-value {
+		    color: #333333;
+		    word-break: break-all;
+		    font-family: 'Consolas', 'Monaco', monospace;
+		}
+		
+		.canvas-debug-bar .canvas-debug-bar-files-list {
+		    display: flex;
+		    flex-direction: column;
+		    gap: 12px;
+		}
+		
+		.canvas-debug-bar .canvas-debug-bar-file-item {
+		    background: #f8f9fa;
+		    border: 1px solid #e0e0e0;
+		    border-radius: 4px;
+		    padding: 12px;
+		}
+		
+		.canvas-debug-bar .canvas-debug-bar-file-item.invalid {
+		    border-color: #dc3545;
+		    background: #f8d7da;
+		}
+		
+		.canvas-debug-bar .canvas-debug-bar-file-header {
+		    display: flex;
+		    align-items: center;
+		    gap: 12px;
+		    margin-bottom: 8px;
+		}
+		
+		.canvas-debug-bar .canvas-debug-bar-file-name {
+		    color: #0066cc;
+		    font-family: 'Consolas', 'Monaco', monospace;
+		    font-weight: 500;
+		}
+		
+		.canvas-debug-bar .canvas-debug-bar-file-size {
+		    color: #666666;
+		    font-size: 11px;
+		    background: #e9ecef;
+		    padding: 2px 6px;
+		    border-radius: 3px;
+		}
+		
+		.canvas-debug-bar .canvas-debug-bar-file-error {
+		    color: white;
+		    background: #dc3545;
+		    font-size: 10px;
+		    font-weight: bold;
+		    padding: 2px 6px;
+		    border-radius: 3px;
+		}
+		
+		.canvas-debug-bar .canvas-debug-bar-file-details {
+		    display: flex;
+		    flex-direction: column;
+		    gap: 4px;
+		}
+		
+		.canvas-debug-bar .canvas-debug-bar-file-detail {
+		    display: flex;
+		    font-size: 12px;
+		}
+		
+		.canvas-debug-bar .canvas-debug-bar-error {
+		    color: #dc3545;
+		    font-weight: 500;
+		}
+    }
 CSS;
 		}
 		
@@ -1138,12 +1047,4 @@ JS;
 		
 		}
 		
-		/**
-		 * Returns the position of the </body> tag
-		 * @param string $content
-		 * @return false|int
-		 */
-		private function getEndOfBodyPosition(string $content): false|int {
-			return strpos($content, "</body>");
-		}
 	}
