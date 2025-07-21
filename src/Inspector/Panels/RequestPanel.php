@@ -1,10 +1,10 @@
 <?php
 	
-	namespace Quellabs\Canvas\Debugbar\Panels;
+	namespace Quellabs\Canvas\Inspector\Panels;
 	
-	use Quellabs\Canvas\Debugbar\DebugEventCollector;
-	use Quellabs\Canvas\Debugbar\Helpers\RequestExtractor;
-	use Quellabs\Contracts\Debugbar\DebugPanelInterface;
+	use Quellabs\Canvas\Inspector\EventCollector;
+	use Quellabs\Canvas\Inspector\Helpers\RequestExtractor;
+	use Quellabs\Contracts\Inspector\InspectorPanelInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	
 	/**
@@ -18,10 +18,10 @@
 	 *
 	 * @package Quellabs\Canvas\Debugbar\Panels
 	 */
-	class RequestPanel implements DebugPanelInterface {
+	class RequestPanel implements InspectorPanelInterface {
 		
-		/** @var DebugEventCollector Event collector for gathering debug information */
-		private DebugEventCollector $collector;
+		/** @var EventCollector Event collector for gathering debug information */
+		private EventCollector $collector;
 		
 		/** @var array Route data extracted from canvas events */
 		private array $routeData = [];
@@ -29,9 +29,9 @@
 		/**
 		 * Constructor
 		 *
-		 * @param DebugEventCollector $collector The event collector instance
+		 * @param EventCollector $collector The event collector instance
 		 */
-		public function __construct(DebugEventCollector $collector) {
+		public function __construct(EventCollector $collector) {
 			$this->collector = $collector;
 		}
 		

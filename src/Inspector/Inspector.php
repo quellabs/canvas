@@ -1,35 +1,34 @@
 <?php
 	
-	namespace Quellabs\Canvas\Debugbar;
+	namespace Quellabs\Canvas\Inspector;
 	
-	use Quellabs\Canvas\Configuration\Configuration;
-	use Quellabs\Canvas\Debugbar\Helpers\DebugRegistry;
-	use Quellabs\Canvas\Debugbar\Helpers\HtmlAnalyzer;
+	use Quellabs\Canvas\Inspector\Helpers\Registry;
+	use Quellabs\Canvas\Inspector\Helpers\HtmlAnalyzer;
 	use Quellabs\Contracts\Configuration\ConfigurationInterface;
-	use Quellabs\Contracts\Debugbar\DebugEventCollectorInterface;
+	use Quellabs\Contracts\Inspector\EventCollectorInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
 	
 	/**
-	 * Main debugbar class responsible for injecting debug information into HTTP responses.
+	 * Main inspector class responsible for injecting debug information into HTTP responses.
 	 * Provides debugging panels and analytics for web applications by modifying HTML responses.
 	 */
-	class Debugbar {
+	class Inspector {
 		
-		/** @var DebugRegistry Registry that manages all debug panels */
-		private DebugRegistry $registry;
+		/** @var Registry Registry that manages all debug panels */
+		private Registry $registry;
 		
 		/** @var HtmlAnalyzer Helper for analyzing and manipulating HTML content */
 		private HtmlAnalyzer $htmlAnalyzer;
 		
 		/**
 		 * Initialize the debugbar with required dependencies.
-		 * @param DebugEventCollectorInterface $eventCollector The event collector for gathering debug data
+		 * @param EventCollectorInterface $eventCollector The event collector for gathering debug data
 		 * @param ConfigurationInterface $config
 		 */
-		public function __construct(DebugEventCollectorInterface $eventCollector, ConfigurationInterface $config) {
+		public function __construct(EventCollectorInterface $eventCollector, ConfigurationInterface $config) {
 			$this->htmlAnalyzer = new HtmlAnalyzer();
-			$this->registry = new DebugRegistry($eventCollector, $config);
+			$this->registry = new Registry($eventCollector, $config);
 		}
 		
 		/**

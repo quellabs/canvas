@@ -1,9 +1,9 @@
 <?php
 	
-	namespace Quellabs\Canvas\Debugbar\Panels;
+	namespace Quellabs\Canvas\Inspector\Panels;
 	
-	use Quellabs\Canvas\Debugbar\DebugEventCollector;
-	use Quellabs\Contracts\Debugbar\DebugPanelInterface;
+	use Quellabs\Canvas\Inspector\EventCollector;
+	use Quellabs\Contracts\Inspector\InspectorPanelInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	
 	/**
@@ -12,7 +12,7 @@
 	 * This panel collects and displays database query events including execution time,
 	 * SQL queries, and bound parameters in a formatted debug interface.
 	 */
-	class QueryPanel implements DebugPanelInterface {
+	class QueryPanel implements InspectorPanelInterface {
 		
 		/** @var array<int, array> Collection of processed query events */
 		private array $queries = [];
@@ -20,14 +20,14 @@
 		/** @var float Total execution time for all queries in milliseconds */
 		private float $totalTime = 0.0;
 		
-		/** @var DebugEventCollector Event collector for gathering debug events */
-		private DebugEventCollector $collector;
+		/** @var EventCollector Event collector for gathering debug events */
+		private EventCollector $collector;
 		
 		/**
 		 * Initialize the QueryPanel with a debug event collector.
-		 * @param DebugEventCollector $collector The event collector instance
+		 * @param EventCollector $collector The event collector instance
 		 */
-		public function __construct(DebugEventCollector $collector) {
+		public function __construct(EventCollector $collector) {
 			$this->collector = $collector;
 		}
 		

@@ -1,6 +1,6 @@
 <?php
 	
-	namespace Quellabs\Canvas\Debugbar\Helpers;
+	namespace Quellabs\Canvas\Inspector\Helpers;
 	
 	use Symfony\Component\HttpFoundation\Response;
 	
