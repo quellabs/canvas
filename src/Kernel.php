@@ -35,6 +35,7 @@
 		private Discover $discover; // Service discovery
 		private AnnotationReader $annotationsReader; // Annotation reading
 		private Configuration $configuration;
+		private Configuration $debugbar_configuration;
 		private ?array $contents_of_app_php = null;
 		private bool $legacyEnabled;
 		private ?LegacyHandler $legacyFallbackHandler;
@@ -53,7 +54,8 @@
 			$this->discover = new Discover();
 			
 			// Store the configuration array
-			$this->configuration = new Configuration(array_merge($this->getConfigFile(), $configuration));
+			$this->configuration = new Configuration(array_merge($this->getConfigFile("app.php"), $configuration));
+			$this->debugbar_configuration = new Configuration($this->getConfigFile("debugbar.php"));
 			
 			// Register Annotations Reader
 			$this->annotationsReader = $this->createAnnotationReader();
@@ -156,7 +158,7 @@
 			try {
 				// Init the debug bar
 				$debugMode = $this->configuration->get('debug_mode', false);
-				$debugBarEnabled = $this->configuration->get('debug_bar', false);
+				$debugBarEnabled = $this->$this->debugbar_configuration->get('enabled', false);
 				
 				if ($debugMode && $debugBarEnabled) {
 					$debugCollector = new DebugEventCollector($this->getSignalHub());
@@ -432,26 +434,28 @@
 		 * Load app.php
 		 * @return array
 		 */
-		private function getConfigFile(): array {
+		private function getConfigFile(string $filename): array {
 			// Fetch from cache if we can
-			if ($this->contents_of_app_php !== null) {
-				return $this->contents_of_app_php;
+			if (isset($this->contents_of_app_php[$filename])) {
+				return $this->contents_of_app_php[$filename];
 			}
 			
 			// Fetch the project root
 			$projectRoot = $this->discover->getProjectRoot();
 			
-			// If the config file does not exist, do not attempt to load it
-			if (!file_exists($projectRoot . '/config/app.php')) {
-				$this->contents_of_app_php = [];
-				return [];
+			// If the config file can't be loaded, return an empty array
+			if (
+				!file_exists($projectRoot . "/config/{$filename}") ||
+				!is_readable($projectRoot . "/config/{$filename}")
+			) {
+				return $this->contents_of_app_php[$filename] = [];
 			}
 			
 			// Otherwise, grab the contents
-			$this->contents_of_app_php = require $projectRoot . '/config/app.php';
+			$this->contents_of_app_php[$filename] = require $projectRoot . "/config/{$filename}";
 			
 			// And return them
-			return $this->contents_of_app_php;
+			return $this->contents_of_app_php[$filename];
 		}
 		
 		/**
