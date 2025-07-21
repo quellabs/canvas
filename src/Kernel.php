@@ -148,7 +148,6 @@
 			// Start time for performance monitoring
 			$start = microtime(true);
 			$memoryStart = memory_get_usage(true);
-			$peakMemoryStart = memory_get_peak_usage(true);
 			
 			// Prepare request dependencies and register with dependency injector
 			// This involves setting up request-scoped services and context
@@ -176,7 +175,6 @@
 						// Send signal for performance monitoring
 						$end = microtime(true);
 						$memoryEnd = memory_get_usage(true);
-						$peakMemoryEnd = memory_get_peak_usage(true);
 						
 						$this->canvasQuerySignal->emit([
 							'request'           => $request,
@@ -187,8 +185,7 @@
 							'pattern'           => $urlData['route']->getRoute(),
 							'parameters'        => $urlData['variables'],
 							'execution_time_ms' => ($end - $start) * 1000,
-							'memory_used_bytes' => $memoryEnd - $memoryStart,
-							'peak_memory_bytes' => $peakMemoryEnd - $peakMemoryStart,
+							'memory_used_bytes' => $memoryEnd - $memoryStart
 						]);
 
 						// Inject the bar
