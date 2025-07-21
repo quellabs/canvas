@@ -12,7 +12,7 @@
 	use Symfony\Component\HttpFoundation\Request;
 	
 	/**
-	 * Central registry for managing debug panels and rendering the debug bar
+	 * Central registry for managing debug panels and rendering the inspector
 	 *
 	 * This class acts as the main coordinator for the Canvas debug bar system,
 	 * managing multiple debug panels and orchestrating their rendering into
@@ -144,7 +144,7 @@
 					
 				} catch (\Exception $e) {
 					// Log the error but don't break the entire debugbar
-					error_log("Failed to initialize debug panel '{$panelName}': " . $e->getMessage());
+					error_log("Failed to initialize panel '{$panelName}': " . $e->getMessage());
 				}
 			}
 		}
@@ -194,12 +194,12 @@
 			], JSON_HEX_TAG | JSON_HEX_AMP);
 			
 			return <<<HTML
-<!-- Canvas Debug Bar -->
+<!-- Canvas Inspector -->
 <div id="canvas-debug-bar" class="canvas-debug-bar minimized">
     <!-- Header with logo, arrow, statistics, and controls -->
     <div class="canvas-debug-bar-header" onclick="CanvasDebugBar.toggle()">
         <span class="canvas-debug-bar-arrow" id="debug-bar-arrow">▲</span>
-        <div class="canvas-debug-bar-logo">Canvas Debug</div>
+        <div class="canvas-debug-bar-logo">Canvas Inspector</div>
         <div class="canvas-debug-bar-stats" id="debug-stats"></div>
         <div class="canvas-debug-bar-controls">
             <label class="canvas-debug-remain-open" onclick="event.stopPropagation()">
@@ -239,7 +239,6 @@ HTML;
 		
 		/**
 		 * Get the base CSS styles for the debug bar
-		 *
 		 * @return string CSS styles for the debug bar structure and layout
 		 */
 		private function getBaseCss(): string {
@@ -435,7 +434,6 @@ CSS;
 		
 		/**
 		 * Get common component CSS that can be reused across panels
-		 *
 		 * @return string CSS for reusable components like tables, grids, badges
 		 */
 		private function getCommonComponentsCss(): string {
@@ -651,7 +649,6 @@ CSS;
 		
 		/**
 		 * Get common JavaScript helper functions
-		 *
 		 * @return string JavaScript helper functions for use in panel templates
 		 */
 		private function getCommonHelpers(): string {
@@ -754,7 +751,6 @@ JS;
 		
 		/**
 		 * Get the base JavaScript functionality for the debug bar
-		 *
 		 * @return string JavaScript code for debug bar interaction and rendering
 		 */
 		private function getBaseJs(): string {
