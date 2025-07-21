@@ -5,7 +5,7 @@
 	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\Canvas\AOP\AspectDispatcher;
 	use Quellabs\Canvas\Configuration\Configuration;
-	use Quellabs\Canvas\Debugbar\Helpers\DebugEventCollector;
+	use Quellabs\Canvas\Debugbar\DebugEventCollector;
 	use Quellabs\Canvas\Discover\AnnotationsReaderProvider;
 	use Quellabs\Canvas\Discover\CacheInterfaceProvider;
 	use Quellabs\Canvas\Discover\ConfigurationProvider;
