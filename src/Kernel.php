@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas;
 	
 	use Quellabs\AnnotationReader\AnnotationReader;
+	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Canvas\AOP\AspectDispatcher;
 	use Quellabs\Canvas\Configuration\Configuration;
 	use Quellabs\Canvas\Inspector\EventCollector;
@@ -147,84 +148,144 @@
 		 * @return Response HTTP response to be sent back to the client
 		 */
 		public function handle(Request $request): Response {
-			// Start time for performance monitoring
-			$start = microtime(true);
-			$memoryStart = memory_get_usage(true);
+			// Initialize variables to track route resolution and performance metrics
+			$urlData = null;           // Will hold resolved route data if found
+			$isLegacyPath = false;     // Flag to track if legacy routing was used
+			$start = microtime(true);  // Record start time for performance measurement
+			$memoryStart = memory_get_usage(true); // Record initial memory usage
 			
-			// Prepare request dependencies and register with dependency injector
-			// This involves setting up request-scoped services and context
+			// Set up request environment and get service providers
 			$providers = $this->prepareRequest($request);
 			
+			// Initialize debug data collector for development/debugging purposes
+			$debugCollector = $this->initializeDebugCollector();
+			
 			try {
-				// Init the debug bar
-				$debugMode = $this->configuration->get('debug_mode', false);
-				$debugBarEnabled = $this->inspector_configuration->get('enabled', false);
-				
-				if ($debugMode && $debugBarEnabled) {
-					$debugCollector = new EventCollector($this->getSignalHub());
-				} else {
-					$debugCollector = null;
-				}
-				
-				// Initialize URL resolver with annotation-based routing capabilities
-				$urlResolver = new AnnotationResolver($this);
-				
-				// Attempt to resolve the incoming request URL to route data
-				// This maps the URL to controller class, method name, and parameters
 				try {
-					$urlData = $urlResolver->resolve($request);
-					$response = $this->executeCanvasRoute($request, $urlData);
-					
-					// Inject the debugBar if debug mode is enabled
-					if ($debugCollector) {
-						// Send signal for performance monitoring
-						$end = microtime(true);
-						$memoryEnd = memory_get_usage(true);
-						
-						$this->canvasQuerySignal->emit([
-							'request'           => $request,
-							'legacy_path'       => false,
-							'http_methods'      => $urlData['http_methods'],
-							'controller'        => $urlData['controller'],
-							'method'            => $urlData['method'],
-							'pattern'           => $urlData['route']->getRoute(),
-							'parameters'        => $urlData['variables'],
-							'execution_time_ms' => ($end - $start) * 1000,
-							'memory_used_bytes' => $memoryEnd - $memoryStart
-						]);
-
-						// Inject the bar
-						$debugBar = new Inspector\Inspector($debugCollector, $this->inspector_configuration);
-						$debugBar->inject($request, $response);
-					}
-					
-					// Return response
-					return $response;
-					
+					$response = $this->modernResolve($request);
 				} catch (RouteNotFoundException $e) {
-					// Route isn't found in primary resolver - fall through to legacy handling
+					$response = $this->legacyResolve($request, $isLegacyPath);
 				}
-				
-				// Fallback to legacy routing if enabled and configured
-				if ($this->legacyEnabled && $this->legacyFallbackHandler) {
-					try {
-						return $this->legacyFallbackHandler->handle($request);
-					} catch (RouteNotFoundException $e) {
-						// Legacy handler also couldn't find a route
-						// Continue to 404 response generation
-					}
-				}
-				
-				// No routes matched in either system - generate 404 Not Found response.
-				// Pass legacy flag to potentially customize 404-behavior based on routing mode
-				return $this->createNotFoundResponse($request, $this->legacyEnabled);
-				
 			} catch (\Exception $e) {
-				return $this->createErrorResponse($e);
+				// Handle any unexpected errors during request processing
+				$response = $this->createErrorResponse($e);
+				$isLegacyPath = false;
 			} finally {
-				// Critical cleanup: Always unregister to prevent memory leaks
+				// Always clean up request resources, regardless of success/failure
 				$this->cleanupRequest($providers);
 			}
+			
+			// Inject debug information into the response for development purposes
+			// This adds performance metrics and route resolution details
+			$this->injectDebugBar($debugCollector, $request, $response, $urlData, $isLegacyPath, $start, $memoryStart);
+			
+			// Return the final HTTP response to be sent to the client
+			return $response;
+		}
+		
+		/**
+		 * Resolves routes using modern annotation-based routing system
+		 * @param Request $request The incoming HTTP request to resolve
+		 * @return Response The response from the matched route handler
+		 * @throws RouteNotFoundException When no matching route is found
+		 * @throws \Quellabs\AnnotationReader\Exception\AnnotationReaderException When annotation parsing fails
+		 */
+		private function modernResolve(Request $request): Response {
+			// Create resolver to handle annotation-based route discovery
+			// This scans controller classes for route annotations/attributes
+			$urlResolver = new AnnotationResolver($this);
+			
+			// Attempt to resolve the request URL to a controller/action
+			// Returns route data including controller class, method, and parameters
+			$urlData = $urlResolver->resolve($request);
+			
+			// Execute the resolved route and get the response
+			// Instantiates controller, calls method, and handles response formatting
+			return $this->executeCanvasRoute($request, $urlData);
+		}
+		
+		/**
+		 * Fallback to legacy routing system when modern resolution fails
+		 * @param Request $request The incoming HTTP request to resolve
+		 * @param bool $isLegacyPath Reference parameter - set to true if legacy routing is used
+		 * @return Response The response from legacy handler or 404 if routing fails
+		 */
+		private function legacyResolve(Request $request, bool &$isLegacyPath): Response {
+			// Check if legacy routing is enabled and a handler is configured
+			if (!$this->legacyEnabled || !$this->legacyFallbackHandler) {
+				// No legacy fallback configured, return 404 response
+				// This maintains consistent error handling when legacy support is disabled
+				return $this->createNotFoundResponse($request, $this->legacyEnabled);
+			}
+			
+			try {
+				// Mark that we're using legacy routing for this request
+				$isLegacyPath = true;
+				
+				// Delegate to the legacy routing handler
+				// The legacy handler uses its own routing logic (likely file-based or config-based)
+				return $this->legacyFallbackHandler->handle($request);
+			} catch (RouteNotFoundException $e) {
+				// Legacy routing also failed - return 404 response
+				// Both modern and legacy routing have been exhausted without finding a match
+				return $this->createNotFoundResponse($request, $this->legacyEnabled);
+			}
+		}
+		
+		/**
+		 * Initialize debug collector if debug mode is enabled
+		 * @return EventCollector|null Debug collector instance or null if disabled
+		 */
+		private function initializeDebugCollector(): ?EventCollector {
+			$debugMode = $this->configuration->get('debug_mode', false);
+			$debugBarEnabled = $this->inspector_configuration->get('enabled', false);
+			
+			if (!$debugMode || !$debugBarEnabled) {
+				return null;
+			}
+			
+			return new EventCollector($this->getSignalHub());
+		}
+		
+		/**
+		 * Inject debug bar into response if debug collector is available
+		 * @param EventCollector|null $debugCollector Debug collector instance
+		 * @param Request $request The HTTP request
+		 * @param Response $response The HTTP response to inject into
+		 * @param array|null $urlData URL resolution data
+		 * @param bool $isLegacyPath Whether this was handled by legacy system
+		 * @param float $start Request start time
+		 * @param int $memoryStart Initial memory usage
+		 */
+		private function injectDebugBar(
+			?EventCollector $debugCollector,
+			Request         $request,
+			Response        $response,
+			?array          $urlData,
+			bool            $isLegacyPath,
+			float           $start,
+			int             $memoryStart
+		): void {
+			if (!$debugCollector) {
+				return;
+			}
+			
+			// Send signal for performance monitoring
+			$this->canvasQuerySignal->emit([
+				'request'           => $request,
+				'legacy_path'       => $isLegacyPath,
+				'http_methods'      => $urlData['http_methods'] ?? null,
+				'controller'        => $urlData['controller'] ?? null,
+				'method'            => $urlData['method'] ?? null,
+				'pattern'           => $urlData['route']?->getRoute() ?? null,
+				'parameters'        => $urlData['variables'] ?? null,
+				'execution_time_ms' => (microtime(true) - $start) * 1000,
+				'memory_used_bytes' => memory_get_usage(true) - $memoryStart
+			]);
+			
+			// Inject the debug bar
+			$debugBar = new Inspector\Inspector($debugCollector, $this->inspector_configuration);
+			$debugBar->inject($request, $response);
 		}
 		
 		/**
@@ -331,6 +392,7 @@
 		 * @param Request $request
 		 * @param array $urlData
 		 * @return Response
+		 * @throws AnnotationReaderException
 		 */
 		private function executeCanvasRoute(Request $request, array $urlData): Response {
 			// Get the controller instance from the dependency injection container
