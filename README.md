@@ -956,7 +956,7 @@ return [
 ```php
 // config/inspector.php
 return [
-    'enabled'  => true,  // Enables the visual debug bar
+    'enabled'  => true,  // Enables the inspector
     // ... other config
 ];
 ```
@@ -1115,14 +1115,14 @@ CSS;
 Configure custom panels in your application config:
 
 ```php
-// config/app.php
+// config/inspector.php
 return [
-    'debug_bar_panels' => [
+    'enabled' => true,
+    'panels' => [
         'cache' => \App\Debug\CachePanel::class,
         'security' => \App\Debug\SecurityPanel::class,
         'mail' => \App\Debug\MailPanel::class,
     ],
-    // ... other config
 ];
 ```
 
@@ -1143,6 +1143,12 @@ use Quellabs\SignalHub\HasSignals;
 class CacheService {
     use HasSignals;
     
+    private Signal $cacheSignal;
+     
+    public function __construct() {
+        $this->cacheSignal = $this->createSignal(['array'], 'debug.cache.get');
+    }
+    
     public function get(string $key): mixed {
         $startTime = microtime(true);
         
@@ -1150,7 +1156,7 @@ class CacheService {
         $executionTime = (microtime(true) - $startTime) * 1000;
         
         // Emit debug event for cache operations
-        $this->emit('debug.cache.get', [
+        $this->cacheSignal->emit([
             'key' => $key,
             'type' => $value !== null ? 'hit' : 'miss',
             'execution_time_ms' => round($executionTime, 2)
