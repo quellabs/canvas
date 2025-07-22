@@ -14,7 +14,8 @@
 	use Symfony\Component\HttpFoundation\Session\Session;
 	
 	class RequestHandler {
-
+		
+		/** @var Kernel Application kernel */
 		private Kernel $kernel;
 		
 		/**

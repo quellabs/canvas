@@ -3,8 +3,6 @@
 	namespace Quellabs\Canvas;
 	
 	use Quellabs\AnnotationReader\AnnotationReader;
-	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
-	use Quellabs\Canvas\AOP\AspectDispatcher;
 	use Quellabs\Canvas\Configuration\Configuration;
 	use Quellabs\Canvas\Http\RequestHandler;
 	use Quellabs\Canvas\Inspector\EventCollector;
@@ -13,13 +11,10 @@
 	use Quellabs\Canvas\Discover\ConfigurationProvider;
 	use Quellabs\Canvas\Discover\DiscoverProvider;
 	use Quellabs\Canvas\Discover\KernelProvider;
-	use Quellabs\Canvas\Discover\RequestProvider;
-	use Quellabs\Canvas\Discover\SessionInterfaceProvider;
 	use Quellabs\Canvas\Discover\SignalHubProvider;
-	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
+	use Quellabs\Canvas\Inspector\Inspector;
 	use Quellabs\Canvas\Legacy\LegacyBridge;
 	use Quellabs\Canvas\Legacy\LegacyHandler;
-	use Quellabs\Canvas\Routing\AnnotationResolver;
 	use Quellabs\DependencyInjection\Container;
 	use Quellabs\Discover\Discover;
 	use Quellabs\SignalHub\HasSignals;
@@ -27,7 +22,6 @@
 	use Quellabs\SignalHub\SignalHubLocator;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
-	use Symfony\Component\HttpFoundation\Session\Session;
 	
 	class Kernel {
 		
@@ -228,7 +222,7 @@
 			]);
 			
 			// Inject the debug bar
-			$debugBar = new \Quellabs\Canvas\Inspector\Inspector($debugCollector, $this->getInspectorConfiguration());
+			$debugBar = new Inspector($debugCollector, $this->getInspectorConfiguration());
 			$debugBar->inject($request, $response);
 		}
 		
