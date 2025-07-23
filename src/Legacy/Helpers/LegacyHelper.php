@@ -17,11 +17,6 @@
 	function canvas_header(string $header, bool $replace = true, ?int $responseCode = null): void {
 		global $__canvas_headers;
 		
-		// Create variable if it doesn't exist yet
-		if (!isset($__canvas_headers)) {
-			$__canvas_headers = [];
-		}
-		
 		// If a response code is provided, add it as a separate Status header
 		if ($responseCode !== null) {
 			$statusHeader = "Status: {$responseCode}";
@@ -54,6 +49,20 @@
 		$__canvas_headers[] = $header;
 	}
 	
+	if (!function_exists('canvas_fetch_debug_signal')) {
+		function canvas_fetch_debug_signal(): \Quellabs\SignalHub\Signal {
+			$signalHub = \Quellabs\SignalHub\SignalHubLocator::getInstance();
+			$signal = $signalHub->getSignal('debug.objectquel.query');
+			
+			if ($signal === null) {
+				$signal = new \Quellabs\SignalHub\Signal(['array'], 'debug.objectquel.query');
+				$signalHub->registerSignal($signal);
+			}
+			
+			return $signal;
+		}
+	}
+	
 	if (!function_exists('canvas_mysqli_query')) {
 		/**
 		 * Monitored version of mysqli_query that logs queries for inspection
@@ -63,14 +72,8 @@
 		 * @return mysqli_result|bool Query result or false on failure
 		 */
 		function canvas_mysqli_query(mysqli $connection, string $query, int $resultMode = MYSQLI_STORE_RESULT): mysqli_result|bool {
-			// Fetch SignalHub and Signal
-			$signalHub = \Quellabs\SignalHub\SignalHubLocator::getInstance();
-			$signal = $signalHub->getSignal('debug.objectquel.query');
-			
-			if ($signal === null) {
-				$signal = new \Quellabs\SignalHub\Signal(['array'], 'debug.objectquel.query');
-				$signalHub->registerSignal($signal);
-			}
+			// Fetch Signal
+			$signal = canvas_fetch_debug_signal();
 			
 			// Record query start time for performance monitoring
 			$startTime = microtime(true);
@@ -105,14 +108,8 @@
 		 * @return PDOStatement|false Query result or false on failure
 		 */
 		function canvas_pdo_query(PDO $pdo, string $query): PDOStatement|false {
-			// Fetch SignalHub and Signal
-			$signalHub = \Quellabs\SignalHub\SignalHubLocator::getInstance();
-			$signal = $signalHub->getSignal('debug.objectquel.query');
-			
-			if ($signal === null) {
-				$signal = new \Quellabs\SignalHub\Signal(['array'], 'debug.objectquel.query');
-				$signalHub->registerSignal($signal);
-			}
+			// Fetch Signal
+			$signal = canvas_fetch_debug_signal();
 			
 			// Record query start time for performance monitoring
 			$startTime = microtime(true);
@@ -194,14 +191,8 @@
 			 * @return bool Success status
 			 */
 			public function execute(): bool {
-				// Fetch SignalHub and Signal
-				$signalHub = \Quellabs\SignalHub\SignalHubLocator::getInstance();
-				$signal = $signalHub->getSignal('debug.objectquel.query');
-				
-				if ($signal === null) {
-					$signal = new \Quellabs\SignalHub\Signal(['array'], 'debug.objectquel.query');
-					$signalHub->registerSignal($signal);
-				}
+				// Fetch Signal
+				$signal = canvas_fetch_debug_signal();
 				
 				// Record query start time for performance monitoring
 				$startTime = microtime(true);
@@ -261,14 +252,8 @@
 			 * @return bool Success status
 			 */
 			public function execute(?array $params = null): bool {
-				// Fetch SignalHub and Signal
-				$signalHub = \Quellabs\SignalHub\SignalHubLocator::getInstance();
-				$signal = $signalHub->getSignal('debug.objectquel.query');
-				
-				if ($signal === null) {
-					$signal = new \Quellabs\SignalHub\Signal(['array'], 'debug.objectquel.query');
-					$signalHub->registerSignal($signal);
-				}
+				// Fetch Signal
+				$signal = canvas_fetch_debug_signal();
 				
 				// Record query start time for performance monitoring
 				$startTime = microtime(true);
