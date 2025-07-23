@@ -9,6 +9,7 @@
 	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
 	use Quellabs\Canvas\Kernel;
 	use Quellabs\Canvas\Routing\AnnotationResolver;
+	use Quellabs\Support\ComposerUtils;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
 	use Symfony\Component\HttpFoundation\Session\Session;
@@ -168,7 +169,7 @@
 		 */
 		private function createNotFoundResponse(Request $request, bool $legacyAttempted = false): Response {
 			$isDevelopment = $this->kernel->getConfiguration()->getAs('debug_mode', 'bool', false);
-			$legacyPath = $this->kernel->getDiscover()->normalizePath($this->kernel->getConfiguration()->get('legacy_path', $this->kernel->getDiscover()->getProjectRoot() . DIRECTORY_SEPARATOR . 'legacy'));
+			$legacyPath = ComposerUtils::normalizePath($this->kernel->getConfiguration()->get('legacy_path', ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . 'legacy'));
 			$notFoundFile = $legacyPath . '404.php';
 			
 			if ($isDevelopment) {

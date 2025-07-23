@@ -7,6 +7,7 @@
 	use Quellabs\Contracts\TaskScheduler\TaskInterface;
 	use Quellabs\Contracts\TaskScheduler\TaskTimeoutException;
 	use Quellabs\Discover\Discover;
+	use Quellabs\Support\ComposerUtils;
 	
 	/**
 	 * Timeout strategy that runs tasks in separate processes with configurable timeouts.
@@ -28,12 +29,6 @@
 		private LoggerInterface $logger;
 		
 		/**
-		 * Discovery class
-		 * @var Discover
-		 */
-		private Discover $discover;
-		
-		/**
 		 * Constructor - initializes the strategy with a logger instance.
 		 * @param int $timeout Maximum execution time in seconds
 		 * @param LoggerInterface $logger Logger for debugging and error reporting
@@ -41,7 +36,6 @@
 		public function __construct(int $timeout, LoggerInterface $logger) {
 			$this->timeout = $timeout;
 			$this->logger = $logger;
-			$this->discover = new Discover();
 		}
 		
 		/**
@@ -77,7 +71,7 @@
 		 */
 		private function createTaskScript(TaskInterface $task): string {
 			// Determine the autoload-directory (composer)
-			$autoloadPath = $this->discover->getProjectRoot() . "/vendor/autoload.php";
+			$autoloadPath = ComposerUtils::getProjectRoot() . "/vendor/autoload.php";
 			
 			// Create a temporary file for the script
 			$tempScript = tempnam(sys_get_temp_dir(), 'task_');

@@ -6,6 +6,7 @@
 	use Quellabs\Canvas\Kernel;
 	use Quellabs\Canvas\Legacy\LegacyExitException;
 	use Quellabs\Canvas\Legacy\Resolvers\DefaultFileResolver;
+	use Quellabs\Support\ComposerUtils;
 	use Symfony\Component\HttpFoundation\RedirectResponse;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
@@ -36,11 +37,10 @@
 		
 		/**
 		 * Initialize the handler with a base legacy path.
-		 * @param Kernel $kernel
 		 * @param string $legacyPath Base directory path for legacy files
 		 * @param bool $preprocessingEnabled
 		 */
-		public function __construct(Kernel $kernel, string $legacyPath = 'legacy/', bool $preprocessingEnabled = true) {
+		public function __construct(string $legacyPath = 'legacy/', bool $preprocessingEnabled = true) {
 			// Store the legacy path
 			$this->legacyPath = $legacyPath;
 			
@@ -48,7 +48,7 @@
 			$this->preprocessingEnabled = $preprocessingEnabled;
 			
 			// Set cache directory using kernel's project root
-			$this->cacheDir = $kernel->getDiscover()->getProjectRoot() . '/storage/cache/legacy';
+			$this->cacheDir = ComposerUtils::getProjectRoot() . '/storage/cache/legacy';
 			
 			// Create cache directory if preprocessing is enabled
 			if ($this->preprocessingEnabled && !is_dir($this->cacheDir)) {

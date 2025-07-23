@@ -4,6 +4,7 @@
 	
 	use Quellabs\Discover\Discover;
 	use Quellabs\Sculpt\ConfigurationManager;
+	use Quellabs\Support\ComposerUtils;
 	
 	class RoutesCacheClearCommand extends RoutesBase {
 		
@@ -32,11 +33,8 @@
 			// Fetch contents of app.php
 			$providerConfig = $this->getProvider()->getConfig();
 			
-			// Discover utility to fetch the project root
-			$discover = new Discover();
-			
 			// Determine the cache directory
-			$cacheDirectory = $providerConfig['cache_dir'] ?? $discover->getProjectRoot();
+			$cacheDirectory = $providerConfig['cache_dir'] ?? ComposerUtils::getProjectRoot();
 			
 			// Remove the cache file
 			@unlink($cacheDirectory . "/storage/cache/routes.serialized");

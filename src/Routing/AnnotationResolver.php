@@ -4,6 +4,7 @@
 	
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Canvas\Kernel;
+	use Quellabs\Support\ComposerUtils;
 	use Symfony\Component\HttpFoundation\Request;
 	use Quellabs\Canvas\Cache\Foundation\FileCache;
 	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
@@ -246,7 +247,7 @@
 			
 			$this->debugMode = $config->getAs('debug_mode', 'bool', false);
 			$this->matchTrailingSlashes = $config->getAs('match_trailing_slashes', 'bool', false);
-			$this->cacheDirectory = $config->get('cache_dir', $this->kernel->getDiscover()->getProjectRoot() . "/storage/cache");
+			$this->cacheDirectory = $config->get('cache_dir', ComposerUtils::getProjectRoot() . "/storage/cache");
 			$this->controllerDirectory = $this->getControllerDirectory();
 		}
 		
@@ -311,8 +312,7 @@
 		 * @return string Absolute path to controllers directory
 		 */
 		private function getControllerDirectory(): string {
-			$projectRoot = $this->kernel->getDiscover()->getProjectRoot();
-			$fullPath = $projectRoot . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "Controllers";
+			$fullPath = ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "Controllers";
 			
 			if (!is_dir($fullPath)) {
 				return "";

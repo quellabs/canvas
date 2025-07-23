@@ -11,6 +11,7 @@
 	use Quellabs\Contracts\DependencyInjection\Container;
 	use Quellabs\DependencyInjection\Provider\ServiceProvider;
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
+	use Quellabs\Support\ComposerUtils;
 	
 	/**
 	 * This class is responsible for providing a CacheInterface implementation
@@ -37,9 +38,6 @@
 		/** @var Container Used for dependency injection */
 		private Container $dependencyInjector;
 		
-		/** @var Discover Discovery component for fetching the project root */
-		private Discover $discover;
-		
 		/** @var string|null Project root folder */
 		private ?string $projectRoot;
 		
@@ -61,9 +59,8 @@
 			AnnotationReader $annotationReader
 		) {
 			$this->dependencyInjector = $dependencyInjector;
-			$this->discover = $discover;
 			$this->annotationReader = $annotationReader;
-			$this->projectRoot = $this->discover->getProjectRoot();
+			$this->projectRoot = ComposerUtils::getProjectRoot();
 			$this->pathToConfig = $this->projectRoot . DIRECTORY_SEPARATOR . "config" . DIRECTORY_SEPARATOR . "cache.php";
 			$this->cacheConfig = $this->getCacheConfig();
 		}

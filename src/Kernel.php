@@ -20,6 +20,7 @@
 	use Quellabs\SignalHub\HasSignals;
 	use Quellabs\SignalHub\Signal;
 	use Quellabs\SignalHub\SignalHubLocator;
+	use Quellabs\Support\ComposerUtils;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
 	
@@ -275,7 +276,7 @@
 				'Canvas\Kernel[mode=%s, legacy=%s, root=%s]',
 				$debugMode,
 				$legacyStatus,
-				$this->discover->getProjectRoot()
+				ComposerUtils::getProjectRoot()
 			);
 		}
 		
@@ -286,7 +287,7 @@
 		public function __debugInfo(): array {
 			return [
 				// Project root directory path
-				'project_root'   => $this->discover->getProjectRoot(),
+				'project_root'   => ComposerUtils::getProjectRoot(),
 				
 				// Current debug mode setting (boolean from configuration)
 				'debug_mode'     => $this->configuration->getAs('debug_mode', 'bool', false),
@@ -310,7 +311,7 @@
 			// Check if we're NOT in debug mode (i.e., in production or staging)
 			if (!$this->configuration->getAs('debug_mode', 'bool', false)) {
 				// Get the project root directory path for cache storage
-				$rootPath = $this->discover->getProjectRoot();
+				$rootPath = ComposerUtils::getProjectRoot();
 				
 				// Enable annotation caching for better performance in production
 				$config->setUseAnnotationCache(true);
@@ -334,7 +335,7 @@
 			}
 			
 			// Fetch the project root
-			$projectRoot = $this->discover->getProjectRoot();
+			$projectRoot = ComposerUtils::getProjectRoot();
 			
 			// If the config file can't be loaded, return an empty array
 			if (
@@ -364,13 +365,13 @@
 				LegacyBridge::initialize($this->dependencyInjector);
 				
 				// Fetch the legacy path
-				$legacyPath = $this->configuration->get('legacy_path', $this->discover->getProjectRoot() . '/legacy/');
+				$legacyPath = $this->configuration->get('legacy_path', ComposerUtils::getProjectRoot() . '/legacy/');
 				
 				// Fetch the legacy path
 				$preprocessingEnabled = $this->configuration->get('legacy_preprocessing', true);
 				
 				// Create the fallthrough handler
-				$this->legacyFallbackHandler = new LegacyHandler($this, $legacyPath, $preprocessingEnabled);
+				$this->legacyFallbackHandler = new LegacyHandler($legacyPath, $preprocessingEnabled);
 			}
 		}
 		

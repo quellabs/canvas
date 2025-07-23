@@ -6,6 +6,7 @@
 	use Quellabs\Sculpt\ConfigurationManager;
 	use Quellabs\Canvas\TaskScheduler\TaskScheduler;
 	use Quellabs\Canvas\TaskScheduler\Storage\FileTaskStorage;
+	use Quellabs\Support\ComposerUtils;
 	
 	/**
 	 * Command class for listing scheduled tasks
@@ -49,7 +50,7 @@
 			// Create a task scheduler instance with file-based storage
 			// The storage directory is set to {project_root}/storage/task-scheduler
 			$scheduler = new TaskScheduler(
-				new FileTaskStorage($discover->getProjectRoot() . "/storage/task-scheduler")
+				new FileTaskStorage(ComposerUtils::getProjectRoot() . "/storage/task-scheduler")
 			);
 			
 			// Build the task list with sorting data
