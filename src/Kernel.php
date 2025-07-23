@@ -166,8 +166,9 @@
 			
 			// Initialize debug data collection system for development environments
 			// This collector will gather performance metrics, query logs, and debugging info
-			$debugCollector = $this->initializeDebugCollector();
-			
+			$debugBarEnabled = $this->getInspectorConfiguration()->get('enabled', false);
+			$debugCollector = $debugBarEnabled ? new EventCollector(SignalHubLocator::getInstance()) : null;
+
 			// Initialize URL parsing variables
 			$urlData = null;
 			$isLegacyPath = false;
@@ -224,22 +225,6 @@
 			// Inject the debug bar
 			$debugBar = new Inspector($debugCollector, $this->getInspectorConfiguration());
 			$debugBar->inject($request, $response);
-		}
-		
-		/**
-		 * Initialize debug collector if debug mode is enabled
-		 * @return EventCollector|null Debug collector instance or null if disabled
-		 * @throws \Exception
-		 */
-		private function initializeDebugCollector(): ?EventCollector {
-			$debugMode = $this->getConfiguration()->get('debug_mode', false);
-			$debugBarEnabled = $this->getInspectorConfiguration()->get('enabled', false);
-			
-			if (!$debugMode || !$debugBarEnabled) {
-				return null;
-			}
-			
-			return new EventCollector(SignalHubLocator::getInstance());
 		}
 		
 		/**

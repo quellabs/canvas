@@ -116,13 +116,17 @@
 			
 			// Process each segment and compile it for optimal matching
 			$compiledSegments = [];
+			$totalSegments = count($segments);
 			
-			foreach ($segments as $segment) {
+			foreach ($segments as $index => $segment) {
 				// Determine the type of this segment (static, variable, wildcard, etc.)
 				$type = $this->segmentAnalyzer->getSegmentType($segment);
 				
 				// Initialize the compiled segment structure with default values
 				$compiledSegment = $this->initializeCompiledSegment($type, $segment);
+
+				// Add remaining segments count for optimization
+				$compiledSegment['remaining_segments_count'] = $totalSegments - $index - 1;
 				
 				// Get type-specific modifications and merge them with the base structure
 				$modifications = match ($type) {
@@ -363,6 +367,13 @@
 				$modifications['variable_names'] = $result['variables'];
 				$modifications['literal_prefix'] = $result['literal_prefix'] ?? null;
 				$modifications['literal_suffix'] = $result['literal_suffix'] ?? null;
+
+				// Pre-compile pattern metadata for performance
+				$patternMetadata = $this->compilePatternMetadata($segment);
+				
+				if ($patternMetadata) {
+					$modifications['pattern_metadata'] = $patternMetadata;
+				}
 				
 				// Check if any variables are wildcards
 				foreach ($result['variable_info'] as $varInfo) {
@@ -375,6 +386,51 @@
 			}
 			
 			return $modifications;
+		}
+		
+		/**
+		 * Parses route segments like "prefix{variable}suffix" and extracts
+		 * structural information needed for efficient matching and validation.
+		 * @param string $segment Route segment to analyze (e.g., "user{id}.json")
+		 * @return array|null Metadata array or null if the segment has no variables
+		 */
+		private function compilePatternMetadata(string $segment): ?array {
+			// Match pattern: literal_prefix + {variable} + literal_suffix
+			// Examples: "user{id}", "{name}.json", "api/v1/{endpoint}/data"
+			if (preg_match('/^([^{]*)(\{[^}]+})(.*)$/', $segment, $matches)) {
+				// Extract the three parts of the segment
+				$literalPrefix = $matches[1];  // Text before the variable
+				$variablePart = $matches[2];   // The {variable} part including braces
+				$literalSuffix = $matches[3];  // Text after the variable
+				
+				// Pre-calculate string lengths for performance optimization
+				// These will be used frequently during route matching
+				$prefixLength = strlen($literalPrefix);
+				$suffixLength = strlen($literalSuffix);
+				
+				// Extract the variable name from within the braces
+				// Remove surrounding { } characters
+				$variableName = trim($variablePart, '{}');
+				
+				// Handle variable constraints (e.g., {id:int} -> "id")
+				// If variable has a type constraint, extract just the name part
+				if (str_contains($variableName, ':')) {
+					$variableName = explode(':', $variableName)[0];
+				}
+				
+				// Return compiled metadata for efficient route matching
+				return [
+					'literal_prefix' => $literalPrefix,    // Static text before variable
+					'literal_suffix' => $literalSuffix,    // Static text after variable
+					'prefix_length'  => $prefixLength,     // Length of prefix (performance)
+					'suffix_length'  => $suffixLength,     // Length of suffix (performance)
+					'variable_name'  => $variableName,     // Clean variable name for parameter extraction
+					'min_length'     => $prefixLength + $suffixLength // Minimum possible segment length
+				];
+			}
+			
+			// Return null for segments without variables (pure literal segments)
+			return null;
 		}
 		
 		/**

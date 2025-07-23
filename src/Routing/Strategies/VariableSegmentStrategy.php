@@ -27,15 +27,16 @@
 		public function match(array $segment, MatchingContext $context): MatchResult {
 			// Extract configuration from the segment definition
 			$variableName = $segment['variable_name'];
-			$pattern = $segment['pattern'];
+			$pattern = $segment['pattern'] ?? null;
 			
 			// Handle multi-wildcard variables that capture remaining URL segments
-			if ($segment['is_multi_wildcard']) {
+			if ($segment['is_multi_wildcard'] ?? false) {
 				// Get all remaining URL segments
 				$remainingSegments = $context->getRemainingUrlSegments();
 				
 				// Join all remaining segments with '/' and store as variable value
-				$context->setVariable($variableName, implode('/', $remainingSegments));
+				$capturedValue = implode('/', $remainingSegments);
+				$context->setVariable($variableName, $capturedValue);
 				
 				// Multi-wildcard consumes all remaining segments, so matching is complete
 				return MatchResult::COMPLETE_MATCH;
@@ -45,9 +46,13 @@
 			$urlSegment = $context->getCurrentUrlSegment();
 			
 			// Validate the URL segment against the pattern if one is specified
-			if ($pattern && !preg_match('/^' . $pattern . '$/', $urlSegment)) {
-				// Pattern validation failed
-				return MatchResult::NO_MATCH;
+			if ($pattern !== null && $pattern !== '' && $pattern !== '*') {
+				// Use the pattern as-is since it's already a valid regex from the route parser
+				// Use ~ as delimiter instead of / to avoid conflicts with forward slashes in the pattern
+				if (!preg_match('~^' . $pattern . '$~', $urlSegment)) {
+					// Pattern validation failed
+					return MatchResult::NO_MATCH;
+				}
 			}
 			
 			// Store the captured URL segment value in the variable

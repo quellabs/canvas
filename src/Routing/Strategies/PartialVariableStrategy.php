@@ -154,69 +154,133 @@
 		}
 		
 		/**
-		 * Fallback matching for partial variables without compiled regex.
-		 *
-		 * This method provides a backup matching strategy when pre-compiled regex patterns
-		 * are not available. It manually parses the route pattern to extract literal prefixes,
-		 * suffixes, and variable placeholders, then matches them against the URL segment.
-		 *
-		 * This fallback handles basic cases like "prefix-{var}-suffix" but may not support
-		 * all the advanced features available in compiled regex patterns.
-		 *
-		 * @param array $segment The segment configuration containing the original pattern
-		 * @param MatchingContext $context The current matching context with URL segments and variables
-		 * @return MatchResult The result of the matching attempt (NO_MATCH or CONTINUE_MATCHING)
+		 * This method acts as a secondary matching mechanism that attempts to match
+		 * URL segments using either optimized pre-compiled patterns or falls back
+		 * to the original matching algorithm for compatibility.
+		 * @param array $segment The route segment configuration containing pattern data
+		 * @param MatchingContext $context The current matching context with URL information
+		 * @return MatchResult The result of the matching operation
 		 */
 		private function fallbackPartialMatch(array $segment, MatchingContext $context): MatchResult {
-			// Get the current URL segment we're trying to match
+			// Get the current URL segment from the matching context
 			$currentUrlSegment = $context->getCurrentUrlSegment();
 			
-			// Get the original route pattern string for manual parsing
-			// Example: "user-{id}-profile" or "file-{name}.html"
-			// Note: This fallback only supports ONE variable per segment
+			// Check if we have pre-compiled pattern metadata available for optimization
+			// This allows us to use faster, cached pattern matching when possible
+			if (!isset($segment['pattern_metadata'])) {
+				// If no pattern metadata is available, fall back to the original matching algorithm
+				// This ensures backward compatibility with existing route configurations
+				// and handles edge cases where pattern compilation wasn't possible
+				return $this->originalFallbackMatch($segment, $context);
+			}
+			
+			// Use the optimized matching path with pre-compiled patterns
+			// This should be faster and more efficient than the original method
+			return $this->optimizedFallbackMatch($segment['pattern_metadata'], $currentUrlSegment, $context);
+		}
+
+		/**
+		 * Performs optimized pattern matching for URL segments with variable placeholders.
+		 * This method uses pre-calculated metadata to efficiently match URL segments against
+		 * route patterns that contain variables (e.g., "/user/{id}/profile").
+		 *
+		 * @param array $patternMetadata Pre-calculated pattern information including:
+		 *                              - min_length: Minimum required URL segment length
+		 *                              - literal_prefix: Fixed text at the start of pattern
+		 *                              - literal_suffix: Fixed text at the end of pattern
+		 *                              - prefix_length: Length of the literal prefix
+		 *                              - suffix_length: Length of the literal suffix
+		 *                              - variable_name: Name of the variable to extract
+		 * @param string $urlSegment The URL segment to match against the pattern
+		 * @param MatchingContext $context Context object for storing extracted variables
+		 * @return MatchResult Result indicating match success and next action
+		 */
+		private function optimizedFallbackMatch(array $patternMetadata, string $urlSegment, MatchingContext $context): MatchResult {
+			// Cache the URL segment length to avoid multiple strlen() calls
+			$urlLength = strlen($urlSegment);
+			
+			// Perform early rejection: if the URL segment is shorter than the minimum
+			// required length (prefix + suffix + at least 1 char for variable), it cannot match
+			if ($urlLength < $patternMetadata['min_length']) {
+				return MatchResult::NO_MATCH;
+			}
+			
+			// Extract pre-calculated pattern components for efficient access
+			$literalPrefix = $patternMetadata['literal_prefix'];    // e.g., "user/" from "/user/{id}"
+			$literalSuffix = $patternMetadata['literal_suffix'];    // e.g., "/profile" from "/{id}/profile"
+			$prefixLength = $patternMetadata['prefix_length'];      // Length of literal prefix
+			$suffixLength = $patternMetadata['suffix_length'];      // Length of literal suffix
+			
+			// Verify the URL segment starts with the expected literal prefix
+			// Using substr() with exact length is faster than string comparison with longer strings
+			if ($prefixLength > 0 && substr($urlSegment, 0, $prefixLength) !== $literalPrefix) {
+				return MatchResult::NO_MATCH;
+			}
+			
+			// Verify the URL segment ends with the expected literal suffix
+			// Negative offset in substr() counts from the end of the string
+			if ($suffixLength > 0 && substr($urlSegment, -$suffixLength) !== $literalSuffix) {
+				return MatchResult::NO_MATCH;
+			}
+			
+			// Calculate the boundaries for variable extraction
+			$startPos = $prefixLength;                              // Start after the prefix
+			$variableLength = $urlLength - $prefixLength - $suffixLength;  // Length between prefix and suffix
+			
+			// Ensure the variable portion has actual content
+			// Variables must contain at least one character to be valid
+			if ($variableLength <= 0) {
+				return MatchResult::NO_MATCH;
+			}
+			
+			// Extract the variable value from between the literal prefix and suffix
+			// This is the actual dynamic content that will be passed to the route handler
+			$variableValue = substr($urlSegment, $startPos, $variableLength);
+			
+			// Store the extracted variable in the routing context for later use
+			// The variable name comes from the route pattern (e.g., "id" from "{id}")
+			$context->setVariable($patternMetadata['variable_name'], $variableValue);
+			
+			// Indicate successful match and that routing should continue to the next segment
+			// This allows for multi-segment routes like "/user/{id}/posts/{postId}"
+			return MatchResult::CONTINUE_MATCHING;
+		}
+		
+		/**
+		 * Original fallback matching logic preserved for compatibility
+		 * This should rarely be called if pattern_metadata is properly compiled
+		 * @param array $segment
+		 * @param MatchingContext $context
+		 * @return MatchResult
+		 */
+		private function originalFallbackMatch(array $segment, MatchingContext $context): MatchResult {
+			$currentUrlSegment = $context->getCurrentUrlSegment();
 			$original = $segment['original'];
 			
 			// Use regex to parse the route pattern into its components:
 			// - Literal prefix (text before the variable)
 			// - Variable placeholder (the {variable} part)
 			// - Literal suffix (text after the variable)
-			// Pattern matches: prefix + {variable} + suffix
 			if (preg_match('/^([^{]*)(\{[^}]+})(.*)$/', $original, $matches)) {
-				// Extract the literal text that must appear before the variable
-				// Example: for "user-{id}-profile", this would be "user-"
 				$literalPrefix = $matches[1];
-				
-				// Extract the variable placeholder including the curly braces
-				// Example: for "user-{id}-profile", this would be "{id}"
 				$variablePart = $matches[2];
-				
-				// Extract the literal text that must appear after the variable
-				// Example: for "user-{id}-profile", this would be "-profile"
 				$literalSuffix = $matches[3];
 				
 				// Validate that the URL segment starts with the required literal prefix
-				// If there's a prefix and the URL doesn't start with it, no match
 				if ($literalPrefix !== '' && !str_starts_with($currentUrlSegment, $literalPrefix)) {
 					return MatchResult::NO_MATCH;
 				}
 				
 				// Validate that the URL segment ends with the required literal suffix
-				// If there's a suffix and the URL doesn't end with it, no match
 				if ($literalSuffix !== '' && !str_ends_with($currentUrlSegment, $literalSuffix)) {
 					return MatchResult::NO_MATCH;
 				}
 				
 				// Calculate the positions to extract the variable value from the URL segment
-				// Start position is after the literal prefix
 				$startPos = strlen($literalPrefix);
-				
-				// End position is before the literal suffix (if any)
-				// If no suffix, extract to the end of the string
 				$endPos = strlen($literalSuffix) > 0 ? -strlen($literalSuffix) : null;
 				
 				// Extract the variable value from between the prefix and suffix
-				// Example: for URL "user-123-profile" with pattern "user-{id}-profile",
-				// this extracts "123"
 				if ($endPos !== null) {
 					$variableValue = substr($currentUrlSegment, $startPos, $endPos - $startPos);
 				} else {
@@ -224,22 +288,16 @@
 				}
 				
 				// Extract the variable name from the placeholder by removing curly braces
-				// Example: "{id}" becomes "id"
 				$variableName = trim($variablePart, '{}');
 				
-				// Clean the variable name by removing type constraints and wildcards
-				// Route patterns may include type hints like "{id:int}" or "{slug:string}"
-				// We only want the variable name part before the colon
+				// Clean the variable name by removing type constraints
 				if (str_contains($variableName, ':')) {
 					$variableName = explode(':', $variableName)[0];
 				}
 				
 				// Store the extracted variable value in the routing context
-				// This makes it available for use in the matched route handler
 				$context->setVariable($variableName, $variableValue);
 				
-				// Return CONTINUE_MATCHING since we successfully matched this segment
-				// and there may be more segments in the route pattern to process
 				return MatchResult::CONTINUE_MATCHING;
 			}
 			
