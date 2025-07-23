@@ -28,6 +28,9 @@
 			// Replace http_response_code() calls with Canvas header collection function
 			$content = $this->replaceHttpResponseCodeCalls($content);
 			
+			// Replace mysqli_query() calls with monitored version
+			$content = $this->replaceMysqliQueryCalls($content);
+			
 			// Inject Canvas helper functions at the appropriate location
 			return $this->addCanvasHelper($content);
 		}
@@ -110,6 +113,27 @@
 			return preg_replace_callback($pattern, function ($matches) {
 				$statusCode = (int)$matches[1];
 				return "canvas_header('Status: {$statusCode}', true)";
+			}, $content);
+		}
+		
+		/**
+		 * Replace mysqli_query() calls with the monitored version for inspection.
+		 * This allows automatic monitoring of all database queries in the inspector.
+		 * @param string $content The PHP content to process
+		 * @return string Content with mysqli_query() calls replaced
+		 */
+		private function replaceMysqliQueryCalls(string $content): string {
+			// Pattern to match mysqli_query calls with various parameter combinations
+			// mysqli_query($connection, $query) or mysqli_query($connection, $query, $resultmode)
+			$pattern = '/\bmysqli_query\s*\(\s*([^,]+),\s*([^,)]+)(?:\s*,\s*([^)]+))?\s*\)/';
+			
+			return preg_replace_callback($pattern, function ($matches) {
+				$connection = trim($matches[1]);
+				$query = trim($matches[2]);
+				$resultMode = isset($matches[3]) ? ', ' . trim($matches[3]) : '';
+				
+				// Replace with monitored version
+				return "canvas_mysqli_query({$connection}, {$query}{$resultMode})";
 			}, $content);
 		}
 

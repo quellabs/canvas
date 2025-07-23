@@ -53,3 +53,45 @@
 		// Add the new header
 		$__canvas_headers[] = $header;
 	}
+	
+	if (!function_exists('canvas_mysqli_query')) {
+		/**
+		 * Monitored version of mysqli_query that logs queries for inspection
+		 * @param mysqli $connection The MySQL connection
+		 * @param string $query The SQL query to execute
+		 * @param int $resultMode Optional result mode (MYSQLI_STORE_RESULT or MYSQLI_USE_RESULT)
+		 * @return mysqli_result|bool Query result or false on failure
+		 */
+		function canvas_mysqli_query(mysqli $connection, string $query, int $resultMode = MYSQLI_STORE_RESULT): mysqli_result|bool {
+			// Fetch SignalHub and Signal
+			$signalHub = \Quellabs\SignalHub\SignalHubLocator::getInstance();
+			$signal = $signalHub->getSignal('debug.objectquel.query');
+			
+			if ($signal === null) {
+				$signal = new \Quellabs\SignalHub\Signal(['array'], 'debug.objectquel.query');
+				$signalHub->registerSignal($signal);
+			}
+			
+			// Record query start time for performance monitoring
+			$startTime = microtime(true);
+			
+			// Execute the actual query
+			$result = mysqli_query($connection, $query, $resultMode);
+			
+			// Calculate execution time
+			$executionTime = microtime(true) - $startTime;
+			
+			// Log query information for inspector
+			$signal->emit([
+				'query'             => $query,
+				'bound_parameters'  => [],
+				'execution_time_ms' => $executionTime,
+				'timestamp'         => date('Y-m-d H:i:s'),
+				'memory_usage_kb'   => memory_get_usage(true) / 1024,
+				'peak_memory_kb'    => memory_get_peak_usage(true) / 1024
+			]);
+			
+			// Return the original result
+			return $result;
+		}
+	}
