@@ -232,7 +232,6 @@
 		private function haveControllersChanged(): bool {
 			$currentModificationTime = $this->getLastControllerModification();
 			$cachedModificationTime = $this->cache->get(self::CONTROLLER_MTIME_KEY, 0);
-			
 			return $currentModificationTime > $cachedModificationTime;
 		}
 		

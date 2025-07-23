@@ -26,21 +26,19 @@
 		 */
 		public function match(array $segment, MatchingContext $context): MatchResult {
 			// Get the remaining segments in both the route definition and the URL
-			$remainingRouteSegments = $context->getRemainingRouteSegments();
+			$remainingRouteSegments = $segment['remaining_segments_count'] ?? 0;
 			$remainingUrlSegments = $context->getRemainingUrlSegments();
 			
 			// Calculate how many segments this wildcard should consume
-			if (count($remainingRouteSegments) > 0) {
-				// There are more route segments after this wildcard that need to be matched
-				
+			if ($remainingRouteSegments > 0) {
 				// Ensure we have enough URL segments to satisfy both the wildcard and remaining route
-				if (count($remainingUrlSegments) < count($remainingRouteSegments)) {
+				if (count($remainingUrlSegments) < $remainingRouteSegments) {
 					// Not enough URL segments to match the remaining route structure
 					return MatchResult::NO_MATCH;
 				}
 				
 				// Calculate segments to consume: leave enough for the remaining route segments
-				$segmentsToConsume = count($remainingUrlSegments) - count($remainingRouteSegments);
+				$segmentsToConsume = count($remainingUrlSegments) - $remainingRouteSegments;
 				$consumedSegments = array_slice($remainingUrlSegments, 0, $segmentsToConsume);
 				
 				// Advance the URL index to skip the consumed segments
@@ -56,7 +54,7 @@
 			
 			// Store the captured path in the appropriate variable
 			if ($segment['variable_name'] === '**') {
-				// Special handling for the generic "**" wildcard - store in array
+				// Special handling for the generic "**" wildcard - store in the array
 				$context->addToVariableArray('**', $capturedPath);
 			} else {
 				// Named wildcard - store as a regular variable

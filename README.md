@@ -946,14 +946,6 @@ It provides essential insights into your application's performance, database que
 The inspector is controlled by your application configuration:
 
 ```php
-// config/app.php
-return [
-    'debug_mode' => true,  // Must be true for debug features
-    // ... other config
-];
-```
-
-```php
 // config/inspector.php
 return [
     'enabled'  => true,  // Enables the inspector
@@ -961,7 +953,7 @@ return [
 ];
 ```
 
-**Important**: The inspector only appears on HTML responses and automatically hides in production environments.
+**Important**: The inspector only appears on HTML responses.
 
 ### Built-in Debug Panels
 
@@ -1203,12 +1195,6 @@ const timeBadge = window.formatTimeBadge(executionTime);
 3. **Check execution times** for performance bottlenecks
 4. **Review request data** to debug form submissions and routing issues
 
-#### Performance Optimization
-- Inspector automatically disables in production
-- Minimal overhead when disabled
-- Efficient event collection system
-- Lazy-loaded panel rendering
-
 #### Security Considerations
 - Never enable inspector in production environments
 - Sensitive data is automatically sanitized in panel displays
@@ -1218,7 +1204,7 @@ const timeBadge = window.formatTimeBadge(executionTime);
 
 #### Inspector Not Appearing
 Check these common issues:
-1. Ensure `debug_mode` and `enabled` are both `true` in config
+1. Ensure `enabled` is set to `true` in config/inspector.php
 2. Verify the response is HTML (debug bar only works with HTML responses)
 3. Check that the response contains a closing `</body>` or `</html>` tag
 4. Ensure no JavaScript errors are preventing the bar from initializing

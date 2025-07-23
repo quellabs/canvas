@@ -207,17 +207,20 @@
 		 * @return array Parsed URL segments
 		 */
 		private function parseRequestUrl(string $requestUri): array {
-			// Parse URL into segments
-			return array_values(array_filter(
-				explode('/', $requestUri),
-				fn($segment) => $segment !== ''
-			));
+			$result = [];
+			
+			foreach (explode('/', $requestUri) as $segment) {
+				if ($segment !== '') {
+					$result[] = $segment;
+				}
+			}
+			
+			return $result;
 		}
 		
 		/**
 		 * Get or build route index for fast lookups
 		 * @return array Complete route index ready for lookups
-		 * @throws AnnotationReaderException
 		 */
 		private function getRouteIndex(): array {
 			// Return cached index if available
