@@ -31,6 +31,10 @@
 			// Replace mysqli_query() calls with monitored version
 			$content = $this->replaceMysqliQueryCalls($content);
 			
+			// Replace PDO query methods with monitored versions
+			$content = $this->replacePdoQueryCalls($content);
+			$content = $this->replacePdoPrepareCalls($content);
+			
 			// Inject Canvas helper functions at the appropriate location
 			return $this->addCanvasHelper($content);
 		}
@@ -136,7 +140,43 @@
 				return "canvas_mysqli_query({$connection}, {$query}{$resultMode})";
 			}, $content);
 		}
-
+		
+		/**
+		 * Replace PDO::query() calls with monitored version.
+		 * @param string $content The PHP content to process
+		 * @return string Content with PDO::query() calls replaced
+		 */
+		private function replacePdoQueryCalls(string $content): string {
+			// Pattern to match $pdo->query() calls
+			$pattern = '/(\$\w+)->query\s*\(\s*([^)]+)\s*\)/';
+			
+			return preg_replace_callback($pattern, function ($matches) {
+				$pdoVar = $matches[1];
+				$query = trim($matches[2]);
+				
+				// Replace with monitored version
+				return "canvas_pdo_query({$pdoVar}, {$query})";
+			}, $content);
+		}
+		
+		/**
+		 * Replace PDO::prepare() calls with monitored version.
+		 * @param string $content The PHP content to process
+		 * @return string Content with PDO::prepare() calls replaced
+		 */
+		private function replacePdoPrepareCalls(string $content): string {
+			// Pattern to match $pdo->prepare() calls
+			$pattern = '/(\$\w+)->prepare\s*\(\s*([^)]+)\s*\)/';
+			
+			return preg_replace_callback($pattern, function ($matches) {
+				$pdoVar = $matches[1];
+				$query = trim($matches[2]);
+				
+				// Replace with monitored version
+				return "canvas_pdo_prepare({$pdoVar}, {$query})";
+			}, $content);
+		}
+		
 		/**
 		 * Find the best insertion point for Canvas helper code.
 		 * This method analyzes the file structure to inject helpers AFTER namespace
@@ -158,7 +198,7 @@
 			}
 			
 			// Find all use statements after the namespace (or after <?php if no namespace)
-			$usePattern = '/\buse\s+(?:[^;{]+(?:\{[^}]*\})?[^;]*);/i';
+			$usePattern = '/\buse\s+[^;{]+(?:\{[^}]*})?[^;]*;/i';
 			$searchPos = $insertPos;
 			
 			// Keep finding use statements and update insertion point to after the last one
@@ -166,7 +206,7 @@
 				$insertPos = (int)$matches[0][1] + strlen($matches[0][0]);
 				$searchPos = $insertPos;
 			}
-		
+			
 			// Return the insertion point
 			return $insertPos;
 		}

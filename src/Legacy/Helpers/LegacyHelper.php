@@ -1,5 +1,5 @@
 <?php
-
+	
 	// Global array to store headers for Canvas processing
 	if (!isset($__canvas_headers)) {
 		$__canvas_headers = [];
@@ -79,7 +79,7 @@
 			$result = mysqli_query($connection, $query, $resultMode);
 			
 			// Calculate execution time
-			$executionTime = round(microtime(true) - $startTime);
+			$executionTime = round((microtime(true) - $startTime) * 1000); // Convert to milliseconds
 			
 			// Log query information for inspector
 			$signal->emit([
@@ -88,10 +88,139 @@
 				'execution_time_ms' => $executionTime,
 				'timestamp'         => date('Y-m-d H:i:s'),
 				'memory_usage_kb'   => memory_get_usage(true) / 1024,
-				'peak_memory_kb'    => memory_get_peak_usage(true) / 1024
+				'peak_memory_kb' => memory_get_peak_usage(true) / 1024,
+				'driver'         => 'mysqli'
 			]);
 			
 			// Return the original result
 			return $result;
+		}
+	}
+	
+	if (!function_exists('canvas_pdo_query')) {
+		/**
+		 * Monitored version of PDO::query that logs queries for inspection
+		 * @param PDO $pdo The PDO connection
+		 * @param string $query The SQL query to execute
+		 * @return PDOStatement|false Query result or false on failure
+		 */
+		function canvas_pdo_query(PDO $pdo, string $query): PDOStatement|false {
+			// Fetch SignalHub and Signal
+			$signalHub = \Quellabs\SignalHub\SignalHubLocator::getInstance();
+			$signal = $signalHub->getSignal('debug.objectquel.query');
+			
+			if ($signal === null) {
+				$signal = new \Quellabs\SignalHub\Signal(['array'], 'debug.objectquel.query');
+				$signalHub->registerSignal($signal);
+			}
+			
+			// Record query start time for performance monitoring
+			$startTime = microtime(true);
+			
+			// Execute the actual query
+			$result = $pdo->query($query);
+			
+			// Calculate execution time
+			$executionTime = round((microtime(true) - $startTime) * 1000);
+			
+			// Log query information for inspector
+			$signal->emit([
+				'query'             => $query,
+				'bound_parameters'  => [],
+				'execution_time_ms' => $executionTime,
+				'timestamp'         => date('Y-m-d H:i:s'),
+				'memory_usage_kb'   => memory_get_usage(true) / 1024,
+				'peak_memory_kb'    => memory_get_peak_usage(true) / 1024,
+				'driver'            => 'pdo'
+			]);
+			
+			// Return the original result
+			return $result;
+		}
+	}
+	
+	if (!function_exists('canvas_pdo_prepare')) {
+		/**
+		 * Monitored version of PDO::prepare that returns a wrapped PDOStatement
+		 * @param PDO $pdo The PDO connection
+		 * @param string $query The SQL query to prepare
+		 * @return CanvasPDOStatement|false Wrapped statement or false on failure
+		 */
+		function canvas_pdo_prepare(PDO $pdo, string $query): CanvasPDOStatement|false {
+			$statement = $pdo->prepare($query);
+			
+			if ($statement === false) {
+				return false;
+			}
+			
+			// Return wrapped statement that will monitor execute() calls
+			return new CanvasPDOStatement($statement, $query);
+		}
+	}
+	
+	if (!class_exists('CanvasPDOStatement')) {
+		/**
+		 * Wrapper class for PDOStatement that monitors execute() calls
+		 */
+		class CanvasPDOStatement {
+			private PDOStatement $statement;
+			private string $query;
+			
+			public function __construct(PDOStatement $statement, string $query) {
+				$this->statement = $statement;
+				$this->query = $query;
+			}
+			
+			/**
+			 * Monitored execute method
+			 * @param array|null $params Parameters to bind
+			 * @return bool Success status
+			 */
+			public function execute(?array $params = null): bool {
+				// Fetch SignalHub and Signal
+				$signalHub = \Quellabs\SignalHub\SignalHubLocator::getInstance();
+				$signal = $signalHub->getSignal('debug.objectquel.query');
+				
+				if ($signal === null) {
+					$signal = new \Quellabs\SignalHub\Signal(['array'], 'debug.objectquel.query');
+					$signalHub->registerSignal($signal);
+				}
+				
+				// Record query start time for performance monitoring
+				$startTime = microtime(true);
+				
+				// Execute the actual query
+				$result = $this->statement->execute($params);
+				
+				// Calculate execution time
+				$executionTime = round((microtime(true) - $startTime) * 1000);
+				
+				// Log query information for inspector
+				$signal->emit([
+					'query'             => $this->query,
+					'bound_parameters'  => $params ?? [],
+					'execution_time_ms' => $executionTime,
+					'timestamp'         => date('Y-m-d H:i:s'),
+					'memory_usage_kb'   => memory_get_usage(true) / 1024,
+					'peak_memory_kb'    => memory_get_peak_usage(true) / 1024,
+					'driver'            => 'pdo_prepared'
+				]);
+				
+				return $result;
+			}
+			
+			// Delegate all other method calls to the original PDOStatement
+			public function __call(string $method, array $args) {
+				return $this->statement->$method(...$args);
+			}
+			
+			// Delegate property access to the original PDOStatement
+			public function __get(string $name) {
+				return $this->statement->$name;
+			}
+			
+			public function __set(string $name, $value) {
+				$this->statement->$name = $value;
+			}
 		}
 	}
