@@ -79,7 +79,7 @@
 			$result = mysqli_query($connection, $query, $resultMode);
 			
 			// Calculate execution time
-			$executionTime = microtime(true) - $startTime;
+			$executionTime = round(microtime(true) - $startTime);
 			
 			// Log query information for inspector
 			$signal->emit([
