@@ -7,7 +7,6 @@
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Canvas\Annotations\Route;
 	use Quellabs\Canvas\AOP\AspectResolver;
-	use Quellabs\Discover\Discover;
 	use Quellabs\Sculpt\ConfigurationManager;
 	use Quellabs\Support\ComposerUtils;
 	
