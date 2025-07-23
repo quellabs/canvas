@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Routing\Components;
 	
 	use Quellabs\Canvas\Annotations\RoutePrefix;
+	use Quellabs\Support\ComposerUtils;
 	use ReflectionException;
 	use Quellabs\Canvas\Annotations\Route;
 	use Quellabs\Canvas\Kernel;
@@ -94,7 +95,7 @@
 			// Discover and process all controller classes in the directory
 			$result = [];
 
-			foreach ($this->kernel->getDiscover()->findClassesInDirectory($controllerDir) as $controller) {
+			foreach (ComposerUtils::findClassesInDirectory($controllerDir) as $controller) {
 				// Extract route definitions from the current controller
 				$controllerRoutes = $this->getRoutesFromController($controller);
 				
@@ -176,7 +177,7 @@
 			
 			// Use the kernel's discovery service to scan the directory and find all controller classes
 			// This will return an array of fully qualified class names (FQCN) for each controller
-			return $this->kernel->getDiscover()->findClassesInDirectory($controllerDir);
+			return ComposerUtils::findClassesInDirectory($controllerDir);
 		}
 		
 		/**
@@ -374,8 +375,7 @@
 		 * @return string|null Absolute path to controllers directory or null if not found
 		 */
 		private function getControllerDirectory(): ?string {
-			$projectRoot = $this->kernel->getDiscover()->getProjectRoot();
-			$fullPath = $projectRoot . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "Controllers";
+			$fullPath = ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "Controllers";
 			
 			if (!is_dir($fullPath)) {
 				return null;

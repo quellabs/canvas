@@ -9,6 +9,7 @@
 	use Quellabs\Canvas\AOP\AspectResolver;
 	use Quellabs\Discover\Discover;
 	use Quellabs\Sculpt\ConfigurationManager;
+	use Quellabs\Support\ComposerUtils;
 	
 	class AnnotationLister extends AnnotationBase {
 		
@@ -43,12 +44,9 @@
 				return $this->cache;
 			}
 			
-			// Initialize the class discovery utility
-			$discover = new Discover();
-			
 			// Scan the Controller directory to find all controller classes
 			// This assumes controllers are located in /src/Controller relative to project root
-			$controllers = $discover->findClassesInDirectory($discover->getProjectRoot() . "/src/Controllers");
+			$controllers = ComposerUtils::findClassesInDirectory(ComposerUtils::getProjectRoot() . "/src/Controllers");
 			
 			// Iterate through each discovered controller class
 			$result = [];

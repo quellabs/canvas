@@ -14,6 +14,7 @@
 	use Quellabs\Sculpt\Contracts\CommandBase;
 	use Quellabs\Discover\Scanner\ComposerScanner;
 	use Quellabs\Contracts\Publishing\AssetPublisher;
+	use Quellabs\Support\ComposerUtils;
 	
 	class PublishCommand extends CommandBase {
 		
@@ -214,10 +215,10 @@
 		 */
 		private function preparePublishing(AssetPublisher $targetProvider, string $publisher): ?array {
 			// Get project root and source directory
-			$projectRoot = $this->discover->getProjectRoot();
+			$projectRoot = ComposerUtils::getProjectRoot();
 			
 			// Resolve the source directory
-			$sourceDirectory = $this->discover->resolvePath($targetProvider->getSourcePath());
+			$sourceDirectory = ComposerUtils::normalizePath($targetProvider->getSourcePath());
 			
 			// Show information about what we're publishing
 			$this->output->writeLn("Publishing: " . $publisher);
@@ -249,7 +250,7 @@
 				'manifest'        => $manifest,
 				'publisher'       => $publisher,
 				'projectRoot'     => $projectRoot,
-				'sourceDirectory' => $this->discover->resolvePath($sourceDirectory)
+				'sourceDirectory' => ComposerUtils::normalizePath($sourceDirectory)
 			];
 		}
 		

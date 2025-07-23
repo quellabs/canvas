@@ -4,6 +4,7 @@
 	
 	use Quellabs\Canvas\Cache\Contracts\CacheInterface;
 	use Quellabs\Discover\Discover;
+	use Quellabs\Support\ComposerUtils;
 	
 	/**
 	 * File-based cache implementation with comprehensive concurrency protection
@@ -25,17 +26,13 @@
 		/** @var int Maximum time to wait for locks (seconds) */
 		private int $lockTimeout;
 		
-		/** @var Discover */
-		private Discover $discover;
-		
 		/**
 		 * FileCache Constructor
 		 * @param string $namespace Cache context for namespacing (e.g., 'pages', 'data')
 		 * @param int $lockTimeout Maximum time to wait for locks in seconds
 		 */
 		public function __construct(string $namespace = 'default', int $lockTimeout = 5) {
-			$this->discover = new Discover();
-			$this->cachePath = rtrim($this->discover->getProjectRoot() . DIRECTORY_SEPARATOR . "storage" . DIRECTORY_SEPARATOR . "cache");
+			$this->cachePath = rtrim(ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . "storage" . DIRECTORY_SEPARATOR . "cache");
 			$this->namespace = $namespace;
 			$this->lockTimeout = $lockTimeout;
 			
