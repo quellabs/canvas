@@ -210,6 +210,13 @@
 				return;
 			}
 			
+			// Route
+			if ($isLegacyPath || $urlData === null) {
+				$pattern = '';
+			} else {
+				$pattern = $urlData['route']?->getRoute();
+			}
+			
 			// Send signal for performance monitoring
 			$this->canvasQuerySignal->emit([
 				'request'           => $request,
@@ -217,7 +224,7 @@
 				'http_methods'      => $urlData['http_methods'] ?? null,
 				'controller'        => $urlData['controller'] ?? null,
 				'method'            => $urlData['method'] ?? null,
-				'pattern'           => $urlData['route']?->getRoute() ?? null,
+				'pattern' => $pattern,
 				'parameters'        => $urlData['variables'] ?? null,
 				'execution_time_ms' => (microtime(true) - $start) * 1000,
 				'memory_used_bytes' => memory_get_usage(true) - $memoryStart
