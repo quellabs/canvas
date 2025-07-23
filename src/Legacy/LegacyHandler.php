@@ -2,11 +2,9 @@
 	
 	namespace Quellabs\Canvas\Legacy;
 	
-	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
-	use Quellabs\Canvas\Kernel;
-	use Quellabs\Canvas\Legacy\LegacyExitException;
-	use Quellabs\Canvas\Legacy\Resolvers\DefaultFileResolver;
 	use Quellabs\Support\ComposerUtils;
+	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
+	use Quellabs\Canvas\Legacy\Resolvers\DefaultFileResolver;
 	use Symfony\Component\HttpFoundation\RedirectResponse;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
