@@ -29,7 +29,7 @@
 			// Handle replace logic for status headers
 			if ($replace) {
 				// Remove any existing Status headers
-				$__canvas_headers = array_filter($__canvas_headers, function($h) {
+				$__canvas_headers = array_filter($__canvas_headers, function ($h) {
 					return !preg_match('/^Status:/i', $h);
 				});
 			}
@@ -44,7 +44,7 @@
 				$headerName = trim($matches[1]);
 				
 				// Remove existing headers with the same name
-				$__canvas_headers = array_filter($__canvas_headers, function($h) use ($headerName) {
+				$__canvas_headers = array_filter($__canvas_headers, function ($h) use ($headerName) {
 					return !preg_match('/^' . preg_quote($headerName, '/') . ':/i', $h);
 				});
 			}
@@ -155,6 +155,90 @@
 			
 			// Return wrapped statement that will monitor execute() calls
 			return new CanvasPDOStatement($statement, $query);
+		}
+	}
+	
+	if (!class_exists('CanvasMysqliStatement')) {
+		/**
+		 * Wrapper class for mysqli_stmt that monitors execute() calls
+		 */
+		class CanvasMysqliStatement {
+			private mysqli_stmt $statement;
+			private string $query;
+			private array $boundParams = [];
+			
+			public function __construct(mysqli_stmt $statement, string $query) {
+				$this->statement = $statement;
+				$this->query = $query;
+			}
+			
+			/**
+			 * Monitored bind_param method - captures parameters for logging
+			 * @param string $types Parameter types
+			 * @param mixed ...$vars Variables to bind
+			 * @return bool Success status
+			 */
+			public function bind_param(string $types, &...$vars): bool {
+				// Store bound parameters for logging (by value to avoid reference issues)
+				$this->boundParams = [];
+				foreach ($vars as $var) {
+					$this->boundParams[] = $var;
+				}
+				
+				// Call original bind_param
+				return $this->statement->bind_param($types, ...$vars);
+			}
+			
+			/**
+			 * Monitored execute method
+			 * @return bool Success status
+			 */
+			public function execute(): bool {
+				// Fetch SignalHub and Signal
+				$signalHub = \Quellabs\SignalHub\SignalHubLocator::getInstance();
+				$signal = $signalHub->getSignal('debug.objectquel.query');
+				
+				if ($signal === null) {
+					$signal = new \Quellabs\SignalHub\Signal(['array'], 'debug.objectquel.query');
+					$signalHub->registerSignal($signal);
+				}
+				
+				// Record query start time for performance monitoring
+				$startTime = microtime(true);
+				
+				// Execute the actual query
+				$result = $this->statement->execute();
+				
+				// Calculate execution time
+				$executionTime = round((microtime(true) - $startTime) * 1000);
+				
+				// Log query information for inspector
+				$signal->emit([
+					'query'             => $this->query,
+					'bound_parameters'  => $this->boundParams,
+					'execution_time_ms' => $executionTime,
+					'timestamp'         => date('Y-m-d H:i:s'),
+					'memory_usage_kb'   => memory_get_usage(true) / 1024,
+					'peak_memory_kb'    => memory_get_peak_usage(true) / 1024,
+					'driver'            => 'mysqli_prepared'
+				]);
+				
+				return $result;
+			}
+			
+			// Delegate all other method calls to the original mysqli_stmt
+			public function __call(string $method, array $args) {
+				return $this->statement->$method(...$args);
+			}
+			
+			// Delegate property access to the original mysqli_stmt
+			public function __get(string $name) {
+				return $this->statement->$name;
+			}
+			
+			public function __set(string $name, $value) {
+				$this->statement->$name = $value;
+			}
 		}
 	}
 	

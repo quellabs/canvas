@@ -30,6 +30,7 @@
 			
 			// Replace mysqli_query() calls with monitored version
 			$content = $this->replaceMysqliQueryCalls($content);
+			$content = $this->replaceMysqliPrepareCalls($content);
 			
 			// Replace PDO query methods with monitored versions
 			$content = $this->replacePdoQueryCalls($content);
@@ -138,6 +139,24 @@
 				
 				// Replace with monitored version
 				return "canvas_mysqli_query({$connection}, {$query}{$resultMode})";
+			}, $content);
+		}
+		
+		/**
+		 * Replace mysqli_prepare() calls with monitored version.
+		 * @param string $content The PHP content to process
+		 * @return string Content with mysqli_prepare() calls replaced
+		 */
+		private function replaceMysqliPrepareCalls(string $content): string {
+			// Pattern to match mysqli_prepare calls
+			$pattern = '/\bmysqli_prepare\s*\(\s*([^,]+),\s*([^)]+)\s*\)/';
+			
+			return preg_replace_callback($pattern, function ($matches) {
+				$connection = trim($matches[1]);
+				$query = trim($matches[2]);
+				
+				// Replace with monitored version
+				return "canvas_mysqli_prepare({$connection}, {$query})";
 			}, $content);
 		}
 		
