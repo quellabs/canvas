@@ -145,7 +145,7 @@
 			} catch (\Throwable $e) {
 				// Wrap any exception in a more specific RuntimeException
 				// This provides better error context for debugging
-				throw new \RuntimeException("Failed to load cache configuration: " . $e->getMessage());
+				throw new \RuntimeException("Failed to load cache configuration: " . $e->getMessage(), $e->getCode(), $e);
 			}
 		}
 		

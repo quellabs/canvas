@@ -60,7 +60,7 @@
 		 */
 		public function getError(): string {
 			// Return a custom error message if provided
-			if (!isset($this->message)) {
+			if ($this->message === null) {
 				return "Regular expression did not match.";
 			}
 			

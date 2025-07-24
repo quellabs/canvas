@@ -249,17 +249,12 @@
 			if ($this->isApiPath($pathInfo)) {
 				return true;
 			}
-			
 			// Check for AJAX requests that might expect JSON
-			if ($request->isXmlHttpRequest()) {
-				// Additional check: if it's AJAX and Accept header prefers JSON to HTML
-				if (str_contains($acceptHeader, 'application/json') &&
-					strpos($acceptHeader, 'application/json') < strpos($acceptHeader, 'text/html')) {
-					return true;
-				}
-			}
-			
-			return false;
+			// Additional check: if it's AJAX and Accept header prefers JSON to HTML
+			return
+				$request->isXmlHttpRequest() &&
+				str_contains($acceptHeader, 'application/json') &&
+				strpos($acceptHeader, 'application/json') < strpos($acceptHeader, 'text/html');
 		}
 		
 		/**
@@ -441,7 +436,7 @@
 		 */
 		private function replaceVariablesInErrorString(string $string, array $variables): string {
 			// Use regex to find and replace {{variable}} patterns
-			return preg_replace_callback('/{{\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*}}/', function ($matches) use ($variables) {
+			return preg_replace_callback('/{{\s*([a-zA-Z_]\w*)\s*}}/', function ($matches) use ($variables) {
 				// Replace it with actual value if exists, otherwise keep the original placeholder
 				return $variables[$matches[1]] ?? $matches[0];
 			}, $string);

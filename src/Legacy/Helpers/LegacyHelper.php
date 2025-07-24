@@ -33,16 +33,13 @@
 		}
 		
 		// Handle the main header
-		if ($replace) {
-			// Extract header name to check for duplicates
-			if (preg_match('/^([^:]+):/', $header, $matches)) {
-				$headerName = trim($matches[1]);
-				
-				// Remove existing headers with the same name
-				$__canvas_headers = array_filter($__canvas_headers, function ($h) use ($headerName) {
+		// Extract header name to check for duplicates
+		if ($replace && preg_match('/^([^:]+):/', $header, $matches)) {
+			$headerName = trim($matches[1]);
+			// Remove existing headers with the same name
+			$__canvas_headers = array_filter($__canvas_headers, function ($h) use ($headerName) {
 					return !preg_match('/^' . preg_quote($headerName, '/') . ':/i', $h);
 				});
-			}
 		}
 		
 		// Add the new header

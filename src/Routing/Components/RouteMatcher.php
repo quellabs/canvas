@@ -135,7 +135,9 @@
 		 */
 		private function matchStaticRoute(array $compiledPattern, array $requestUrl, array $routeData): ?array {
 			//  Single loop with early termination
-			for ($i = 0; $i < count($compiledPattern); $i++) {
+			$counter = count($compiledPattern);
+			
+			for ($i = 0; $i < $counter; $i++) {
 				if ($compiledPattern[$i]['original'] !== $requestUrl[$i]) {
 					return null; // Early termination on first mismatch
 				}

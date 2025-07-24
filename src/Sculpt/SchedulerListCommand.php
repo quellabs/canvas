@@ -113,7 +113,7 @@
 				['pattern' => '/^\*\/([2-5])(\s|$)/', 'priority' => 2], // Every 2-5 minutes
 				['pattern' => '/^\*\/([6-9]|1[0-5])(\s|$)/', 'priority' => 3], // Every 6-15 minutes
 				['pattern' => '/^\*\/([1-2][6-9]|30)(\s|$)/', 'priority' => 4], // Every 16-30 minutes
-				['pattern' => '/^\*\/([3-5][0-9])(\s|$)/', 'priority' => 5], // Every 31-59 minutes
+				['pattern' => '/^\*\/([3-5]\d)(\s|$)/', 'priority' => 5], // Every 31-59 minutes
 				
 				// Specific minute patterns
 				['pattern' => '/^\d+\/\d+ \* \* \* \*$/', 'priority' => 2], // Every X minutes (alternative format)

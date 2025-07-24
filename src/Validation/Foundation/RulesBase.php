@@ -31,7 +31,7 @@
 		 * @return string The error string with variables replaced.
 		 */
 		protected function replaceVariablesInErrorString(string $string, array $variables): string {
-			return preg_replace_callback('/{{\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*}}/', function ($matches) use ($variables) {
+			return preg_replace_callback('/{{\s*([a-zA-Z_]\w*)\s*}}/', function ($matches) use ($variables) {
 				return $variables[$matches[1]] ?? $matches[0];
 			}, $string);
 		}
