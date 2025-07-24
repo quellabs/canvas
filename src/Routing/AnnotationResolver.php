@@ -6,7 +6,7 @@
 	use Quellabs\Canvas\Kernel;
 	use Quellabs\Support\ComposerUtils;
 	use Symfony\Component\HttpFoundation\Request;
-	use Quellabs\Canvas\Cache\Foundation\FileCache;
+	use Quellabs\Cache\FileCache;
 	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
 	use Quellabs\Canvas\Routing\Components\RouteCacheManager;
 	use Quellabs\Canvas\Routing\Components\RouteDiscovery;

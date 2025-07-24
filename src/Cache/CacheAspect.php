@@ -2,10 +2,9 @@
 	
 	namespace Quellabs\Canvas\Cache;
 	
-	use Quellabs\Canvas\Cache\Foundation\FileCache;
+	use Quellabs\Cache\FileCache;
 	use Quellabs\Contracts\AOP\AroundAspect;
 	use Quellabs\Contracts\AOP\MethodContext;
-	use Quellabs\Discover\Discover;
 	
 	/**
 	 * Caches the return value of controller methods using configurable cache keys and TTL.
