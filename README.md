@@ -1162,7 +1162,8 @@ class CacheService {
 #### Common Debug Signals
 
 Canvas uses standardized signal patterns:
-- `debug.objectquel.query` - Database queries with performance data
+
+- `debug.database.query` - Database queries with performance data
 - `debug.canvas.query` - Route and controller execution information
 - `debug.cache.*` - Cache operations (hits, misses, writes)
 - `debug.security.*` - Security-related events (CSRF, authentication)
