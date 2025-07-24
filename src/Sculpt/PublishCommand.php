@@ -19,11 +19,6 @@
 	class PublishCommand extends CommandBase {
 		
 		/**
-		 * @var Discover Discovery component
-		 */
-		private Discover $discover;
-		
-		/**
 		 * @var FileOperationManager operations manager
 		 */
 		private FileOperationManager $operationManager;
@@ -36,7 +31,6 @@
 		 */
 		public function __construct(ConsoleInput $input, ConsoleOutput $output, ?ProviderInterface $provider = null) {
 			parent::__construct($input, $output, $provider);
-			$this->discover = new Discover();
 			$this->operationManager = new FileOperationManager($output);
 		}
 		

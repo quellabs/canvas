@@ -96,12 +96,13 @@
 		/**
 		 * Resolves routes using modern annotation-based routing system
 		 * @param Request $request The incoming HTTP request to resolve
-		 * @param array|null $urlData Reference parameter to store resolved route data
+		 * @param array|null $urlData Reference parameter to store resolved route data         *
 		 * @return Response The response from the matched route handler
+		 * @param-out array $urlData The resolved URL data (never null after execution)
 		 * @throws RouteNotFoundException When no matching route is found
 		 * @throws AnnotationReaderException When annotation parsing fails
 		 */
-		private function modernResolve(Request $request, ?array &$urlData = null): Response {
+		private function modernResolve(Request $request, ?array &$urlData): Response {
 			// Create resolver to handle annotation-based route discovery
 			$urlResolver = new AnnotationResolver($this->kernel);
 			

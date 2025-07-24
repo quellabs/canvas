@@ -2,7 +2,6 @@
 	
 	namespace Quellabs\Canvas\Discover;
 	
-	use Quellabs\Discover\Discover;
 	use Quellabs\Canvas\Annotations\CacheContext;
 	use Quellabs\Contracts\Context\MethodContext;
 	use Quellabs\AnnotationReader\AnnotationReader;
@@ -49,12 +48,10 @@
 		
 		/**
 		 * CacheInterfaceProvider constructor
-		 * @param Discover $discover
 		 * @param Container $dependencyInjector
 		 * @param AnnotationReader $annotationReader
 		 */
 		public function __construct(
-			Discover $discover,
 			Container $dependencyInjector,
 			AnnotationReader $annotationReader
 		) {
