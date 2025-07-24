@@ -6,8 +6,8 @@
 	use Quellabs\Canvas\Annotations\CacheContext;
 	use Quellabs\Contracts\Context\MethodContext;
 	use Quellabs\AnnotationReader\AnnotationReader;
-	use Quellabs\Canvas\Cache\Foundation\FileCache;
-	use Quellabs\Canvas\Cache\Contracts\CacheInterface;
+	use Quellabs\Cache\FileCache;
+	use Quellabs\Contracts\Cache\CacheInterface;
 	use Quellabs\Contracts\DependencyInjection\Container;
 	use Quellabs\DependencyInjection\Provider\ServiceProvider;
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
