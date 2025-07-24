@@ -4,7 +4,7 @@
 	
 	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\Canvas\Configuration\Configuration;
-	use Quellabs\Canvas\Http\RequestHandler;
+	use Quellabs\Canvas\Routing\RequestHandler;
 	use Quellabs\Canvas\Inspector\EventCollector;
 	use Quellabs\Canvas\Discover\AnnotationsReaderProvider;
 	use Quellabs\Canvas\Discover\CacheInterfaceProvider;

@@ -36,7 +36,7 @@
 		 * @return array<string> Array of signal patterns to match
 		 */
 		public function getSignalPatterns(): array {
-			return ['debug.objectquel.query'];
+			return ['debug.database.query'];
 		}
 		
 		/**

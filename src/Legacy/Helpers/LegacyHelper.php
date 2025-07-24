@@ -52,10 +52,10 @@
 	if (!function_exists('canvas_fetch_debug_signal')) {
 		function canvas_fetch_debug_signal(): \Quellabs\SignalHub\Signal {
 			$signalHub = \Quellabs\SignalHub\SignalHubLocator::getInstance();
-			$signal = $signalHub->getSignal('debug.objectquel.query');
+			$signal = $signalHub->getSignal('debug.database.query');
 			
 			if ($signal === null) {
-				$signal = new \Quellabs\SignalHub\Signal(['array'], 'debug.objectquel.query');
+				$signal = new \Quellabs\SignalHub\Signal(['array'], 'debug.database.query');
 				$signalHub->registerSignal($signal);
 			}
 			
@@ -86,13 +86,13 @@
 			
 			// Log query information for inspector
 			$signal->emit([
+				'driver'         => 'mysqli',
 				'query'             => $query,
 				'bound_parameters'  => [],
 				'execution_time_ms' => $executionTime,
 				'timestamp'         => date('Y-m-d H:i:s'),
 				'memory_usage_kb'   => memory_get_usage(true) / 1024,
 				'peak_memory_kb' => memory_get_peak_usage(true) / 1024,
-				'driver'         => 'mysqli'
 			]);
 			
 			// Return the original result
@@ -122,13 +122,13 @@
 			
 			// Log query information for inspector
 			$signal->emit([
+				'driver' => 'pdo',
 				'query'             => $query,
 				'bound_parameters'  => [],
 				'execution_time_ms' => $executionTime,
 				'timestamp'         => date('Y-m-d H:i:s'),
 				'memory_usage_kb'   => memory_get_usage(true) / 1024,
 				'peak_memory_kb'    => memory_get_peak_usage(true) / 1024,
-				'driver'            => 'pdo'
 			]);
 			
 			// Return the original result
@@ -205,13 +205,13 @@
 				
 				// Log query information for inspector
 				$signal->emit([
+					'driver' => 'mysqli_prepared',
 					'query'             => $this->query,
 					'bound_parameters'  => $this->boundParams,
 					'execution_time_ms' => $executionTime,
 					'timestamp'         => date('Y-m-d H:i:s'),
 					'memory_usage_kb'   => memory_get_usage(true) / 1024,
 					'peak_memory_kb'    => memory_get_peak_usage(true) / 1024,
-					'driver'            => 'mysqli_prepared'
 				]);
 				
 				return $result;
@@ -266,13 +266,13 @@
 				
 				// Log query information for inspector
 				$signal->emit([
+					'driver' => 'pdo_prepared',
 					'query'             => $this->query,
 					'bound_parameters'  => $params ?? [],
 					'execution_time_ms' => $executionTime,
 					'timestamp'         => date('Y-m-d H:i:s'),
 					'memory_usage_kb'   => memory_get_usage(true) / 1024,
 					'peak_memory_kb'    => memory_get_peak_usage(true) / 1024,
-					'driver'            => 'pdo_prepared'
 				]);
 				
 				return $result;

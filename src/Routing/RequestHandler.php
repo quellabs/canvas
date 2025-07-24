@@ -1,6 +1,6 @@
 <?php
 	
-	namespace Quellabs\Canvas\Http;
+	namespace Quellabs\Canvas\Routing;
 	
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Canvas\AOP\AspectDispatcher;
@@ -8,7 +8,6 @@
 	use Quellabs\Canvas\Discover\SessionInterfaceProvider;
 	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
 	use Quellabs\Canvas\Kernel;
-	use Quellabs\Canvas\Routing\AnnotationResolver;
 	use Quellabs\Support\ComposerUtils;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
