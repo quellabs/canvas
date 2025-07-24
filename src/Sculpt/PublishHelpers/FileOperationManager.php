@@ -421,7 +421,7 @@
 			$handle = opendir($dirPath);
 			
 			while (false !== ($entry = readdir($handle))) {
-				if ($entry != "." && $entry != "..") {
+				if ($entry !== "." && $entry !== "..") {
 					closedir($handle);
 					return false;
 				}

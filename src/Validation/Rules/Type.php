@@ -83,11 +83,9 @@
 			}
 			
 			// Handle types that use PHP's is_* functions (e.g., is_string, is_int)
-			if (in_array($this->type, $this->is_a_types)) {
-				if (!call_user_func("is_{$this->type}", $value)) {
-					$this->defaultMessage = "This value should be of type {$this->type}";
-					return false;
-				}
+			if (in_array($this->type, $this->is_a_types) && !call_user_func("is_{$this->type}", $value)) {
+				$this->defaultMessage = "This value should be of type {$this->type}";
+				return false;
 			}
 			
 			// Handle types that use PHP's ctype_* functions (e.g., ctype_alpha, ctype_digit)

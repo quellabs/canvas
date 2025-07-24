@@ -173,12 +173,10 @@
 				}
 				
 				// Handle lock files (.lock extension)
-				if (str_ends_with($filename, '.lock')) {
-					// Only clean up lock files that we don't currently own
-					// This prevents us from accidentally removing our own active locks
-					if (!isset($this->acquiredLocks[$filePath])) {
-						$this->cleanupLockFileIfStale($filePath);
-					}
+				// Only clean up lock files that we don't currently own
+				// This prevents us from accidentally removing our own active locks
+				if (str_ends_with($filename, '.lock') && !isset($this->acquiredLocks[$filePath])) {
+					$this->cleanupLockFileIfStale($filePath);
 				}
 			}
 		}
@@ -189,12 +187,10 @@
 		 */
 		private function ensureStorage(): void {
 			// Check if the storage directory exists
-			if (!is_dir($this->storageDirectory)) {
-				// Attempt to create the directory with proper permissions (0755)
-				// The third parameter 'true' enables recursive directory creation
-				if (!mkdir($this->storageDirectory, 0755, true)) {
-					throw new RuntimeException("Failed to create storage directory: {$this->storageDirectory}");
-				}
+			// Attempt to create the directory with proper permissions (0755)
+			// The third parameter 'true' enables recursive directory creation
+			if (!is_dir($this->storageDirectory) && !mkdir($this->storageDirectory, 0755, true)) {
+				throw new RuntimeException("Failed to create storage directory: {$this->storageDirectory}");
 			}
 			
 			// Verify that the storage directory is writable

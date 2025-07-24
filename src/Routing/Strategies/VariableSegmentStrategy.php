@@ -46,13 +46,16 @@
 			$urlSegment = $context->getCurrentUrlSegment();
 			
 			// Validate the URL segment against the pattern if one is specified
-			if ($pattern !== null && $pattern !== '' && $pattern !== '*') {
-				// Use the pattern as-is since it's already a valid regex from the route parser
-				// Use ~ as delimiter instead of / to avoid conflicts with forward slashes in the pattern
-				if (!preg_match('~^' . $pattern . '$~', $urlSegment)) {
-					// Pattern validation failed
-					return MatchResult::NO_MATCH;
-				}
+			// Use the pattern as-is since it's already a valid regex from the route parser
+			// Use ~ as delimiter instead of / to avoid conflicts with forward slashes in the pattern
+			if (
+				$pattern !== null &&
+				$pattern !== '' &&
+				$pattern !== '*' &&
+				!preg_match('~^' . $pattern . '$~', $urlSegment)
+			) {
+				// Pattern validation failed
+				return MatchResult::NO_MATCH;
 			}
 			
 			// Store the captured URL segment value in the variable

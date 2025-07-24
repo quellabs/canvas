@@ -299,11 +299,13 @@
 		 * @return void
 		 */
 		private function initializeCacheDirectory(): void {
-			if (!$this->debugMode && !is_dir($this->cacheDirectory)) {
-				if (!@mkdir($this->cacheDirectory, 0755, true)) {
-					error_log("AnnotationResolver: Cannot create cache directory: {$this->cacheDirectory}");
-					$this->debugMode = true;
-				}
+			if (
+				!$this->debugMode &&
+				!is_dir($this->cacheDirectory) &&
+				!@mkdir($this->cacheDirectory, 0755, true)
+			) {
+				error_log("AnnotationResolver: Cannot create cache directory: {$this->cacheDirectory}");
+				$this->debugMode = true;
 			}
 		}
 		

@@ -368,7 +368,9 @@
 		 * @param array &$index Reference to index structure
 		 */
 		private function addToMultiLevelIndex(array $route, array $compiledPattern, array &$index): void {
-			for ($position = 0; $position < count($compiledPattern); $position++) {
+			$counter = count($compiledPattern);
+			
+			for ($position = 0; $position < $counter; $position++) {
 				$segment = $compiledPattern[$position];
 				
 				// Only index static segments for fast elimination
@@ -693,9 +695,11 @@
 			// Extract the multi-level index structure that maps position -> static_segment -> routes
 			// This index allows O(1) lookup of routes that have specific static segments at specific positions
 			$multiLevelIndex = $routeIndex['multi_level'] ?? [];
-			
+
 			// Iterate through each position in the request URL to progressively filter candidates
-			for ($position = 0; $position < count($requestUrl); $position++) {
+			$counter = count($requestUrl);
+			
+			for ($position = 0; $position < $counter; $position++) {
 				// Get the URL segment at current position (e.g., 'users' in '/users/123/edit')
 				$urlSegment = $requestUrl[$position];
 				

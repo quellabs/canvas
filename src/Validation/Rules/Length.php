@@ -56,21 +56,17 @@
 			}
 			
 			// Check the minimum length requirement if specified
-			if (!is_null($this->min)) {
-				if (strlen($value) < $this->min) {
-					// Set default error message for minimum length violation
-					$this->defaultMessage = "This value is too short. It should have {{ min }} characters or more.";
-					return false;
-				}
+			if (!is_null($this->min) && strlen($value) < $this->min) {
+				// Set default error message for minimum length violation
+				$this->defaultMessage = "This value is too short. It should have {{ min }} characters or more.";
+				return false;
 			}
 			
 			// Check the maximum length requirement if specified
-			if (!is_null($this->max)) {
-				if (strlen($value) > $this->max) {
-					// Set default error message for maximum length violation
-					$this->defaultMessage = "This value is too long. It should have {{ max }} characters or less.";
-					return false;
-				}
+			if (!is_null($this->max) && strlen($value) > $this->max) {
+				// Set default error message for maximum length violation
+				$this->defaultMessage = "This value is too long. It should have {{ max }} characters or less.";
+				return false;
 			}
 			
 			// Validation passed - value meets all length requirements
