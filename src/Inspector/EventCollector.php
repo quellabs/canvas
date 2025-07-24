@@ -44,7 +44,7 @@
 			// Only connect to signals that start with 'debug.'
 			if ($name && str_starts_with($name, 'debug.')) {
 				// Connect an anonymous function to capture the signal's data
-				$signal->connect(function (array $data) use ($name) {
+				$signal->connect(function (array $data) use ($name): void {
 					// Store the event with signal name, data, and high-precision timestamp
 					$this->events[] = [
 						'signal'    => $name,
@@ -95,7 +95,7 @@
 		private function connectToExistingSignals(SignalHub $signalHub): void {
 			// Connect to the specific debug signal for canvas queries
 			// This is needed because the signal might already exist when this collector is created
-			$signalHub->getSignal('debug.canvas.query')->connect(function (array $data) {
+			$signalHub->getSignal('debug.canvas.query')->connect(function (array $data): void {
 				// Store the event data with timestamp
 				$this->events[] = [
 					'signal'    => 'debug.canvas.query',

@@ -175,7 +175,7 @@
 			
 			// Generate JavaScript functions from panel templates
 			$jsFunctions = [];
-			foreach ($jsTemplates as $panelName => $template) {
+			foreach ($jsTemplates as $template) {
 				$jsFunctions[] = "window.{$template['function']} = function(data) {\n{$template['code']}\n};";
 			}
 			

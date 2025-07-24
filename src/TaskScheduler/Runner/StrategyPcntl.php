@@ -49,7 +49,7 @@
 			}
 			
 			// Set up signal handler for SIGALRM to throw timeout exception
-			pcntl_signal(SIGALRM, function () use ($task) {
+			pcntl_signal(SIGALRM, function () use ($task): void {
 				throw new TaskTimeoutException("Task {$task->getName()} timed out");
 			});
 			
