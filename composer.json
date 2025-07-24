@@ -37,9 +37,6 @@
     "dragonmantank/cron-expression": "*"
   },
   "autoload": {
-    "files": [
-      "src/Polyfills/polyfill-bootstrap.php"
-    ],
     "psr-4": {
       "Quellabs\\Canvas\\": "src/"
     }
