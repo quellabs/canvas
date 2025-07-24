@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Configuration;
 	
 	use Quellabs\Contracts\Configuration\ConfigurationInterface;
+	use Traversable;
 	
 	/**
 	 * Configuration management class for handling application settings
@@ -23,6 +24,15 @@
 			$this->config = $config;
 		}
 		
+		/**
+		 * Get an iterator for the configuration data
+		 * Allows the configuration object to be used in foreach loops
+		 * @return Traversable Iterator over the configuration array
+		 */
+		public function getIterator(): Traversable {
+			return new \ArrayIterator($this->config);
+		}
+
 		/**
 		 * Get the entire configuration array
 		 * @return array Complete configuration data
