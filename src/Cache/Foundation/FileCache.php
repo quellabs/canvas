@@ -2,8 +2,7 @@
 	
 	namespace Quellabs\Canvas\Cache\Foundation;
 	
-	use Quellabs\Canvas\Cache\Contracts\CacheInterface;
-	use Quellabs\Discover\Discover;
+	use Quellabs\Contracts\Cache\CacheInterface;
 	use Quellabs\Support\ComposerUtils;
 	
 	/**
