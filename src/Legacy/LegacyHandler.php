@@ -24,8 +24,8 @@
 		/** @var bool True if we should preprocess the legacy php file */
 		private bool $preprocessingEnabled;
 		
-		/** @var LegacyPreprocessor Optional preprocessor for handling exit() and headers */
-		private LegacyPreprocessor $preprocessor;
+		/** @var RecursiveLegacyPreprocessor Optional preprocessor for handling exit() and headers */
+		private RecursiveLegacyPreprocessor $preprocessor;
 		
 		/**
 		 * Cache directory for preprocessed legacy PHP files
@@ -53,9 +53,9 @@
 				mkdir($this->cacheDir, 0755, true);
 			}
 			
-			// Initialize the legacy preprocessor only if needed
+			// Initialize the recursive legacy preprocessor
 			if ($this->preprocessingEnabled) {
-				$this->preprocessor = new LegacyPreprocessor();
+				$this->preprocessor = new RecursiveLegacyPreprocessor($this->cacheDir, $this->legacyPath);
 			}
 			
 			// Add default resolver for standard file resolution
@@ -118,15 +118,7 @@
 			
 			return $removed;
 		}
-		
-		/**
-		 * Check if preprocessing is enabled.
-		 * @return bool True if preprocessing is enabled
-		 */
-		public function isPreprocessingEnabled(): bool {
-			return $this->preprocessingEnabled;
-		}
-		
+
 		/**
 		 * Perform basic security checks on the resolved file.
 		 * Ensures the file exists, is readable, and has a .php extension.
@@ -139,25 +131,6 @@
 				file_exists($file) &&
 				str_ends_with($file, '.php') &&
 				is_readable($file);
-		}
-		
-		/**
-		 * Get the preprocessed version of a legacy file, creating it if necessary.
-		 * @param string $originalFile Path to the original legacy file
-		 * @return string Path to the preprocessed file
-		 */
-		private function getProcessedFile(string $originalFile): string {
-			// Generate a cache key based on file path and modification time
-			$cacheKey = md5($originalFile . filemtime($originalFile));
-			$cachedFile = $this->cacheDir . '/' . $cacheKey . basename($originalFile);
-			
-			// Create a preprocessed file if it doesn't exist
-			if (!file_exists($cachedFile)) {
-				$processedContent = $this->preprocessor->preprocess($originalFile);
-				file_put_contents($cachedFile, $processedContent);
-			}
-			
-			return $cachedFile;
 		}
 		
 		/**
@@ -178,7 +151,7 @@
 			
 			// Determine which file to execute (original or preprocessed)
 			if ($this->preprocessingEnabled) {
-				$fileToExecute = $this->getProcessedFile($file);
+				$fileToExecute = $this->preprocessor->processFileRecursively($file);
 			} else {
 				$fileToExecute = $file;
 			}
