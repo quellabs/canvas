@@ -68,6 +68,7 @@
 			$candidates = [
 				// Try direct file match: path.php
 				$this->legacyPath . DIRECTORY_SEPARATOR . $path . '.php',
+				
 				// Try index file in directory: path/index.php
 				$this->legacyPath . DIRECTORY_SEPARATOR . $path . DIRECTORY_SEPARATOR . 'index.php',
 			];
