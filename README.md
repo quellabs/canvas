@@ -1593,14 +1593,16 @@ $kernel->getLegacyHandler()->addResolver(new CustomFileResolver);
 
 ### Legacy Preprocessing
 
-Canvas includes preprocessing capabilities to handle legacy PHP files that use common patterns like `header()`, `die()`, and `exit()` functions:
+Canvas includes preprocessing capabilities to handle legacy PHP files that use common patterns like `header()`,
+`die()`, and `exit()` functions. It also rewrites mysqli and pdo queries for automatic performance measuring in
+the inspector.
 
 ```php
 <?php
 // public/index.php
 $kernel = new Kernel([
-    'legacy_enabled' => true,
-    'legacy_path' => __DIR__ . '/../legacy',
+    'legacy_enabled'       => true,
+    'legacy_path'          => __DIR__ . '/../legacy',
     'legacy_preprocessing' => true  // Default: enabled
 ]);
 ```
@@ -1609,8 +1611,8 @@ $kernel = new Kernel([
 - Converts `header()` calls to Canvas's internal header management
 - Transforms `http_response_code()` to Canvas response handling
 - Converts `die()` and `exit()` calls to Canvas exceptions (maintains flow control)
-
-**Important limitation:** Preprocessing only applies to the main legacy file, not to included/required files. Files included by legacy scripts may need refactoring if they use these functions.
+- Converts `mysqli_query()` and `mysqli_prepare()` calls to internal versions for performance measuring
+- Converts `pdo` calls to internal versions for performance measuring
 
 ### Benefits of Legacy Integration
 
