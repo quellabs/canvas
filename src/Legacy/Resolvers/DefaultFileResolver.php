@@ -18,10 +18,11 @@
 		private string $legacyPath;
 		
 		/**
-		 * Constructor
+		 * DefaultFileResolver constructor
 		 * @param string $legacyPath The base directory path where legacy files are stored
 		 */
 		public function __construct(string $legacyPath) {
+			// Remove trailing directory separator to ensure consistent path handling
 			$this->legacyPath = rtrim($legacyPath, DIRECTORY_SEPARATOR);
 		}
 		
@@ -42,20 +43,64 @@
 			// Normalize the path by removing leading/trailing slashes
 			$path = trim($path, '/');
 			
-			// Try these patterns in order of preference:
+			// Check if the path already ends with .php extension
+			if (str_ends_with($path, ".php")) {
+				// Handle direct PHP file requests (e.g., "script.php")
+				return $this->resolveDirectPhpFile($path);
+			}
+			
+			// Handle paths without .php extension (e.g., "users", "admin/dashboard")
+			return $this->resolvePath($path);
+		}
+		
+		/**
+		 * Resolve a path to a legacy PHP file using common naming patterns
+		 *
+		 * Attempts to find files in the following order:
+		 * 1. Direct file: /users -> legacy/users.php
+		 * 2. Index file in directory: /users -> legacy/users/index.php
+		 *
+		 * @param string $path The normalized path without .php extension
+		 * @return string|null The absolute file path if found, null otherwise
+		 */
+		private function resolvePath(string $path): ?string {
+			// Build array of potential file locations to check
 			$candidates = [
-				$this->legacyPath .DIRECTORY_SEPARATOR . $path . '.php', // Direct file: /users -> legacy/users.php
-				$this->legacyPath . DIRECTORY_SEPARATOR . $path . DIRECTORY_SEPARATOR . 'index.php',  // Index file: /users -> legacy/users/index.php
+				// Try direct file match: path.php
+				$this->legacyPath . DIRECTORY_SEPARATOR . $path . '.php',
+				// Try index file in directory: path/index.php
+				$this->legacyPath . DIRECTORY_SEPARATOR . $path . DIRECTORY_SEPARATOR . 'index.php',
 			];
 			
-			// Check each candidate file path
+			// Check each candidate file path in order of preference
 			foreach ($candidates as $file) {
-				if (file_exists($file)) {
-					return $file; // Return the first matching file found
+				if (file_exists($file) && is_readable($file)) {
+					// Return the first matching file found
+					return $file;
 				}
 			}
 			
-			// No matching file found
+			// No matching file found after trying all patterns
+			return null;
+		}
+		
+		/**
+		 * Handles requests that already include the .php extension
+		 * (e.g., "admin/script.php" -> "legacy/admin/script.php")
+		 * @param string $path The path that already ends with .php
+		 * @return string|null The absolute file path if it exists, null otherwise
+		 */
+		private function resolveDirectPhpFile(string $path): ?string {
+			// Construct the full file path by combining legacy base path with the PHP file path
+			$candidate = $this->legacyPath . DIRECTORY_SEPARATOR . $path;
+			
+			// Check if the file actually exists on the filesystem
+			if (file_exists($candidate) && is_readable($candidate)) {
+				// Return the verified file path
+				return $candidate;
+			}
+			
+			// File not found
 			return null;
 		}
 	}
