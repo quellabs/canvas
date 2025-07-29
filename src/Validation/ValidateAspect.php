@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Validation;
 	
 	use Quellabs\Canvas\Validation\Contracts\ValidationInterface;
+	use Quellabs\Canvas\Validation\Contracts\ValidationRuleInterface;
 	use Quellabs\Contracts\AOP\BeforeAspect;
 	use Quellabs\Contracts\AOP\MethodContext;
 	use Symfony\Component\HttpFoundation\Request;
@@ -160,6 +161,7 @@
 			// Fetch content type
 			$contentType = $request->headers->get('Content-Type', '');
 			
+			// Merge in JSON content if json is expected
 			if ($this->isJsonContentType($contentType) && !empty($request->getContent())) {
 				try {
 					$jsonData = json_decode($request->getContent(), true, 512, JSON_THROW_ON_ERROR);
@@ -402,7 +404,7 @@
 			foreach ($validators as $value) {
 				// Case 1: Direct validator object
 				// Example: ['email' => EmailValidator]
-				if ($value instanceof ValidationInterface) {
+				if ($value instanceof ValidationRuleInterface) {
 					return false; // Found a validator, so this is a validator array
 				}
 				
@@ -411,7 +413,7 @@
 				if (is_array($value)) {
 					// Check each item in the sub-array
 					foreach ($value as $item) {
-						if ($item instanceof ValidationInterface) {
+						if ($item instanceof ValidationRuleInterface) {
 							return false; // Found a validator in sub-array, so this is a validator array
 						}
 					}
@@ -442,19 +444,31 @@
 			
 			// Apply each validator to the current field
 			foreach ($validators as $validator) {
-				// Skip if this is somehow still a nested array (shouldn't happen with proper structure detection)
-				if (is_array($validator)) {
-					continue;
+				// Validate that the validator implements ValidationRuleInterface
+				if (!$validator instanceof ValidationRuleInterface) {
+					$type = is_object($validator) ? get_class($validator) : gettype($validator);
+					throw new \InvalidArgumentException(
+						"Invalid validator for field '{$fieldName}'. Expected ValidationRuleInterface, got {$type}"
+					);
 				}
 				
 				// Run the validation check
-				if (!$validator->validate($fieldValue, $request)) {
-					// Validation failed - generate an error message with variable substitution
-					$errors[] = $this->replaceVariablesInErrorString(
-						$validator->getError(), [
-							'key'   => $fieldName,  // Field name for an error message
-							'value' => $fieldValue, // Actual field value
-						]
+				try {
+					if (!$validator->validate($fieldValue, $request)) {
+						$errors[] = $this->replaceVariablesInErrorString(
+							$validator->getError(),
+							[
+								'key'   => $fieldName,
+								'value' => $fieldValue,
+							]
+						);
+					}
+				} catch (\Throwable $e) {
+					$validatorClass = get_class($validator);
+					throw new \RuntimeException(
+						"Validator {$validatorClass} failed for field '{$fieldName}': {$e->getMessage()}",
+						0,
+						$e
 					);
 				}
 			}
