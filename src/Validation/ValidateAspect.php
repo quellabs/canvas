@@ -157,6 +157,24 @@
 			// This includes POST data, file uploads, and other request parameters
 			$requestData = $request->request->all();
 			
+			// Fetch content type
+			$contentType = $request->headers->get('Content-Type', '');
+			
+			if ($this->isJsonContentType($contentType) && !empty($request->getContent())) {
+				try {
+					$jsonData = json_decode($request->getContent(), true, 512, JSON_THROW_ON_ERROR);
+					
+					if (is_array($jsonData)) {
+						// Merge JSON data with form data (JSON takes precedence)
+						$requestData = array_merge($requestData, $jsonData);
+					}
+				} catch (\JsonException $e) {
+					// Invalid JSON - add a validation error
+					$errors['_json'] = ['Invalid JSON data provided'];
+					return $errors;
+				}
+			}
+			
 			// Recursively validate each field against its corresponding rules
 			// This method handles both simple fields and nested array structures
 			// Parameters:
@@ -177,10 +195,11 @@
 		 * @return bool True if validation should be skipped, false otherwise
 		 */
 		private function shouldSkipValidation(Request $request): bool {
-			// Skip validation for GET requests that have no query parameters
-			// GET requests without parameters typically don't need validation as they're
-			// just retrieving data without sending any input that could be malformed
-			if ($request->isMethod('GET') && empty($request->query->all())) {
+			// Fetch request method
+			$method = $request->getMethod();
+			
+			// Skip validation for safe methods (GET, HEAD, OPTIONS) with no query parameters
+			if (in_array($method, ['GET', 'HEAD', 'OPTIONS']) && empty($request->query->all())) {
 				return true;
 			}
 			
@@ -197,16 +216,13 @@
 				// Check if request contains JSON data in the body
 				// Check both that content exists and Content-Type indicates JSON
 				$contentType = $request->headers->get('Content-Type', '');
-				$hasJsonData =
-					!empty($request->getContent()) && (
-						str_contains($contentType, 'application/json') ||
-						str_contains($contentType, 'application/vnd.api+json')
-					);
+				$hasJsonData = !empty($request->getContent()) && $this->isJsonContentType($contentType);
+				$hasQueryData = !empty($request->query->all());
 				
 				// If none of the data types are present, skip validation
 				// This covers cases like DELETE /api/users/123 where the ID is in the URL
 				// and no additional data needs validation
-				if (!$hasFormData && !$hasFiles && !$hasJsonData) {
+				if (!$hasFormData && !$hasFiles && !$hasJsonData && !$hasQueryData) {
 					return true;
 				}
 			}
@@ -231,30 +247,30 @@
 			
 			// Check Accept header for JSON content types
 			$acceptHeader = $request->headers->get('Accept', '');
-			
-			if ($this->acceptsJsonContentType($acceptHeader)) {
-				return true;
-			}
-			
-			// Check Content-Type header for JSON content types
 			$contentType = $request->headers->get('Content-Type', '');
 			
+			// Check Content-Type header for JSON content types
 			if ($this->isJsonContentType($contentType)) {
 				return true;
 			}
 			
-			// Check URL patterns that typically indicate API endpoints
-			$pathInfo = $request->getPathInfo();
-			
-			if ($this->isApiPath($pathInfo)) {
+			// Check Accept header
+			if ($this->acceptsJsonContentType($acceptHeader)) {
 				return true;
 			}
-			// Check for AJAX requests that might expect JSON
-			// Additional check: if it's AJAX and Accept header prefers JSON to HTML
-			return
-				$request->isXmlHttpRequest() &&
-				str_contains($acceptHeader, 'application/json') &&
-				strpos($acceptHeader, 'application/json') < strpos($acceptHeader, 'text/html');
+			
+			// Check URL patterns
+			if ($this->isApiPath($request->getPathInfo())) {
+				return true;
+			}
+			
+			// Check AJAX call
+			if ($request->isXmlHttpRequest()) {
+				return str_contains($acceptHeader, 'application/json');
+			}
+			
+			// We do not except JSON
+			return false;
 		}
 		
 		/**
@@ -358,14 +374,15 @@
 						$errors[$fullFieldName] = $fieldErrors; // Flattened key instead of nested array
 					}
 					
-					// Move to next field
+					// Move to the next field
 					continue;
 				}
 				
 				// Recursively validate the nested fields
 				// Pass the current full field name as the new prefix to build proper dot notation
 				// e.g., if we're validating 'customer' and now validating 'name', prefix becomes 'customer'
-				$this->validateFields($validators, $fieldValue, $errors, $request, $fullFieldName);
+				$nestedData = is_array($fieldValue) ? $fieldValue : [];
+				$this->validateFields($validators, $nestedData, $errors, $request, $fullFieldName);
 			}
 		}
 		
@@ -375,19 +392,37 @@
 		 * @return bool True if it's a nested field structure, false if it's validators
 		 */
 		private function isNestedFieldStructure(array $validators): bool {
-			// If the array is empty, it's not a nested structure
+			// Empty arrays are treated as validator arrays (safer default)
 			if (empty($validators)) {
 				return false;
 			}
 			
-			// Check if all keys are strings (field names) and none are numeric indices
+			// Strategy: Look for ANY ValidationInterface objects in the structure
+			// If we find any, it's a validator array. If we find none, it's nested fields.
 			foreach ($validators as $value) {
-				// If the value is an object that implements ValidationInterface, this is a validator array
+				// Case 1: Direct validator object
+				// Example: ['email' => EmailValidator]
 				if ($value instanceof ValidationInterface) {
-					return false;
+					return false; // Found a validator, so this is a validator array
 				}
+				
+				// Case 2: Array that might contain validators
+				// Example: ['email' => [EmailValidator, RequiredValidator]]
+				if (is_array($value)) {
+					// Check each item in the sub-array
+					foreach ($value as $item) {
+						if ($item instanceof ValidationInterface) {
+							return false; // Found a validator in sub-array, so this is a validator array
+						}
+					}
+				}
+				
+				// Case 3: Other types (strings, objects, etc.) are ignored
+				// They don't help us determine the structure type
 			}
 			
+			// No ValidationInterface objects found anywhere in the structure
+			// This means it's a nested field structure containing only field definitions
 			return true;
 		}
 		
