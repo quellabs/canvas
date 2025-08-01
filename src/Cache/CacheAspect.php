@@ -54,6 +54,7 @@
 		 * @param string $namespace Cache group for namespacing
 		 * @param int $lockTimeout Lock timeout in seconds for cache operations
 		 * @param bool $gracefulFallback Whether to execute method if caching fails
+		 * @param array $__all__ Special 'magic' variable that receives all InterceptWith parameters from DI
 		 */
 		public function __construct(
 			Container $di = null,
