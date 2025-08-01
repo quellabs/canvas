@@ -59,6 +59,7 @@
 			string    $namespace = 'default',
 			int       $lockTimeout = 5,
 			bool      $gracefulFallback = true,
+			array     $__all__ = []
 		) {
 			$this->di = $di;
 			$this->key = $key;
