@@ -2,6 +2,7 @@
 	
 	namespace Quellabs\Canvas\Discover;
 	
+	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Canvas\Annotations\CacheContext;
 	use Quellabs\Contracts\Context\MethodContext;
 	use Quellabs\AnnotationReader\AnnotationReader;
@@ -9,7 +10,6 @@
 	use Quellabs\Contracts\Cache\CacheInterface;
 	use Quellabs\Contracts\DependencyInjection\Container;
 	use Quellabs\DependencyInjection\Provider\ServiceProvider;
-	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Support\ComposerUtils;
 	
 	/**
@@ -21,29 +21,23 @@
 	class CacheInterfaceProvider extends ServiceProvider {
 		
 		/**
-		 * The default cache key
+		 * The default cache namespace
 		 */
-		const string DEFAULT_NAMESPACE = "default";
+		private const string DEFAULT_NAMESPACE = "default";
 		
 		/**
-		 * Singleton instance of the cache implementation
-		 * @var CacheInterface[] $cache Holds the cached instance to ensure singleton behavior
+		 * Singleton instances of cache implementations
+		 * @var CacheInterface[] $cache Holds the cached instances to ensure singleton behavior
 		 */
 		private array $cache = [];
 		
-		/** @var AnnotationReader AnnotationReader */
+		/** @var AnnotationReader Used to read method annotations */
 		private AnnotationReader $annotationReader;
 		
 		/** @var Container Used for dependency injection */
 		private Container $dependencyInjector;
 		
-		/** @var string|null Project root folder */
-		private ?string $projectRoot;
-		
-		/** @var string Path to cache.php */
-		private string $pathToConfig;
-		
-		/** @var array Cache configuration */
+		/** @var array Cache configuration loaded from config file */
 		private array $cacheConfig;
 		
 		/**
@@ -57,9 +51,7 @@
 		) {
 			$this->dependencyInjector = $dependencyInjector;
 			$this->annotationReader = $annotationReader;
-			$this->projectRoot = ComposerUtils::getProjectRoot();
-			$this->pathToConfig = $this->projectRoot . DIRECTORY_SEPARATOR . "config" . DIRECTORY_SEPARATOR . "cache.php";
-			$this->cacheConfig = $this->getCacheConfig();
+			$this->cacheConfig = $this->loadCacheConfig();
 		}
 		
 		/**
@@ -76,109 +68,147 @@
 		 * Creates and returns the cache interface instance.
 		 * @param string $className The class name being requested (should be CacheInterface::class)
 		 * @param array $dependencies Dependencies for the class (unused since we return existing instance)
-		 * @param array $metadata Metadata as passed by Discover
-		 * @param MethodContext|null $methodContext
+		 * @param array $metadata Metadata as passed by Discover - may contain 'provider' key
+		 * @param MethodContext|null $methodContext Context about the method requesting the cache
 		 * @return CacheInterface The cache interface implementation
 		 * @throws AnnotationReaderException
 		 */
-		public function createInstance(string $className, array $dependencies, array $metadata, ?MethodContext $methodContext=null): CacheInterface {
-			// Default cache key
-			$namespace = self::DEFAULT_NAMESPACE;
+		public function createInstance(
+			string $className,
+			array $dependencies,
+			array $metadata,
+			?MethodContext $methodContext = null
+		): CacheInterface {
+			// Resolve the cache context from method annotations
+			$context = $this->resolveContext($methodContext);
 			
-			// Read the annotations of the class/method
-			$annotationContext = [];
-			$annotationContextHash = $namespace;
-
+			// Determine which cache provider to use based on metadata or annotations
+			$providerName = $metadata['provider'] ?? $context['driver'] ?? null;
+			$providerClass = $this->getProviderClass($providerName);
+			
+			// Create a unique cache key for this provider and context combination
+			$cacheKey = $providerClass . ':' . $context['hash'];
+			
+			// Return existing instance if already created (singleton pattern)
+			if (isset($this->cache[$cacheKey])) {
+				return $this->cache[$cacheKey];
+			}
+			
+			// Prepare constructor parameters for the cache implementation
+			$constructorParams = [
+				'namespace' => $context['namespace'],
+				'config'    => $this->getConnectionConfig($providerName),
+				...$context['params']
+			];
+			
+			// Create and store new cache instance
+			return $this->cache[$cacheKey] = $this->dependencyInjector->make($providerClass, $constructorParams);
+		}
+		
+		/**
+		 * Resolves cache context from method annotations.
+		 * @param MethodContext|null $methodContext The method context to analyze
+		 * @return array Contains namespace, params, and hash for caching
+		 * @throws AnnotationReaderException
+		 */
+		private function resolveContext(?MethodContext $methodContext): array {
+			$namespace = self::DEFAULT_NAMESPACE;
+			$params = [];
+			
+			// Check if we have method context to read annotations from
 			if ($methodContext !== null) {
+				// Read CacheContext annotations from the method
 				$annotations = $this->annotationReader->getMethodAnnotations(
 					$methodContext->getClassName(),
 					$methodContext->getMethodName(),
 					CacheContext::class
 				);
 				
+				// Extract parameters from the first annotation if it exists
 				if (!$annotations->isEmpty()) {
-					$annotationContext = $annotations[0]->getParameters();
-					$annotationContextHash .= ":" . md5(serialize($annotationContext));
-					$namespace = !empty($annotationContext['namespace']) ? $annotationContext['namespace'] : $namespace;
+					$params = $annotations[0]->getParameters();
+					$namespace = $params['namespace'] ?? $namespace;
 				}
 			}
 			
-			// Check which kind of cache we want to create
-			$providerClass = $this->getProviderClass( $metadata['provider'] ?? $annotationContext['driver'] ?? null);
-			
-			// Return existing instance if already created (singleton pattern)
-			if (isset($this->cache["{$providerClass}:{$annotationContextHash}"])) {
-				return $this->cache["{$providerClass}:{$annotationContextHash}"];
-			}
-			
-			// Create and store the FileCache instance, then return it
-			return $this->cache["{$providerClass}:{$annotationContextHash}"] = $this->dependencyInjector->make($providerClass, array_merge(
-				$annotationContext, [
-					'namespace' => $namespace
-				]
-			));
+			return [
+				'namespace' => $namespace,
+				'params'    => $params,
+				'driver'    => $params['driver'] ?? null,
+				'hash'      => $namespace . ':' . md5(serialize($params))
+			];
 		}
 		
 		/**
-		 * Fetches the configuration
-		 * @return array
-		 * @throws \RuntimeException
+		 * Loads cache configuration from the config file.
+		 * @return array The cache configuration array
+		 * @throws \RuntimeException If the configuration file exists but cannot be loaded
 		 */
-		private function getCacheConfig(): array {
-			// Check if the configuration file exists at the specified path
-			if (!file_exists($this->pathToConfig)) {
-				return [];
-			}
+		private function loadCacheConfig(): array {
+			$projectRoot = ComposerUtils::getProjectRoot();
+			$configPath = $projectRoot . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'cache.php';
 			
-			// Verify that the configuration file is readable
-			if (!is_readable($this->pathToConfig)) {
+			// Return empty config if the file doesn't exist or isn't readable
+			if (!is_readable($configPath)) {
 				return [];
 			}
 			
 			try {
 				// Include the PHP configuration file and return its contents
-				// This assumes the config file returns an array
-				return include $this->pathToConfig;
+				return include $configPath;
 			} catch (\Throwable $e) {
 				// Wrap any exception in a more specific RuntimeException
-				// This provides better error context for debugging
-				throw new \RuntimeException("Failed to load cache configuration: " . $e->getMessage(), $e->getCode(), $e);
+				throw new \RuntimeException("Failed to load cache configuration: " . $e->getMessage(), 0, $e);
 			}
 		}
 		
 		/**
-		 * Resolves and returns the cache provider class name based on configuration
+		 * Resolves and returns the cache provider class name based on configuration.
 		 * @param string|null $provider Specific provider name to use, or null for default
 		 * @return string The fully qualified class name of the cache provider
 		 * @throws \InvalidArgumentException When specified provider is not configured
 		 */
 		private function getProviderClass(?string $provider): string {
-			// Fetch the list of configured cache drivers from config
+			// Fetch the list of drivers
 			$drivers = $this->cacheConfig['drivers'] ?? [];
 			
-			// If a specific provider was requested, try to find it
-			if ($provider !== null) {
-				// Return the provider class if found, otherwise throw descriptive error
-				return $drivers[$provider] ?? throw new \InvalidArgumentException(
-					"Cache provider '{$provider}' is not configured. Available: " . implode(', ', array_keys($drivers))
+			// Use specific provider if requested, otherwise fall back to default
+			$targetProvider = $provider ?? $this->cacheConfig['default'] ?? null;
+			
+			// Return the provider class if it exists in drivers
+			if ($targetProvider && isset($drivers[$targetProvider]['class'])) {
+				return $drivers[$targetProvider]['class'];
+			}
+			
+			// Throw error if a specific provider was requested but not found
+			if ($targetProvider) {
+				$available = implode(', ', array_keys($drivers));
+				$type = $provider ? 'Cache provider' : 'Default cache provider';
+				
+				throw new \InvalidArgumentException(
+					"{$type} '{$targetProvider}' not found. Available providers: {$available}"
 				);
 			}
 			
-			// No specific provider requested, so use the configured default
-			$default = $this->cacheConfig['default'] ?? null;
-			
-			// If default is set, validate it exists in drivers
-			if ($default !== null) {
-				if (!isset($drivers[$default])) {
-					throw new \InvalidArgumentException(
-						"Default cache provider '{$default}' is not configured. Available: " . implode(', ', array_keys($drivers))
-					);
-				}
-				
-				return $drivers[$default];
+			// Final fallback when no configuration exists
+			return FileCache::class;
+		}
+		
+		/**
+		 * Gets connection configuration for a specific cache provider.
+		 * @param string|null $providerName The provider name (e.g., 'redis', 'memcached')
+		 * @return array Connection configuration array (empty if not found)
+		 */
+		private function getConnectionConfig(?string $providerName): array {
+			// If no provider name, try to get config for the default provider
+			if ($providerName === null) {
+				$providerName = $this->cacheConfig['default'] ?? null;
 			}
 			
-			// Final fallback: use FileCache when no default is configured
-			return FileCache::class;
+			// Get connection configuration from the connections section
+			$connections = $this->cacheConfig['drivers'] ?? [];
+			
+			// Return the connection
+			return $connections[$providerName] ?? [];
 		}
 	}
