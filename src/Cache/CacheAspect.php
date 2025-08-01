@@ -25,6 +25,12 @@
 	 */
 	class CacheAspect implements AroundAspect {
 		
+		/** @var Container|null Dependency Injector */
+		private ?Container $di;
+		
+		/** @var string|null The driver we want to use (file, memcached, redis) */
+		private ?string $driver;
+		
 		/** @var string|null Cache key template */
 		private ?string $key;
 		
@@ -34,14 +40,8 @@
 		/** @var int Time to live in seconds */
 		private int $ttl;
 		
-		/** @var int Lock timeout for cache operations */
-		private int $lockTimeout;
-		
 		/** @var bool Whether to gracefully handle cache failures */
 		private bool $gracefulFallback;
-		
-		/** @var Container|null Dependency Injector */
-		private ?Container $di;
 		
 		/** @var array All passed parameters from the InterceptWith */
 		private array $allParameters;
@@ -49,28 +49,28 @@
 		/**
 		 * CacheAspect constructor
 		 * @param Container|null $di Dependency Injector
+		 * @param string|null $driver The driver we want to use (file, memcached, redis)
 		 * @param string|null $key Cache key template (null = auto-generate from method context)
 		 * @param int $ttl Time to live in seconds (0 = never expires)
 		 * @param string $namespace Cache group for namespacing
-		 * @param int $lockTimeout Lock timeout in seconds for cache operations
 		 * @param bool $gracefulFallback Whether to execute method if caching fails
 		 * @param array $__all__ Special 'magic' variable that receives all InterceptWith parameters from DI
 		 */
 		public function __construct(
 			Container $di = null,
+			?string   $driver = null,
 			?string   $key = null,
 			int       $ttl = 3600,
 			string    $namespace = 'default',
-			int       $lockTimeout = 5,
 			bool      $gracefulFallback = true,
 			array     $__all__ = []
 		) {
 			$this->allParameters = $__all__;
 			$this->di = $di;
+			$this->driver = $driver;
 			$this->key = $key;
 			$this->ttl = max(0, $ttl); // Ensure non-negative TTL
 			$this->namespace = $namespace;
-			$this->lockTimeout = max(1, $lockTimeout); // Ensure positive timeout
 			$this->gracefulFallback = $gracefulFallback;
 		}
 		
@@ -85,9 +85,9 @@
 			try {
 				// Initialize cache with concurrency protection
 				$cache = $this->di->get(CacheInterface::class, [
-					'namespace'   => $this->namespace,
-					'lockTimeout' => $this->lockTimeout,
-					'config'      => $this->allParameters
+					'driver'    => $this->driver,
+					'namespace' => $this->namespace,
+					'config'    => $this->allParameters
 				]);
 				
 				// Resolve a dynamic cache key
