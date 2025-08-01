@@ -80,7 +80,7 @@
 			?MethodContext $methodContext = null
 		): CacheInterface {
 			// Resolve the cache context from method annotations
-			$context = $this->resolveContext($methodContext);
+			$context = $this->resolveContext($methodContext, $dependencies);
 			
 			// Determine which cache provider to use based on metadata or annotations
 			$providerName = $metadata['provider'] ?? $context['driver'] ?? null;
@@ -93,11 +93,17 @@
 			if (isset($this->cache[$cacheKey])) {
 				return $this->cache[$cacheKey];
 			}
+
+			// Gather parameters from all sources: MethodContext, InterceptWith and config/cache.php
+			$userConfig = $dependencies['config'] ?? [];
+			
+			$totalConfig = array_merge(
+				$this->getConnectionConfig($providerName),
+				$context['params'],
+				$userConfig
+			);
 			
 			// Prepare constructor parameters for the cache implementation
-			$userConfig = $dependencies['config'] ?? [];
-			$totalConfig = array_merge($this->getConnectionConfig($providerName), $userConfig);
-			
 			$constructorParams = [
 				'namespace' => $context['namespace'],
 				'config'    => $totalConfig,
@@ -114,9 +120,14 @@
 		 * @return array Contains namespace, params, and hash for caching
 		 * @throws AnnotationReaderException
 		 */
-		private function resolveContext(?MethodContext $methodContext): array {
+		private function resolveContext(?MethodContext $methodContext, array $dependencies): array {
+			$params = $dependencies;
 			$namespace = self::DEFAULT_NAMESPACE;
-			$params = [];
+			
+			// Check if namespace is passed in the dependencies
+			if (!empty($dependencies['namespace'])) {
+				$namespace = $dependencies['namespace'];
+			}
 			
 			// Check if we have method context to read annotations from
 			if ($methodContext !== null) {
