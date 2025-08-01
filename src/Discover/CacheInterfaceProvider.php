@@ -95,9 +95,12 @@
 			}
 			
 			// Prepare constructor parameters for the cache implementation
+			$userConfig = $dependencies['config'] ?? [];
+			$totalConfig = array_merge($this->getConnectionConfig($providerName), $userConfig);
+			
 			$constructorParams = [
 				'namespace' => $context['namespace'],
-				'config'    => $this->getConnectionConfig($providerName),
+				'config'    => $totalConfig,
 				...$context['params']
 			];
 			
