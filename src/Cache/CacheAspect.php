@@ -5,6 +5,8 @@
 	use Quellabs\Cache\FileCache;
 	use Quellabs\Contracts\AOP\AroundAspect;
 	use Quellabs\Contracts\AOP\MethodContext;
+	use Quellabs\Contracts\Cache\CacheInterface;
+	use Quellabs\DependencyInjection\Container;
 	
 	/**
 	 * Caches the return value of controller methods using configurable cache keys and TTL.
@@ -39,8 +41,12 @@
 		/** @var bool Whether to gracefully handle cache failures */
 		private bool $gracefulFallback;
 		
+		/** @var Container|null Dependency Injector */
+		private ?Container $di;
+		
 		/**
 		 * Constructor
+		 * @param Container|null $di Dependency Injector
 		 * @param string|null $key Cache key template (null = auto-generate from method context)
 		 * @param int $ttl Time to live in seconds (0 = never expires)
 		 * @param string $namespace Cache group for namespacing
@@ -48,12 +54,14 @@
 		 * @param bool $gracefulFallback Whether to execute method if caching fails
 		 */
 		public function __construct(
-			?string          $key = null,
-			int              $ttl = 3600,
-			string           $namespace = 'default',
-			int              $lockTimeout = 5,
-			bool             $gracefulFallback = true
+			Container $di = null,
+			?string   $key = null,
+			int       $ttl = 3600,
+			string    $namespace = 'default',
+			int       $lockTimeout = 5,
+			bool      $gracefulFallback = true,
 		) {
+			$this->di = $di;
 			$this->key = $key;
 			$this->ttl = max(0, $ttl); // Ensure non-negative TTL
 			$this->namespace = $namespace;
@@ -63,17 +71,6 @@
 		
 		/**
 		 * Cache the method execution result
-		 *
-		 * This method implements the around advice pattern:
-		 * 1. Resolve the cache key from method context and arguments
-		 * 2. Check cache for existing result
-		 * 3. Execute the original method in case of cache miss
-		 * 4. Store result in cache for future requests
-		 * 5. Return cached or computed result
-		 *
-		 * If caching operations fail and gracefulFallback is enabled,
-		 * the original method will still be executed to ensure functionality.
-		 *
 		 * @param MethodContext $context Method execution context
 		 * @param callable $proceed Callback to execute the original method
 		 * @return mixed Cached or computed result
@@ -82,7 +79,10 @@
 		public function around(MethodContext $context, callable $proceed): mixed {
 			try {
 				// Initialize cache with concurrency protection
-				$cache = new FileCache($this->namespace, $this->lockTimeout);
+				$cache = $this->di->make(CacheInterface::class, [
+					'namespace'   => $this->namespace,
+					'lockTimeout' => $this->lockTimeout
+				]);
 				
 				// Resolve a dynamic cache key
 				$cacheKey = $this->resolveCacheKey($context);
