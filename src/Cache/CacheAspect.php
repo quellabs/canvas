@@ -43,8 +43,11 @@
 		/** @var Container|null Dependency Injector */
 		private ?Container $di;
 		
+		/** @var array All passed parameters from the InterceptWith */
+		private array $allParameters;
+		
 		/**
-		 * Constructor
+		 * CacheAspect constructor
 		 * @param Container|null $di Dependency Injector
 		 * @param string|null $key Cache key template (null = auto-generate from method context)
 		 * @param int $ttl Time to live in seconds (0 = never expires)
@@ -61,6 +64,7 @@
 			bool      $gracefulFallback = true,
 			array     $__all__ = []
 		) {
+			$this->allParameters = $__all__;
 			$this->di = $di;
 			$this->key = $key;
 			$this->ttl = max(0, $ttl); // Ensure non-negative TTL
@@ -81,7 +85,8 @@
 				// Initialize cache with concurrency protection
 				$cache = $this->di->get(CacheInterface::class, [
 					'namespace'   => $this->namespace,
-					'lockTimeout' => $this->lockTimeout
+					'lockTimeout' => $this->lockTimeout,
+					'config'      => $this->allParameters
 				]);
 				
 				// Resolve a dynamic cache key
@@ -114,10 +119,10 @@
 		 */
 		private function resolveCacheKey(MethodContext $context): string {
 			// Generate key from method context if not provided
-			if ($this->key === null) {
-				$methodKey = $this->generateMethodKey($context);
-			} else {
+			if ($this->key !== null) {
 				$methodKey = $this->key;
+			} else {
+				$methodKey = $this->generateMethodKey($context);
 			}
 			
 			// Use method arguments for cache differentiation
