@@ -2,7 +2,6 @@
 	
 	namespace Quellabs\Canvas\Cache;
 	
-	use Quellabs\Cache\FileCache;
 	use Quellabs\Contracts\AOP\AroundAspect;
 	use Quellabs\Contracts\AOP\MethodContext;
 	use Quellabs\Contracts\Cache\CacheInterface;
@@ -79,7 +78,7 @@
 		public function around(MethodContext $context, callable $proceed): mixed {
 			try {
 				// Initialize cache with concurrency protection
-				$cache = $this->di->make(CacheInterface::class, [
+				$cache = $this->di->get(CacheInterface::class, [
 					'namespace'   => $this->namespace,
 					'lockTimeout' => $this->lockTimeout
 				]);
@@ -95,6 +94,9 @@
 			} catch (\Exception $e) {
 				// Handle cache failure based on configuration
 				if ($this->gracefulFallback) {
+					// Log the error
+					error_log($e->getMessage());
+					
 					// Execute original method without caching
 					return $proceed();
 				}
