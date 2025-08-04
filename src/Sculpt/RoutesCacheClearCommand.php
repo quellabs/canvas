@@ -36,7 +36,9 @@
 			$cacheDirectory = $providerConfig['cache_dir'] ?? ComposerUtils::getProjectRoot();
 			
 			// Remove the cache file
-			@unlink($cacheDirectory . "/storage/cache/routes.serialized");
+			if (file_exists($cacheDirectory . "/storage/cache/routes.serialized")) {
+				@unlink($cacheDirectory . "/storage/cache/routes.serialized");
+			}
 			
 			// Show message
 			$this->output->success("Routes cache cleared");
