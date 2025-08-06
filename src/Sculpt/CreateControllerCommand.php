@@ -132,7 +132,7 @@
 	
 	    /**
 	     * Display the main %s view
-	     * @Route(\"//%s\", methods={\"GET\"})
+	     * @Route(\"%s\", methods={\"GET\"})
 	     * @return Response
 	     */
 	    public function index(): Response {
