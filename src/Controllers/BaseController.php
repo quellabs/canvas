@@ -79,9 +79,9 @@
 		 * Returns JSON data
 		 * @param array $data
 		 * @param int $statusCode The http status code to return
-		 * @return Response
+		 * @return JsonResponse
 		 */
-		protected function json(array $data, int $statusCode=Response::HTTP_OK): Response {
+		protected function json(array $data, int $statusCode=Response::HTTP_OK): JsonResponse {
 			return new JsonResponse($data, $statusCode);
 		}
 		
