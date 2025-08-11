@@ -77,11 +77,15 @@
 		
 		/**
 		 * Returns JSON data
-		 * @param array $data
+		 * @param array|\JsonSerializable $data
 		 * @param int $statusCode The http status code to return
 		 * @return JsonResponse
 		 */
-		protected function json(array $data, int $statusCode=Response::HTTP_OK): JsonResponse {
+		protected function json(array|\JsonSerializable $data, int $statusCode = Response::HTTP_OK): JsonResponse {
+			if ($data instanceof \JsonSerializable) {
+				return new JsonResponse($data->jsonSerialize(), $statusCode);
+			}
+			
 			return new JsonResponse($data, $statusCode);
 		}
 		
