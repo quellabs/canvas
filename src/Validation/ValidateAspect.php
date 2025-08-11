@@ -454,7 +454,7 @@
 				
 				// Run the validation check
 				try {
-					if (!$validator->validate($fieldValue, $request)) {
+					if (!$validator->validate($fieldValue)) {
 						$errors[] = $this->replaceVariablesInErrorString(
 							$validator->getError(),
 							[

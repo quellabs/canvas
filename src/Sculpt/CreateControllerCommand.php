@@ -31,20 +31,19 @@
 		
 		/**
 		 * Show help information for publishers
-		 * @param array $providers Array of discovered publisher providers
-		 * @param string|null $publisher Optional publisher to show specific help for
-		 * @return int Exit code (0 = success, 1 = error)
+		 * @return string
 		 */
-		private function showHelp(array $providers, ?string $publisher = null): int {
-			$this->output->writeLn("Usage: make:controller [controller-name]");
-			$this->output->writeLn("");
-			$this->output->writeLn("Creates a new controller class in the App\\Controllers namespace.");
-			$this->output->writeLn("");
-			$this->output->writeLn("Arguments:");
-			$this->output->writeLn("  controller-name    Name of the controller to create (without 'Controller' suffix)");
-			$this->output->writeLn("");
-			$this->output->writeLn("If no controller name is provided, you will be prompted to enter one.");
-			return 0;
+		public function getHelp(): string {
+			return <<<HELPX
+Usage: make:controller [controller-name]
+
+Creates a new controller class in the App\\Controllers namespace.
+
+Arguments:
+  controller-name    Name of the controller to create (without 'Controller' suffix)");
+
+If no controller name is provided, you will be prompted to enter one.
+HELPX;
 		}
 		
 		/**
