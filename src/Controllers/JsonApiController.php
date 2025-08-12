@@ -2,12 +2,13 @@
 	
 	namespace Quellabs\Canvas\Controllers;
 	
-	use Symfony\Component\HttpFoundation\JsonResponse;
-	use Symfony\Component\HttpFoundation\Request;
-	use Quellabs\Contracts\Templates\TemplateEngineInterface;
-	use Quellabs\ObjectQuel\EntityManager;
+	use Quellabs\DependencyInjection\Container;
+	use Quellabs\ObjectQuel\ObjectQuel\QuelException;
+	use Quellabs\ObjectQuel\OrmException;
 	use Quellabs\ObjectQuel\ReflectionManagement\PropertyHandler;
 	use Quellabs\ObjectQuel\Serialization\Serializers\JsonApiSerializer;
+	use Symfony\Component\HttpFoundation\JsonResponse;
+	use Symfony\Component\HttpFoundation\Request;
 	
 	/**
 	 * Abstract base controller for JSON:API compliant endpoints
@@ -29,18 +30,16 @@
 		
 		/**
 		 * Constructor - initializes the controller with required dependencies
-		 * @param TemplateEngineInterface $templateEngine Template engine for rendering views
-		 * @param EntityManager $entityManager ORM entity manager for database operations
+		 * @param Container $container Dependency injector
 		 * @param PropertyHandler $propertyHandler Handler for dynamic property access
 		 */
 		public function __construct(
-			TemplateEngineInterface $templateEngine,
-			EntityManager           $entityManager,
-			PropertyHandler         $propertyHandler
+			Container       $container,
+			PropertyHandler $propertyHandler
 		) {
-			parent::__construct($templateEngine, $entityManager);
+			parent::__construct($container);
 			$this->propertyHandler = $propertyHandler;
-			$this->serializer = new JsonApiSerializer($this->em);
+			$this->serializer = new JsonApiSerializer($this->em());
 		}
 		
 		/**
@@ -53,27 +52,22 @@
 		
 		/**
 		 * Get the JSON:API resource type identifier for this controller
-		 *
-		 * This should return the resource type as defined in the JSON:API specification
-		 * (e.g., "users", "articles", "comments"). This type appears in the JSON:API
-		 * response structure and must match the type sent in requests.
-		 *
 		 * @return string The JSON:API resource type identifier
 		 */
 		abstract protected function getResourceType(): string;
 		
 		/**
 		 * Generic GET method for retrieving a single resource by ID
-		 *
-		 * Handles GET /resource/{id} requests according to JSON:API specification.
-		 * Returns a 404 error if the resource is not found.
-		 *
 		 * @param int $id The unique identifier of the resource to retrieve
 		 * @return JsonResponse JSON:API formatted response containing the resource or error
+		 * @throws QuelException
 		 */
 		protected function getResource(int $id): JsonResponse {
+			// Fetch entity manager
+			$em = $this->em();
+
 			// Attempt to find the entity by ID using the entity manager
-			$entity = $this->em->find($this->getEntityClass(), $id);
+			$entity = $em->find($this->getEntityClass(), $id);
 			
 			// Return 404 if entity doesn't exist
 			if (!$entity) {
@@ -86,20 +80,20 @@
 		
 		/**
 		 * Generic POST method for creating a new resource
-		 *
-		 * Handles POST /resource requests according to JSON:API specification.
-		 * Validates the request structure, creates a new entity, maps the provided
-		 * attributes, persists it to the database, and returns the created resource.
-		 *
 		 * @param Request $request The HTTP request containing JSON:API formatted data
 		 * @return JsonResponse JSON:API formatted response with created resource or errors
+		 * @throws OrmException
 		 */
 		protected function createResource(Request $request): JsonResponse {
+			// Fetch entity manager
+			$em = $this->em();
+			
 			// Parse the JSON request body
 			$data = json_decode($request->getContent(), true);
 			
 			// Validate that the request follows JSON:API structure requirements
 			$validationResponse = $this->validateJsonApiStructure($data);
+			
 			if ($validationResponse) {
 				return $validationResponse;
 			}
@@ -111,12 +105,19 @@
 			// Extract attributes from the JSON:API request structure
 			$attributes = $data["data"]["attributes"] ?? [];
 			
+			// Validate attributes before creating/updating
+			$validationResponse = $this->validateAttributes($entity, $attributes);
+			
+			if ($validationResponse) {
+				return $validationResponse;
+			}
+			
 			// Map the provided attributes to the entity properties
 			$this->mapAttributesToEntity($entity, $attributes);
 			
 			// Persist the new entity to the database
-			$this->em->persist($entity);
-			$this->em->flush();
+			$em->persist($entity);
+			$em->flush();
 			
 			// Return the created resource with 201 status code
 			$serializedData = $this->serializer->serialize($entity);
@@ -128,10 +129,14 @@
 		 * @param int $id The unique identifier of the resource to update
 		 * @param Request $request The HTTP request containing JSON:API formatted update data
 		 * @return JsonResponse JSON:API formatted response with updated resource or errors
+		 * @throws OrmException|QuelException
 		 */
 		protected function updateResource(int $id, Request $request): JsonResponse {
+			// Fetch entity manager
+			$em = $this->em();
+
 			// Find the existing entity by ID
-			$entity = $this->em->find($this->getEntityClass(), $id);
+			$entity = $em->find($this->getEntityClass(), $id);
 			
 			// Return 404 if entity doesn't exist
 			if (!$entity) {
@@ -143,6 +148,7 @@
 			
 			// Validate that the request follows JSON:API structure requirements
 			$validationResponse = $this->validateJsonApiStructure($data);
+			
 			if ($validationResponse) {
 				return $validationResponse;
 			}
@@ -152,12 +158,21 @@
 				return $this->createIdMismatchResponse();
 			}
 			
-			// Extract and apply the attribute updates to the entity
+			// Extract attributes from the JSON:API request structure
 			$attributes = $data["data"]["attributes"] ?? [];
+
+			// Validate attributes before creating/updating
+			$validationResponse = $this->validateAttributes($entity, $attributes);
+			
+			if ($validationResponse) {
+				return $validationResponse;
+			}
+			
+			// Map the provided attributes to the entity properties
 			$this->mapAttributesToEntity($entity, $attributes);
 			
 			// Save the changes to the database
-			$this->em->flush();
+			$em->flush();
 			
 			// Return the updated resource
 			$serializedData = $this->serializer->serialize($entity);
@@ -168,10 +183,14 @@
 		 * Generic DELETE method for removing a resource
 		 * @param int $id The unique identifier of the resource to delete
 		 * @return JsonResponse Empty response with 204 status code or 404 error
+		 * @throws OrmException|QuelException
 		 */
 		protected function deleteResource(int $id): JsonResponse {
+			// Fetch entity manager
+			$em = $this->em();
+
 			// Find the entity to delete
-			$entity = $this->em->find($this->getEntityClass(), $id);
+			$entity = $em->find($this->getEntityClass(), $id);
 			
 			// Return 404 if entity doesn't exist
 			if (!$entity) {
@@ -179,8 +198,8 @@
 			}
 			
 			// Remove the entity from the database
-			$this->em->remove($entity);
-			$this->em->flush();
+			$em->remove($entity);
+			$em->flush();
 			
 			// Return 204 No Content as per JSON:API specification for successful deletion
 			return new JsonResponse(null, 204);
@@ -215,6 +234,39 @@
 			}
 			
 			// Return null if validation passes
+			return null;
+		}
+		
+		/**
+		 * Validate that all provided attributes can be mapped to entity properties
+		 * @param object $entity The entity instance to validate against
+		 * @param array $attributes Associative array of attribute name => value pairs
+		 * @return JsonResponse|null Error response if validation fails, null if valid
+		 */
+		protected function validateAttributes(object $entity, array $attributes): ?JsonResponse {
+			$unknownAttributes = [];
+			
+			foreach ($attributes as $key => $value) {
+				$setterMethod = 'set' . ucfirst($key);
+				
+				if (
+					!method_exists($entity, $setterMethod) &&
+					!$this->propertyHandler->exists($entity, $key)) {
+					$unknownAttributes[] = $key;
+				}
+			}
+			
+			if (!empty($unknownAttributes)) {
+				return $this->json([
+					"errors" => [[
+						"status" => "422",
+						"title"  => "Invalid attributes",
+						"detail" => "Unknown attributes: " . implode(', ', $unknownAttributes),
+						"source" => ["pointer" => "/data/attributes"]
+					]]
+				], 422);
+			}
+			
 			return null;
 		}
 		
