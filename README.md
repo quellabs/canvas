@@ -73,7 +73,7 @@ class BlogController extends BaseController {
      * @Route("/posts")
      */
     public function list() {
-        $posts = $this->em->findBy(Post::class, ['published' => true]);
+        $posts = $this->em()->findBy(Post::class, ['published' => true]);
         return $this->render('posts.tpl', $posts);
     }
 
@@ -81,7 +81,7 @@ class BlogController extends BaseController {
      * @Route("/posts/{id:int}")
      */
     public function show(int $id) {
-        $post = $this->em->find(Post::class, $id);
+        $post = $this->em()->find(Post::class, $id);
         return $this->render('post.tpl', $post);
     }
 }
@@ -95,11 +95,11 @@ ObjectQuel lets you query data using syntax that feels natural to PHP developers
 
 ```php
 // Find by primary key - fastest lookup method
-$user = $this->em->find(User::class, $id);
+$user = $this->em()->find(User::class, $id);
 
 // Simple filtering using findBy - perfect for basic criteria
-$activeUsers = $this->em->findBy(User::class, ['active' => true]);
-$recentPosts = $this->em->findBy(Post::class, ['published' => true]);
+$activeUsers = $this->em()->findBy(User::class, ['active' => true]);
+$recentPosts = $this->em()->findBy(Post::class, ['published' => true]);
 ```
 
 #### Advanced ObjectQuel Queries
@@ -108,14 +108,14 @@ For complex queries, ObjectQuel provides a natural language syntax:
 
 ```php
 // Basic ObjectQuel query
-$results = $this->em->executeQuery("
+$results = $this->em()->executeQuery("
     range of p is App\\Entity\\Post
     retrieve (p) where p.published = true
     sort by p.publishedAt desc
 ");
 
 // Queries with relationships and parameters
-$techPosts = $this->em->executeQuery("
+$techPosts = $this->em()->executeQuery("
     range of p is App\\Entity\\Post
     range of u is App\\Entity\\User via p.authorId
     retrieve (p, u.name) where p.title = /^Tech/i
@@ -218,14 +218,14 @@ class ApiController extends BaseController {
      * @Route("/users")  // Actual route: /api/v1/users
      */
     public function users() {
-        return $this->json($this->em->findBy(User::class, []));
+        return $this->json($this->em()->findBy(User::class, []));
     }
     
     /**
      * @Route("/users/{id:int}")  // Actual route: /api/v1/users/{id}
      */
     public function user(int $id) {
-        $user = $this->em->find(User::class, $id);
+        $user = $this->em()->find(User::class, $id);
         return $this->json($user);
     }
 }
@@ -292,8 +292,8 @@ class UserController extends BaseController {
                 $user->setEmail($request->request->get('email'));
                 $user->setPassword(password_hash($request->request->get('password'), PASSWORD_DEFAULT));
                 
-                $this->em->persist($user);
-                $this->em->flush();
+                $this->em()->persist($user);
+                $this->em()->flush();
                 
                 return $this->redirect('/users');
             }
@@ -472,8 +472,8 @@ class UserController extends BaseController {
             $user->setEmail($email);
             $user->setBio($bio);
             
-            $this->em->persist($user);
-            $this->em->flush();
+            $this->em()->persist($user);
+            $this->em()->flush();
             
             return $this->redirect('/users');
         }
@@ -1698,7 +1698,7 @@ class UserController extends BaseController {
      */
     public function index() {
         // Gets: RequireAuth + AuditLog (inherited) + Cache (method-level)
-        return $this->em->findBy(User::class, ['active' => true]);
+        return $this->em()->findBy(User::class, ['active' => true]);
     }
 }
 ```
@@ -1715,7 +1715,7 @@ class BlogController extends BaseController {
      */
     public function list() {
         // Method gets caching and rate limiting
-        return $this->em->findBy(Post::class, ['published' => true]);
+        return $this->em()->findBy(Post::class, ['published' => true]);
     }
 }
 ```
@@ -1780,7 +1780,7 @@ class UserController extends AdminController {
      */
     public function manage() {
         // Automatically inherits: RequireAuth + AuditLog + RequireAdmin + RateLimit
-        return $this->em->findBy(User::class, []);
+        return $this->em()->findBy(User::class, []);
     }
 }
 ```
