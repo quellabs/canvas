@@ -1,5 +1,24 @@
 <?php
 	
+	/*
+	 * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+	 * ║                                                                                      ║
+	 * ║     ██████╗ █████╗ ███╗   ██╗██╗   ██╗ █████╗ ███████╗                              ║
+	 * ║    ██╔════╝██╔══██╗████╗  ██║██║   ██║██╔══██╗██╔════╝                              ║
+	 * ║    ██║     ███████║██╔██╗ ██║██║   ██║███████║███████╗                              ║
+	 * ║    ██║     ██╔══██║██║╚██╗██║╚██╗ ██╔╝██╔══██║╚════██║                              ║
+	 * ║    ╚██████╗██║  ██║██║ ╚████║ ╚████╔╝ ██║  ██║███████║                              ║
+	 * ║     ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝  ╚═══╝  ╚═╝  ╚═╝╚══════╝                              ║
+	 * ║                                                                                      ║
+	 * ║  Canvas - A lightweight, modern PHP framework built for real-world projects          ║
+	 * ║                                                                                      ║
+	 * ║  Drop into existing PHP projects without rewriting routes or structure. Features    ║
+	 * ║  annotation-based routing, contextual dependency injection, ObjectQuel ORM, and     ║
+	 * ║  aspect-oriented programming. No magic, no bloat — just the tools you need.         ║
+	 * ║                                                                                      ║
+	 * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+	 */
+	
 	namespace Quellabs\Canvas;
 	
 	use Quellabs\AnnotationReader\AnnotationReader;
