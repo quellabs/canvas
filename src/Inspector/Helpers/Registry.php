@@ -41,7 +41,7 @@
 			if (empty($config->get('panels', []))) {
 				$this->initializeDefaultPanels();
 			} else {
-				$this->initializePanels($config);
+				$this->initializePanels($config->get('panels', []));
 			}
 		}
 		
@@ -120,11 +120,11 @@
 		
 		/**
 		 * Initialize panels based on configuration
-		 * @param Configuration $config Array where key = panel name, value = class name
+		 * @param array $panels $config Array where key = panel name, value = class name
 		 * @return void
 		 */
-		private function initializePanels(ConfigurationInterface $config): void {
-			foreach ($config as $panelName => $className) {
+		private function initializePanels(array $panels): void {
+			foreach ($panels as $panelName => $className) {
 				try {
 					// Validate that the class exists
 					if (!class_exists($className)) {

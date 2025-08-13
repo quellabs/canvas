@@ -96,15 +96,6 @@
 		}
 		
 		/**
-		 * Returns the Service Discovery object
-		 * This also provides PSR-4 utilities
-		 * @return Discover
-		 */
-		public function getDiscover(): Discover {
-			return $this->discover;
-		}
-		
-		/**
 		 * Returns the AnnotationReader object
 		 * @return AnnotationReader
 		 */
