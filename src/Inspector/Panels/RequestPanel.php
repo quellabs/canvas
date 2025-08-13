@@ -4,6 +4,7 @@
 	
 	use Quellabs\Canvas\Inspector\EventCollector;
 	use Quellabs\Canvas\Inspector\Helpers\RequestExtractor;
+	use Quellabs\Contracts\Inspector\EventCollectorInterface;
 	use Quellabs\Contracts\Inspector\InspectorPanelInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	
@@ -31,7 +32,7 @@
 		 *
 		 * @param EventCollector $collector The event collector instance
 		 */
-		public function __construct(EventCollector $collector) {
+		public function __construct(EventCollectorInterface $collector) {
 			$this->collector = $collector;
 		}
 		
