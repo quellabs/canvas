@@ -113,10 +113,9 @@
 		 *
 		 * @param Request $request The HTTP request object
 		 * @return array Array of matched route objects, empty if no matches found
-		 * @throws AnnotationReaderException
 		 */
 		public function resolveAll(Request $request): array {
-			$requestUrl = $this->parseRequestUrl($request->getRequestUri());
+			$requestUrl = $this->parseRequestUrl($request->getPathInfo());
 			$routeIndex = $this->getRouteIndex();
 			
 			$candidates = $this->indexBuilder->getFilteredCandidates(

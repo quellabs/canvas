@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Inspector\Panels;
 	
 	use Quellabs\Canvas\Inspector\EventCollector;
+	use Quellabs\Contracts\Inspector\EventCollectorInterface;
 	use Quellabs\Contracts\Inspector\InspectorPanelInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	
@@ -27,7 +28,7 @@
 		 * Initialize the QueryPanel with a debug event collector.
 		 * @param EventCollector $collector The event collector instance
 		 */
-		public function __construct(EventCollector $collector) {
+		public function __construct(EventCollectorInterface $collector) {
 			$this->collector = $collector;
 		}
 		

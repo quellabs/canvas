@@ -216,6 +216,7 @@
 			float           $start,
 			int             $memoryStart
 		): void {
+			// Do nothing when the debug collector is not activated
 			if (!$debugCollector) {
 				return;
 			}
@@ -234,7 +235,7 @@
 				'http_methods'      => $urlData['http_methods'] ?? null,
 				'controller'        => $urlData['controller'] ?? null,
 				'method'            => $urlData['method'] ?? null,
-				'pattern' => $pattern,
+				'pattern'           => $pattern,
 				'parameters'        => $urlData['variables'] ?? null,
 				'execution_time_ms' => (microtime(true) - $start) * 1000,
 				'memory_used_bytes' => memory_get_usage(true) - $memoryStart

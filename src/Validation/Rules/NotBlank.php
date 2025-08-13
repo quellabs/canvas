@@ -5,8 +5,6 @@
 	use Quellabs\Canvas\Validation\Foundation\RulesBase;
 	
 	/**
-	 * NotBlank validation rule class
-	 *
 	 * Validates that a value is not blank (contains non-whitespace characters).
 	 * This rule trims whitespace from the value and ensures the resulting string
 	 * has a length greater than 0.
@@ -19,6 +17,11 @@
 		 * @return bool True if the value is not blank, false otherwise
 		 */
 		public function validate(mixed $value): bool {
+			// If the value is not present, the check fails
+			if ($value === null) {
+				return false;
+			}
+			
 			// Trim whitespace and check if the resulting string has content
 			return strlen(trim($value)) > 0;
 		}

@@ -21,27 +21,19 @@
 	class Registry {
 		
 		/**
-		 * @var EventCollector Collects all debug events during request processing
-		 */
-		private EventCollector $eventCollector;
-		
-		/**
 		 * @var InspectorPanelInterface[] Array of registered panels indexed by name
 		 */
 		private array $panels = [];
 		
 		/**
 		 * Initialize the debug registry with an event collector
-		 * @param EventCollector $eventCollector Service for collecting debug events
 		 * @param ConfigurationInterface $config
 		 */
 		public function __construct(EventCollectorInterface $eventCollector, ConfigurationInterface $config) {
-			$this->eventCollector = $eventCollector;
-			
 			if (empty($config->get('panels', []))) {
-				$this->initializeDefaultPanels();
+				$this->initializeDefaultPanels($eventCollector);
 			} else {
-				$this->initializePanels($config->get('panels', []));
+				$this->initializePanels($eventCollector, $config->get('panels', []));
 			}
 		}
 		
@@ -120,11 +112,12 @@
 		
 		/**
 		 * Initialize panels based on configuration
+		 * @param EventCollectorInterface $eventCollector Service for collecting debug events
 		 * @param array $panels $config Array where key = panel name, value = class name
 		 * @return void
 		 */
-		private function initializePanels(array $panels): void {
-			foreach ($panels as $panelName => $className) {
+		private function initializePanels(EventCollectorInterface $eventCollector, array $panels): void {
+			foreach ($panels as $className) {
 				try {
 					// Validate that the class exists
 					if (!class_exists($className)) {
@@ -137,14 +130,14 @@
 					}
 					
 					// Create the panel
-					$panel = new $className($this->eventCollector);
+					$panel = new $className($eventCollector);
 					
 					// Register the panel
 					$this->addPanel($panel);
 					
 				} catch (\Exception $e) {
 					// Log the error but don't break the entire debugbar
-					error_log("Failed to initialize panel '{$panelName}': " . $e->getMessage());
+					error_log("Failed to initialize panel '{$className}': " . $e->getMessage());
 				}
 			}
 		}
@@ -152,13 +145,15 @@
 		/**
 		 * Register the default debug panels that come with the debugbar.
 		 * These provide basic debugging information like request details and database queries.
+		 * @param EventCollector $eventCollector Service for collecting debug events
+		 * @return void
 		 */
-		private function initializeDefaultPanels(): void {
+		private function initializeDefaultPanels(EventCollectorInterface $eventCollector): void {
 			// Panel for displaying request information (headers, parameters, etc.)
-			$this->addPanel(new RequestPanel($this->eventCollector));
+			$this->addPanel(new RequestPanel($eventCollector));
 			
 			// Panel for displaying database queries and performance metrics
-			$this->addPanel(new QueryPanel($this->eventCollector));
+			$this->addPanel(new QueryPanel($eventCollector));
 		}
 		
 		/**
