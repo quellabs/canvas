@@ -7,6 +7,7 @@
 	use Quellabs\ObjectQuel\OrmException;
 	use Quellabs\ObjectQuel\ReflectionManagement\PropertyHandler;
 	use Quellabs\ObjectQuel\Serialization\Serializers\JsonApiSerializer;
+	use Quellabs\ObjectQuel\Serialization\UrlBuilders\JsonApiUrlBuilder;
 	use Symfony\Component\HttpFoundation\JsonResponse;
 	use Symfony\Component\HttpFoundation\Request;
 	
@@ -39,23 +40,30 @@
 		) {
 			parent::__construct($container);
 			$this->propertyHandler = $propertyHandler;
-			$this->serializer = new JsonApiSerializer($this->em());
+			$this->serializer = $this->createSerializer();
 		}
 		
 		/**
-		 * Get the fully qualified entity class name for this controller
-		 * This method must be implemented by concrete controllers to specify
-		 * which entity class they operate on (e.g., App\Entity\User::class)
-		 * @return string The fully qualified class name of the entity
+		 * Create the JSON API serializer with URL builder
+		 * Override this method in concrete controllers to customize base URL or URL builder
+		 * @return JsonApiSerializer
 		 */
-		abstract protected function getEntityClass(): string;
+		protected function createSerializer(): JsonApiSerializer {
+			$urlBuilder = new JsonApiUrlBuilder($this->getBaseUrl());
+			return new JsonApiSerializer($this->em(), $urlBuilder);
+		}
 		
 		/**
-		 * Get the JSON:API resource type identifier for this controller
-		 * @return string The JSON:API resource type identifier
+		 * Get the base URL for API endpoints
+		 * Can be overriden
+		 * @return string The base URL (e.g., "https://api.example.com")
 		 */
-		abstract protected function getResourceType(): string;
-		
+		protected function getBaseUrl(): string {
+			$scheme = $_SERVER['REQUEST_SCHEME'];
+			$host = $_SERVER['HTTP_HOST'];
+			return "{$scheme}://{$host}/api";
+		}
+
 		/**
 		 * Generic GET method for retrieving a single resource by ID
 		 * @param int $id The unique identifier of the resource to retrieve
@@ -320,4 +328,19 @@
 				]]
 			], 400);
 		}
+		
+		/**
+		 * Get the fully qualified entity class name for this controller
+		 * This method must be implemented by concrete controllers to specify
+		 * which entity class they operate on (e.g., App\Entity\User::class)
+		 * @return string The fully qualified class name of the entity
+		 */
+		abstract protected function getEntityClass(): string;
+		
+		/**
+		 * Get the JSON:API resource type identifier for this controller
+		 * @return string The JSON:API resource type identifier
+		 */
+		abstract protected function getResourceType(): string;
+		
 	}
