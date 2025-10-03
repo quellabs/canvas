@@ -138,7 +138,10 @@
 			$routeAnnotations = $this->getMethodRouteAnnotations($controller);
 			
 			// Process each method's route annotation to create complete route definitions
-			foreach ($routeAnnotations as $method => $routeAnnotation) {
+			foreach ($routeAnnotations as $routeData) {
+				// Store annotation data
+				$routeAnnotation = $routeData['annotation'];
+				
 				// Get the method-specific route path from the annotation
 				$routePath = $routeAnnotation->getRoute();
 				
@@ -152,7 +155,7 @@
 				$routes[] = [
 					'http_methods' => $routeAnnotation->getMethods(),
 					'controller'   => $controller,
-					'method'       => $method,
+					'method'       => $routeData['method'],
 					'route'        => $routeAnnotation,
 					'route_path'   => $completeRoutePath,
 					'priority'     => $priority
