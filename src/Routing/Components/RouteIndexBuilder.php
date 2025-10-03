@@ -260,7 +260,7 @@
 			// consider routes that both match the segment count AND the HTTP method
 			$candidates = $this->intersectRoutes($methodCandidates, $exactMatches);
 			
-			// Phase 2: ENHANCED - Check routes with fewer segments that have wildcards
+			// Phase 2: ENHANCED - Check routes with fewer segments that have wildcards.
 			// Wildcards can consume multiple URL segments, so a 2-segment route pattern
 			// like "/user/v{path:**}" can match a 3-segment URL like "/user/v10/20"
 			// We need to check all routes with fewer segments than the request
@@ -553,12 +553,12 @@
 				// HTTP method reduction: percentage of routes eliminated by filtering on HTTP method
 				// Formula: (1 - average_routes_per_method / total_routes) * 100
 				// Higher percentage means better filtering efficiency
-				'http_method_reduction'   => $methodCount > 0 ? round((1 - $avgRoutesPerMethod / $totalRoutes) * 100, 2) : 0,
+				'http_method_reduction'   => $methodCount > 0 ? round((1 - $avgRoutesPerMethod / $totalRoutes) * 100, 2, PHP_ROUND_HALF_UP ) : 0,
 				
 				// Segment count reduction: percentage of routes eliminated by filtering on segment count
 				// Formula: (1 - average_routes_per_segment_count / total_routes) * 100
 				// Higher percentage means better filtering efficiency
-				'segment_count_reduction' => $segmentCountGroups > 0 ? round((1 - $avgRoutesPerSegmentCount / $totalRoutes) * 100, 2) : 0,
+				'segment_count_reduction' => $segmentCountGroups > 0 ? round((1 - $avgRoutesPerSegmentCount / $totalRoutes) * 100, 2, PHP_ROUND_HALF_UP ) : 0,
 				
 				// Combined potential is difficult to calculate precisely since it depends on
 				// the specific combination of HTTP method and segment count for each request

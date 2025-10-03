@@ -226,7 +226,7 @@
 				
 				// Calculated average with protection against division by zero
 				// Rounds to 2 decimal places for readability
-				'average_routes_per_controller' => count($controllers) > 0 ? round($totalRoutes / count($controllers), 2) : 0,
+				'average_routes_per_controller' => count($controllers) > 0 ? round($totalRoutes / count($controllers), 2, PHP_ROUND_HALF_UP) : 0,
 				
 				// Detailed breakdown showing route count per controller class
 				'routes_by_controller'          => $routesByController,
