@@ -132,7 +132,7 @@
 		}
 		
 		/**
-		 * NEW METHOD: Match filtered candidates against URL
+		 * Match filtered candidates against URL
 		 * @param array $candidates Pre-filtered route candidates
 		 * @param array $requestUrl Parsed URL segments
 		 * @param string $originalUrl Original URL string

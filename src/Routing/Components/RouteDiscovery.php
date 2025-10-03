@@ -302,8 +302,10 @@
 					
 					// Process each Route annotation found on this method
 					foreach ($annotations as $annotation) {
-						$result[$method->getName()] = $annotation;
-						break; // Only use the first route annotation per method
+						$result[] = [
+							'method'     => $method->getName(),
+							'annotation' => $annotation
+						];
 					}
 				}
 				
