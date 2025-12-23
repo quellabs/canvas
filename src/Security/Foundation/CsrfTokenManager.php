@@ -48,6 +48,7 @@
 			// Store token in session for later validation
 			$this->storeToken($intention, $token);
 			
+			// Return the token
 			return $token;
 		}
 		
