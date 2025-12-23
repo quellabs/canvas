@@ -5,6 +5,7 @@
 	use Quellabs\Canvas\Security\Foundation\CsrfTokenManager;
 	use Quellabs\Contracts\AOP\BeforeAspect;
 	use Quellabs\Contracts\AOP\MethodContext;
+	use Random\RandomException;
 	use Symfony\Component\HttpFoundation\JsonResponse;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
@@ -21,6 +22,7 @@
 	 * - Supports token validation from both form data and headers
 	 * - Provides appropriate error responses for both AJAX and regular requests
 	 * - Automatically adds CSRF tokens to request attributes for use in controllers/templates
+	 * - Configurable error handling: immediate response or deferred to controller
 	 */
 	class CsrfProtectionAspect implements BeforeAspect {
 		
@@ -42,8 +44,11 @@
 		/** @var array HTTP methods that are exempt from CSRF protection (safe methods) */
 		private array $exemptMethods;
 		
-		/** @var int Maximum number of tokens to store per intention (prevents session bloat) **/
+		/** @var int Maximum number of tokens to store per intention (prevents session bloat) * */
 		private int $maxTokens;
+		
+		/** @var bool If true, suppresses immediate error response and adds error to request instead */
+		private bool $suppressResponse;
 		
 		/**
 		 * Constructor
@@ -52,19 +57,22 @@
 		 * @param string $intention Token intention/purpose for scoping
 		 * @param array $exemptMethods HTTP methods exempt from CSRF protection
 		 * @param int $maxTokens Maximum number of tokens to store per intention (prevents session bloat)
+		 * @param bool $suppressResponse If true, suppresses immediate error response and adds error to request attributes instead
 		 */
 		public function __construct(
-			string           $tokenName = self::DEFAULT_TOKEN_NAME,
-			string           $headerName = self::DEFAULT_HEADER_NAME,
-			string           $intention = 'default',
-			array            $exemptMethods = ['GET', 'HEAD', 'OPTIONS'],
-			int              $maxTokens = 10
+			string $tokenName = self::DEFAULT_TOKEN_NAME,
+			string $headerName = self::DEFAULT_HEADER_NAME,
+			string $intention = 'default',
+			array  $exemptMethods = ['GET', 'HEAD', 'OPTIONS'],
+			int    $maxTokens = 10,
+			bool   $suppressResponse = false
 		) {
 			$this->exemptMethods = $exemptMethods;
 			$this->intention = $intention;
 			$this->headerName = $headerName;
 			$this->tokenName = $tokenName;
 			$this->maxTokens = $maxTokens;
+			$this->suppressResponse = $suppressResponse;
 		}
 		
 		/**
@@ -73,6 +81,7 @@
 		 * to the request for use in controllers and templates.
 		 * @param MethodContext $context The method execution context
 		 * @return Response|null Returns error response if validation fails, null to continue execution
+		 * @throws RandomException
 		 */
 		public function before(MethodContext $context): ?Response {
 			// Fetch the request
@@ -84,14 +93,39 @@
 			// Skip CSRF protection for safe methods (GET, HEAD, OPTIONS)
 			// These methods should not change server state, so CSRF protection is not needed
 			if (in_array($request->getMethod(), $this->exemptMethods)) {
+				$request->attributes->set('csrf_validation_succeeded', true);
 				$this->addTokenToRequest($csrfManager, $request);
 				return null; // Continue with normal execution
 			}
 			
 			// Validate CSRF token for state-changing requests (POST, PUT, DELETE, PATCH)
-			if (!$this->validateCsrfToken($csrfManager, $request)) {
+			$isValid = $this->validateCsrfToken($csrfManager, $request);
+			
+			if (!$isValid) {
+				if ($this->suppressResponse) {
+					// Add failure status to request object
+					$request->attributes->set('csrf_validation_succeeded', false);
+					
+					// Set error information
+					$request->attributes->set('csrf_error', [
+						'type'    => 'csrf_token_invalid',
+						'message' => 'Invalid or missing CSRF token'
+					]);
+					
+					// Generate fresh token for re-rendered form
+					$token = $csrfManager->generateToken($this->intention);
+					$request->attributes->set('csrf_token', $token);
+					$request->attributes->set('csrf_token_name', $this->tokenName);
+					
+					// Continue execution, let controller handle error
+					return null;
+				}
+				
 				return $this->createErrorResponse($request);
 			}
+			
+			// Validation succeeded - always set status
+			$request->attributes->set('csrf_validation_succeeded', true);
 			
 			// Add fresh token to request for use in response/templates
 			$this->addTokenToRequest($csrfManager, $request);
