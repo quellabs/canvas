@@ -408,14 +408,16 @@
 		 * @param $request
 		 * @return string
 		 */
-		private function getUserIdentifier($request): string {
-			// Try to get user from session, JWT, or other auth mechanism
-			if ($request->hasSession() && $request->getSession()->has('user_id')) {
-				return 'user_' . $request->getSession()->get('user_id');
+		protected function getUserIdentifier(Request $request): string {
+			// Default implementation: check for user_id in session
+			$session = $request->getSession();
+			
+			if ($session->has('user_id')) {
+				return 'user_' . $session->get('user_id');
 			}
 			
-			// Fallback to IP if no user found
-			return 'anonymous_' . $request->getClientIp();
+			// Fallback to IP for unauthenticated requests
+			return 'ip_' . ($request->getClientIp() ?? 'unknown');
 		}
 		
 		/**
