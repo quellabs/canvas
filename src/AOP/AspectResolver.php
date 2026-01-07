@@ -25,25 +25,59 @@
 		
 		/**
 		 * Resolves all aspects that should be applied to a controller method
-		 * Combines class-level aspects (applied to all methods) with method-level aspects
-		 * Sorts aspects by priority (higher priority executes first)
+		 * Aspects are sorted by priority within each class in the inheritance hierarchy.
+		 * Execution order: grandparent → parent → current class → method
+		 * Within each level, higher priority executes first.
 		 * @param object|string $controller The controller instance
 		 * @param string $method The method name being called
-		 * @return array Array of aspect annotation instances sorted by priority
+		 * @return array Array of aspect definitions sorted by inheritance hierarchy and priority
 		 * @throws AnnotationReaderException
 		 */
 		public function resolve(object|string $controller, string $method): array {
-			// Get all aspect annotations
-			$allAnnotations = $this->getAspectAnnotations($controller, $method);
+			$allAspects = [];
 			
-			// Convert annotation instances to actual aspect objects with their parameters
+			// Process each class in the inheritance chain (parent to child)
+			$inheritanceChain = $this->getInheritanceChain($controller);
+
+			foreach ($inheritanceChain as $class) {
+				// Fetch the annotations
+				$classAnnotations = $this->annotationReader->getClassAnnotations($class, InterceptWith::class);
+				
+				// Convert the annotations to aspects
+				$aspects = $this->convertAnnotationsToAspects($classAnnotations);
+				
+				// Sort by priority within this class level
+				usort($aspects, fn($a, $b) => $b['priority'] <=> $a['priority']);
+				
+				// Add to result, maintaining parent-to-child order
+				$allAspects = array_merge($allAspects, $aspects);
+			}
+			
+			// Get method-level annotations
+			$methodAnnotations = $this->annotationReader->getMethodAnnotations($controller, $method, InterceptWith::class);
+			
+			// Convert the annotations to aspects
+			$methodAspects = $this->convertAnnotationsToAspects($methodAnnotations);
+			
+			// Sort method aspects by priority
+			usort($methodAspects, fn($a, $b) => $b['priority'] <=> $a['priority']);
+			
+			// Combine: all class-level aspects (parent to child) → method aspects
+			return array_merge($allAspects, $methodAspects);
+		}
+		
+		/**
+		 * Convert annotation instances to aspect definitions with parameters and priority
+		 * @param AnnotationCollection $annotations Collection of InterceptWith annotations
+		 * @return array Array of aspect definitions
+		 */
+		private function convertAnnotationsToAspects(AnnotationCollection $annotations): array {
 			$aspects = [];
 			
-			foreach ($allAnnotations as $annotation) {
+			foreach ($annotations as $annotation) {
 				// Extract the aspect class name from the 'value' parameter
-				// This comes from @InterceptWith(CacheAspect::class, ttl=300)
-				$aspectClass = $annotation->getInterceptClass(); // e.g., CacheAspect::class
-
+				$aspectClass = $annotation->getInterceptClass();
+				
 				// Get all annotation parameters except 'value' and 'priority' to pass to aspect constructor
 				// For @InterceptWith(CacheAspect::class, ttl=300, priority=10), this gives us ['ttl' => 300]
 				$parameters = array_filter($annotation->getParameters(), function ($key) {
@@ -58,41 +92,7 @@
 				];
 			}
 			
-			// Sort aspects by priority in descending order (higher priority executes first)
-			usort($aspects, function ($a, $b) {
-				return $b['priority'] <=> $a['priority'];
-			});
-			
 			return $aspects;
-		}
-		
-		/**
-		 * Fetch all AOP Aspects for the method
-		 * @param object|string $controller
-		 * @param string $method
-		 * @return AnnotationCollection
-		 * @throws AnnotationReaderException
-		 */
-		protected function getAspectAnnotations(object|string $controller, string $method): AnnotationCollection {
-			// Fetch the inheritance chain of the controller
-			$inheritanceChain = $this->getInheritanceChain($controller);
-			
-			// Get all annotations from the controller class and filter for aspect annotations
-			// Class-level aspects apply to all methods in the controller
-			$classAnnotations = new AnnotationCollection();
-			
-			foreach ($inheritanceChain as $class) {
-				$classAnnotations = $classAnnotations->merge($this->annotationReader->getClassAnnotations($class, InterceptWith::class));
-			}
-			
-			// Get all annotations from the specific method and filter for aspect annotations
-			// Method-level aspects only apply to this specific method
-			$methodAnnotations = $this->annotationReader->getMethodAnnotations($controller, $method, InterceptWith::class);
-			
-			// Merge class-level and method-level aspects
-			// Class aspects are applied first, then method aspects
-			// This allows method-level aspects to override or extend class-level behavior
-			return $classAnnotations->merge($methodAnnotations);
 		}
 		
 		/**
