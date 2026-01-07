@@ -1746,6 +1746,40 @@ class CacheAspect implements AroundAspect {
 }
 ```
 
+#### Aspect Priority
+
+Control execution order when multiple aspects apply to the same method using the `priority` parameter. Higher priority values execute first (default is 0):
+
+```php
+/**
+ * @InterceptWith(AuthAspect::class, priority=100)      // Runs first
+ * @InterceptWith(RateLimitAspect::class, priority=50)  // Runs second
+ * @InterceptWith(CacheAspect::class, priority=10)      // Runs third
+ * @InterceptWith(LogAspect::class)                     // Runs last (priority=0)
+ */
+public function secureEndpoint() {
+    // Execution order: Auth → RateLimit → Cache → LogAspect → method → LogAspect → Cache → RateLimit → Auth
+}
+```
+
+Priority is particularly important for Before aspects where order affects whether execution continues:
+
+```php
+class UserController extends BaseController {
+    /**
+     * @InterceptWith(AuthAspect::class, priority=100)         // Must run first
+     * @InterceptWith(PermissionAspect::class, priority=90)    // Check permissions after auth
+     * @InterceptWith(ValidationAspect::class, priority=50)    // Validate only if authorized
+     */
+    public function updateProfile() {
+        // Order ensures authentication before permission checks before validation
+    }
+}
+```
+
+The `priority` parameter is not passed to the aspect constructor - it only affects execution order.
+
+
 #### Execution Order
 
 Aspects execute in a predictable order:
