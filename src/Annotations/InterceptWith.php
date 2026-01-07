@@ -5,51 +5,56 @@
 	use Quellabs\AnnotationReader\AnnotationInterface;
 	
 	/**
-	 * InterceptWith annotation class for method interception
+	 * Annotation for declaring aspect-oriented method interception
+	 *
+	 * Usage examples:
+	 * @InterceptWith(LoggingAspect::class)
+	 * @InterceptWith(CacheAspect::class, ttl=3600, priority=10)
 	 */
 	class InterceptWith implements AnnotationInterface {
 		
 		/**
-		 * Array containing the annotation parameters
+		 * Raw annotation parameters from the docblock
 		 * @var array
 		 */
 		private array $parameters;
 		
 		/**
-		 * InterceptWith constructor
-		 * @param array $parameters The annotation parameters containing 'value' and 'type' keys
+		 * Constructs the annotation with parameters parsed from the docblock
+		 * @param array $parameters Parsed annotation parameters (value, type, priority, and aspect-specific params)
 		 */
 		public function __construct(array $parameters) {
 			$this->parameters = $parameters;
 		}
 		
 		/**
-		 * Get all annotation parameters
-		 * @return array The complete parameters array
+		 * Returns all raw annotation parameters including internal ones
+		 * @return array Complete parameters array with all keys and values
 		 */
 		public function getParameters(): array {
 			return $this->parameters;
 		}
 		
 		/**
-		 * Get the interceptor class name
-		 * @return string The interceptor class name from the 'value' parameter
+		 * Returns the fully-qualified class name of the aspect to execute
+		 * @return string The aspect class name from the 'value' parameter (e.g., "App\\Aspects\\CacheAspect")
 		 */
 		public function getInterceptClass(): string {
 			return $this->parameters['value'];
 		}
 		
 		/**
-		 * Get the interception type
-		 *
-		 * Returns when the interceptor should be executed relative to the target method:
-		 * - 'before': Execute interceptor before the target method
-		 * - 'after': Execute interceptor after the target method completes
-		 * - 'around': Execute interceptor around the target method (full control)
-		 *
-		 * @return string The interception type ('before', 'after', or 'around')
+		 * Returns the execution priority for aspect ordering
+		 * Higher priority values execute first. Default is 0.
+		 * Used to control aspect execution order when multiple aspects apply to the same method.
+		 * Example: Authentication (priority=100) should run before caching (priority=10)
+		 * @return int Priority value (defaults to 0 if not specified or invalid)
 		 */
-		public function getInterceptType(): string {
-			return $this->parameters['type'];
+		public function getPriority(): int {
+			if (!isset($this->parameters['priority']) || !is_numeric($this->parameters['priority'])) {
+				return 0;
+			}
+			
+			return (int)$this->parameters['priority'];
 		}
 	}

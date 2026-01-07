@@ -26,15 +26,16 @@
 		/**
 		 * Resolves all aspects that should be applied to a controller method
 		 * Combines class-level aspects (applied to all methods) with method-level aspects
+		 * Sorts aspects by priority (higher priority executes first)
 		 * @param object|string $controller The controller instance
 		 * @param string $method The method name being called
-		 * @return array Array of aspect annotation instances
+		 * @return array Array of aspect annotation instances sorted by priority
 		 * @throws AnnotationReaderException
 		 */
 		public function resolve(object|string $controller, string $method): array {
 			// Get all aspect annotations
 			$allAnnotations = $this->getAspectAnnotations($controller, $method);
-
+			
 			// Convert annotation instances to actual aspect objects with their parameters
 			$aspects = [];
 			
@@ -42,19 +43,25 @@
 				// Extract the aspect class name from the 'value' parameter
 				// This comes from @InterceptWith(CacheAspect::class, ttl=300)
 				$aspectClass = $annotation->getInterceptClass(); // e.g., CacheAspect::class
-				
-				// Get all annotation parameters except 'value' to pass to aspect constructor
-				// For @InterceptWith(CacheAspect::class, ttl=300), this gives us ['ttl' => 300]
+
+				// Get all annotation parameters except 'value' and 'priority' to pass to aspect constructor
+				// For @InterceptWith(CacheAspect::class, ttl=300, priority=10), this gives us ['ttl' => 300]
 				$parameters = array_filter($annotation->getParameters(), function ($key) {
-					return $key !== 'value';
+					return $key !== 'value' && $key !== 'priority';
 				}, ARRAY_FILTER_USE_KEY);
 				
-				// Add the aspect class and parameters to the result list
+				// Add the aspect class, parameters, and priority to the result list
 				$aspects[] = [
 					'class'      => $aspectClass,
-					'parameters' => $parameters
+					'parameters' => $parameters,
+					'priority'   => $annotation->getPriority()
 				];
 			}
+			
+			// Sort aspects by priority in descending order (higher priority executes first)
+			usort($aspects, function ($a, $b) {
+				return $b['priority'] <=> $a['priority'];
+			});
 			
 			return $aspects;
 		}
@@ -74,7 +81,7 @@
 			// Class-level aspects apply to all methods in the controller
 			$classAnnotations = new AnnotationCollection();
 			
-			foreach($inheritanceChain as $class) {
+			foreach ($inheritanceChain as $class) {
 				$classAnnotations = $classAnnotations->merge($this->annotationReader->getClassAnnotations($class, InterceptWith::class));
 			}
 			
