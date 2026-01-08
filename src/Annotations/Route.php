@@ -57,7 +57,7 @@
 		public function getMethods(): array {
 			// If no methods specified, default to GET
 			if (empty($this->parameters["methods"])) {
-				return ["GET"];
+				return ["GET", "HEAD"];
 			}
 			
 			// If methods is already an array, return it as is
