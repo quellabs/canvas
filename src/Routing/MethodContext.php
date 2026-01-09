@@ -1,9 +1,8 @@
 <?php
 	
-	namespace Quellabs\Canvas\AOP;
+	namespace Quellabs\Canvas\Routing;
 	
 	use Symfony\Component\HttpFoundation\Request;
-	use Symfony\Component\HttpFoundation\Session\SessionInterface;
 	
 	/**
 	 * Context object that encapsulates information about a method call.
