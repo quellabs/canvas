@@ -3,8 +3,8 @@
 	namespace Quellabs\Canvas\Security;
 	
 	use Quellabs\Canvas\Security\Foundation\CsrfTokenManager;
-	use Quellabs\Contracts\AOP\BeforeAspect;
-	use Quellabs\Contracts\AOP\MethodContext;
+	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
+	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Random\RandomException;
 	use Symfony\Component\HttpFoundation\JsonResponse;
 	use Symfony\Component\HttpFoundation\Request;
@@ -24,7 +24,7 @@
 	 * - Automatically adds CSRF tokens to request attributes for use in controllers/templates
 	 * - Configurable error handling: immediate response or deferred to controller
 	 */
-	class CsrfProtectionAspect implements BeforeAspect {
+	class CsrfProtectionAspect implements BeforeAspectInterface {
 		
 		/** @var string Default name for CSRF token in forms */
 		private const string DEFAULT_TOKEN_NAME = '_csrf_token';
@@ -83,7 +83,7 @@
 		 * @return Response|null Returns error response if validation fails, null to continue execution
 		 * @throws RandomException
 		 */
-		public function before(MethodContext $context): ?Response {
+		public function before(MethodContextInterface $context): ?Response {
 			// Fetch the request
 			$request = $context->getRequest();
 			

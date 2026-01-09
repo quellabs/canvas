@@ -2,8 +2,8 @@
 	
 	namespace Quellabs\Canvas\Security;
 	
-	use Quellabs\Contracts\AOP\BeforeAspect;
-	use Quellabs\Contracts\AOP\MethodContext;
+	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
+	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Symfony\Component\HttpFoundation\File\UploadedFile;
 	use Symfony\Component\HttpFoundation\JsonResponse;
 	use Symfony\Component\HttpFoundation\Request;
@@ -25,7 +25,7 @@
 	 * - Content validation for image files
 	 * - Execution prevention for uploaded files
 	 */
-	class SecureUploadAspect implements BeforeAspect {
+	class SecureUploadAspect implements BeforeAspectInterface {
 		
 		/** @var string Base upload directory path */
 		private string $uploadPath;
@@ -115,7 +115,7 @@
 		 * @param MethodContext $context The method execution context
 		 * @return Response|null Returns error response if validation fails, null to continue
 		 */
-		public function before(MethodContext $context): ?Response {
+		public function before(MethodContextInterface $context): ?Response {
 			// Extract the HTTP request from the method context
 			$request = $context->getRequest();
 			

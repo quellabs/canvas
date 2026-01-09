@@ -2,8 +2,8 @@
 	
 	namespace Quellabs\Canvas\Cache;
 	
-	use Quellabs\Contracts\AOP\AroundAspect;
-	use Quellabs\Contracts\AOP\MethodContext;
+	use Quellabs\Canvas\AOP\Contracts\AroundAspectInterfaceInterface;
+	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Quellabs\Contracts\Cache\CacheInterface;
 	use Quellabs\DependencyInjection\Container;
 	
@@ -23,7 +23,7 @@
 	 * - Arguments: [123]
 	 * - Final cache key: "product_controller.get_product.arg0:123"
 	 */
-	class CacheAspect implements AroundAspect {
+	class CacheAspect implements AroundAspectInterfaceInterface {
 		
 		/** @var Container|null Dependency Injector */
 		private ?Container $di;
@@ -76,12 +76,12 @@
 		
 		/**
 		 * Cache the method execution result
-		 * @param MethodContext $context Method execution context
+		 * @param MethodContextInterface $context Method execution context
 		 * @param callable $proceed Callback to execute the original method
 		 * @return mixed Cached or computed result
 		 * @throws \RuntimeException If caching fails and gracefulFallback is disabled
 		 */
-		public function around(MethodContext $context, callable $proceed): mixed {
+		public function around(MethodContextInterface $context, callable $proceed): mixed {
 			try {
 				// Initialize cache with concurrency protection
 				$cache = $this->di->get(CacheInterface::class, [
@@ -115,10 +115,10 @@
 		
 		/**
 		 * Resolve the cache key from method context and arguments
-		 * @param MethodContext $context
+		 * @param MethodContextInterface $context
 		 * @return string
 		 */
-		private function resolveCacheKey(MethodContext $context): string {
+		private function resolveCacheKey(MethodContextInterface $context): string {
 			// Generate key from method context if not provided
 			if ($this->key !== null) {
 				$methodKey = $this->key;
@@ -136,10 +136,10 @@
 		
 		/**
 		 * Generate a cache key based on method context
-		 * @param MethodContext $context Method execution context
+		 * @param MethodContextInterface $context Method execution context
 		 * @return string Generated cache key
 		 */
-		private function generateMethodKey(MethodContext $context): string {
+		private function generateMethodKey(MethodContextInterface $context): string {
 			// Get class and method information
 			$target = $context->getClass();
 			$className = get_class($target);
