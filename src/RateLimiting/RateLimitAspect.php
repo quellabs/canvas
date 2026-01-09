@@ -2,8 +2,8 @@
 	
 	namespace Quellabs\Canvas\RateLimiting;
 	
-	use Quellabs\Contracts\AOP\BeforeAspect;
-	use Quellabs\Contracts\AOP\MethodContext;
+	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
+	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Quellabs\Contracts\Cache\CacheInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
@@ -12,7 +12,7 @@
 	/**
 	 * Rate limiting aspect using various strategies
 	 */
-	class RateLimitAspect implements BeforeAspect {
+	class RateLimitAspect implements BeforeAspectInterface {
 		
 		/** @var string[] Valid rate limiting strategies */
 		private const array VALID_STRATEGIES = ['fixed_window', 'sliding_window', 'token_bucket'];
@@ -97,10 +97,10 @@
 		/**
 		 * Middleware method that executes before the main request handler
 		 * Implements rate limiting with multiple strategies and HTTP header management
-		 * @param MethodContext $context The request context containing request data
+		 * @param MethodContextInterface $context The request context containing request data
 		 * @return Response|null Returns Response if rate limit exceeded, null to continue
 		 */
-		public function before(MethodContext $context): ?Response {
+		public function before(MethodContextInterface $context): ?Response {
 			// Fetch the request from the MethodContext
 			$request = $context->getRequest();
 			
@@ -336,10 +336,10 @@
 		 * - API key: "rate_limit:api_key:abc123:PaymentController::process"
 		 * - Global: "rate_limit:global:global:AuthController::register"
 		 *
-		 * @param MethodContext $context The request context containing request and routing info
+		 * @param MethodContextInterface $context The request context containing request and routing info
 		 * @return string The generated cache key for rate limiting
 		 */
-		private function generateKey(MethodContext $context): string {
+		private function generateKey(MethodContextInterface $context): string {
 			// Fetch the request from the context
 			$request = $context->getRequest();
 			

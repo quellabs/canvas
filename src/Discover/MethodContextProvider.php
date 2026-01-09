@@ -2,6 +2,7 @@
 	
 	namespace Quellabs\Canvas\Discover;
 	
+	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Quellabs\Contracts\Context\MethodContext;
 	use Quellabs\DependencyInjection\Provider\ServiceProvider;
 	
@@ -12,15 +13,15 @@
 		
 		/**
 		 * The method context instance to be provided
-		 * @var \Quellabs\Canvas\Routing\MethodContext
+		 * @var \Quellabs\Canvas\Routing\Context\MethodContext
 		 */
-		private \Quellabs\Canvas\Routing\MethodContext $context;
+		private \Quellabs\Canvas\Routing\Context\MethodContext $context;
 		
 		/**
 		 * Constructor - initializes the provider with a MethodContext instance
-		 * @param \Quellabs\Canvas\Routing\MethodContext $context
+		 * @param \Quellabs\Canvas\Routing\Context\MethodContext $context
 		 */
-		public function __construct(\Quellabs\Canvas\Routing\MethodContext $context) {
+		public function __construct(MethodContext $context) {
 			$this->context = $context;
 		}
 		
@@ -31,7 +32,9 @@
 		 * @return bool True if this provider supports the requested class, false otherwise
 		 */
 		public function supports(string $className, array $metadata = []): bool {
-			return $className === \Quellabs\Canvas\Routing\MethodContext::class;
+			return
+				$className === MethodContextInterface::class ||
+				$className === MethodContext::class;
 		}
 		
 		/**

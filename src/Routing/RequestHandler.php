@@ -9,6 +9,7 @@
 	use Quellabs\Canvas\Discover\SessionInterfaceProvider;
 	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
 	use Quellabs\Canvas\Kernel;
+	use Quellabs\Canvas\Routing\Context\MethodContext;
 	use Quellabs\Support\ComposerUtils;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;

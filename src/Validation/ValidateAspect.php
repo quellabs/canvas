@@ -4,8 +4,8 @@
 	
 	use Quellabs\Canvas\Validation\Contracts\ValidationInterface;
 	use Quellabs\Canvas\Validation\Contracts\ValidationRuleInterface;
-	use Quellabs\Contracts\AOP\BeforeAspect;
-	use Quellabs\Contracts\AOP\MethodContext;
+	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
+	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
 	use Symfony\Component\HttpFoundation\JsonResponse;
@@ -16,7 +16,7 @@
 	 * before the method execution. Uses AOP (Aspect-Oriented Programming) pattern
 	 * to separate validation concerns from business logic.
 	 */
-	class ValidateAspect implements BeforeAspect {
+	class ValidateAspect implements BeforeAspectInterface {
 		
 		/**
 		 * @var Container The Dependency Injector container
@@ -55,10 +55,10 @@
 		 * Executes before the target method is called
 		 * Validates the request data and either returns an error response (for API calls)
 		 * or sets validation attributes on the request (for web requests)
-		 * @param MethodContext $context The method execution context containing request data
+		 * @param MethodContextInterface $context The method execution context containing request data
 		 * @return Response|null Returns JsonResponse for failed API validations, null otherwise
 		 */
-		public function before(MethodContext $context): ?Response {
+		public function before(MethodContextInterface $context): ?Response {
 			// Extract the request from the method context
 			// The context object wraps the incoming HTTP request and other execution data
 			$request = $context->getRequest();
