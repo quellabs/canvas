@@ -9,6 +9,7 @@
 	use Quellabs\Contracts\AOP\BeforeAspect;
 	use Quellabs\Contracts\AOP\RequestAspect;
 	use Quellabs\DependencyInjection\Container;
+	use Quellabs\Canvas\Routing\MethodContext;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
 	
@@ -44,31 +45,19 @@
 		 * 6. Executes after aspects for response post-processing
 		 * 7. Returns the final response
 		 *
-		 * @param Request $request The incoming HTTP request object
-		 * @param object $controller The controller instance containing the target method
-		 * @param string $method The name of the method to execute on the controller
-		 * @param array $arguments Method arguments resolved from route parameters
+		 * @param MethodContext $context Pre-created method context (already registered with DI)
 		 * @return Response The final HTTP response after all aspect processing
 		 * @throws AnnotationReaderException
 		 */
-		public function dispatch(Request $request, object $controller, string $method, array $arguments): Response {
+		public function dispatch(MethodContext $context): Response {
 			try {
-				// Create a comprehensive method context containing all execution metadata
-				// This context object is passed to all aspects for introspection
-				$context = new MethodContext(
-					request: $request,
-					target: $controller,
-					methodName: $method,
-					arguments: $arguments
-				);
-				
 				// Discover and instantiate all aspects that apply to this method
 				// Uses annotation scanning and dependency injection for aspect creation
-				$aspects = $this->getResolvedAspects($controller, $method);
+				$aspects = $this->getResolvedAspects($context->getClass(), $context->getMethodName());
 				
 				// Phase 1: Transform the incoming request.
 				// Request aspects can modify headers, parameters, or add computed attributes
-				$this->handleRequestAspects($aspects, $request);
+				$this->handleRequestAspects($aspects, $context->getRequest());
 				
 				// Phase 2: Execute pre-execution logic
 				// Before aspects can perform authorization, validation, or early returns
@@ -76,7 +65,8 @@
 				
 				// Phase 3: Execute the controller method with interception
 				// Around aspects can modify execution, add caching, or replace method entirely
-				$result = $this->handleAroundAspects($controller, $method, $aspects, $context);
+				// The aspect will also call the controller's method
+				$result = $this->handleAroundAspects($context->getClass(), $context->getMethodName(), $aspects, $context);
 				
 				// Phase 4: Post-process the response
 				// After aspects can add headers, cookies, logging, or response transformations
