@@ -769,7 +769,7 @@ The `SecurityHeadersAspect` automatically adds security-related HTTP headers to 
 
 ```php
 <?php
-use Quellabs\Canvas\Security\SecurityHeadersAspectInterface;
+use Quellabs\Canvas\Security\SecurityHeadersAspect;
 
 /**
  * @InterceptWith(SecurityHeadersAspect::class)
