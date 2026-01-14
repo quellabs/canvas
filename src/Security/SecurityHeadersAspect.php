@@ -2,7 +2,7 @@
 	
 	namespace Quellabs\Canvas\Security;
 	
-	use Quellabs\Canvas\AOP\Contracts\AfterAspectInterfaceInterface;
+	use Quellabs\Canvas\AOP\Contracts\AfterAspectInterface;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
@@ -21,7 +21,7 @@
 	 * - Referrer-Policy: Controls referrer information
 	 * - Content-Security-Policy: Prevents XSS and data injection
 	 */
-	class SecurityHeadersAspect implements AfterAspectInterfaceInterface {
+	class SecurityHeadersAspect implements AfterAspectInterface {
 		
 		/** @var string X-Frame-Options value (DENY, SAMEORIGIN, or ALLOW-FROM) */
 		private string $frameOptions;

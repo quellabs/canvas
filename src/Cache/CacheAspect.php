@@ -2,7 +2,7 @@
 	
 	namespace Quellabs\Canvas\Cache;
 	
-	use Quellabs\Canvas\AOP\Contracts\AroundAspectInterfaceInterface;
+	use Quellabs\Canvas\AOP\Contracts\AroundAspectInterface;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Quellabs\Contracts\Cache\CacheInterface;
 	use Quellabs\DependencyInjection\Container;
@@ -23,7 +23,7 @@
 	 * - Arguments: [123]
 	 * - Final cache key: "product_controller.get_product.arg0:123"
 	 */
-	class CacheAspect implements AroundAspectInterfaceInterface {
+	class CacheAspect implements AroundAspectInterface {
 		
 		/** @var Container|null Dependency Injector */
 		private ?Container $di;

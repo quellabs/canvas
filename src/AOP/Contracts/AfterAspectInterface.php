@@ -13,7 +13,7 @@
 	 * replace it entirely. This ensures all after aspects in the chain
 	 * can contribute to the final response.
 	 */
-	interface AfterAspectInterfaceInterface extends AspectAnnotationInterface {
+	interface AfterAspectInterface extends AspectAnnotationInterface {
 		
 		/**
 		 * Executes after the target method has completed.

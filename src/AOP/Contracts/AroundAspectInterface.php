@@ -7,7 +7,7 @@
 	/**
 	 * Interface for aspect-oriented programming "around" advice.
 	 */
-	interface AroundAspectInterfaceInterface extends AspectAnnotationInterface {
+	interface AroundAspectInterface extends AspectAnnotationInterface {
 		
 		/**
 		 * Wraps around the target method execution with full control.
