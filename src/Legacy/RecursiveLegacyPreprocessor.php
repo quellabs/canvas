@@ -34,10 +34,7 @@
 		/**
 		 * Array of path patterns to exclude from preprocessing
 		 */
-		private array $excludedPaths = [
-			'/vendor/',
-			'/node_modules/',
-		];
+		private array $excludedPaths;
 		
 		
 		/**
@@ -48,6 +45,7 @@
 		public function __construct(string $cacheDir, string $legacyBasePath = 'legacy/') {
 			$this->cacheDir = $cacheDir;
 			$this->legacyBasePath = rtrim($legacyBasePath, '/') . '/';
+			$this->excludedPaths = [];
 		}
 		
 		/**
