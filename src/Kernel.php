@@ -388,8 +388,11 @@
 				// Fetch the legacy path
 				$preprocessingEnabled = $this->configuration->get('legacy_preprocessing', true);
 				
+				// Fetch exclusion directories
+				$exclusionPaths = $this->configuration->get('exclusion_paths', []);
+				
 				// Create the fallthrough handler
-				$this->legacyFallbackHandler = new LegacyHandler($legacyPath, $preprocessingEnabled);
+				$this->legacyFallbackHandler = new LegacyHandler($legacyPath, $preprocessingEnabled, $exclusionPaths);
 			}
 		}
 		
