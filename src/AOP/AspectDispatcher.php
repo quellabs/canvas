@@ -181,10 +181,8 @@
 			// This is the innermost function in the chain
 			$proceed = fn() => $this->di->invoke($context->getClass(), $context->getMethodName(), $context->getArguments());
 			
-			// Build a nested chain of around aspects in reverse order.
-			// Reverse order ensures the first declared aspect becomes outermost wrapper.
-			// Each aspect wraps the previous proceed function, creating nested calls.
-			foreach (array_reverse($aroundAspects) as $aspect) {
+			// Build a nested chain of around aspects
+			foreach ($aroundAspects as $aspect) {
 				$currentProceed = $proceed; // Capture current proceed function in closure
 				$proceed = fn() => $aspect->around($context, $currentProceed); // Wrap with this aspect
 			}
