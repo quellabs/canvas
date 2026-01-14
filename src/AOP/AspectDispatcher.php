@@ -5,8 +5,8 @@
 	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
-	use Quellabs\Canvas\AOP\Contracts\AfterAspectInterfaceInterface;
-	use Quellabs\Canvas\AOP\Contracts\AroundAspectInterfaceInterface;
+	use Quellabs\Canvas\AOP\Contracts\AfterAspectInterface;
+	use Quellabs\Canvas\AOP\Contracts\AroundAspectInterface;
 	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
 	use Quellabs\Canvas\AOP\Contracts\RequestAspectInterface;
 	use Quellabs\DependencyInjection\Container;
@@ -152,7 +152,7 @@
 		private function handleAfterAspects(array $aspects, MethodContextInterface $context, ?Response $response): void {
 			if ($response !== null) {
 				foreach ($aspects as $aspect) {
-					if ($aspect instanceof AfterAspectInterfaceInterface) {
+					if ($aspect instanceof AfterAspectInterface) {
 						// After aspects modify the response object directly.
 						// No return value expected - modifications happen in-place
 						$aspect->after($context, $response);
@@ -170,7 +170,7 @@
 		 */
 		private function handleAroundAspects(array $aspects, MethodContextInterface $context): mixed {
 			// Filter to get only around aspects from all resolved aspects
-			$aroundAspects = array_filter($aspects, fn($aspect) => $aspect instanceof AroundAspectInterfaceInterface);
+			$aroundAspects = array_filter($aspects, fn($aspect) => $aspect instanceof AroundAspectInterface);
 			
 			// If no around aspects exist, execute the method directly without interception
 			if (empty($aroundAspects)) {
