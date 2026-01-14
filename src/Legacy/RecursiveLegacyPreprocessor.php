@@ -32,6 +32,15 @@
 		private string $legacyBasePath;
 		
 		/**
+		 * Array of path patterns to exclude from preprocessing
+		 */
+		private array $excludedPaths = [
+			'/vendor/',
+			'/node_modules/',
+		];
+		
+		
+		/**
 		 * Constructor that takes the cache directory and legacy base path
 		 * @param string $cacheDir Directory where processed files will be stored
 		 * @param string $legacyBasePath Base path for legacy files (default: 'legacy/')
@@ -42,11 +51,43 @@
 		}
 		
 		/**
+		 * Set paths to exclude from preprocessing
+		 * @param array $paths Array of path patterns to exclude (e.g., ['/vendor/', '/lib/'])
+		 * @return void
+		 */
+		public function setExcludedPaths(array $paths): void {
+			$this->excludedPaths = $paths;
+		}
+		
+		/**
+		 * Check if a file should be preprocessed or used as-is
+		 * @param string $filePath Path to check
+		 * @return bool True if file should be preprocessed, false to use original
+		 */
+		private function shouldPreprocess(string $filePath): bool {
+			$normalizedPath = str_replace('\\', '/', $filePath);
+			
+			foreach ($this->excludedPaths as $excluded) {
+				if (str_contains($normalizedPath, $excluded)) {
+					return false;
+				}
+			}
+			
+			return true;
+		}
+		
+		/**
 		 * Process a legacy file and all its dependencies recursively
 		 * @param string $mainFilePath Path to the main legacy file
 		 * @return string Path to the processed main file
+		 * @throws \Exception
 		 */
 		public function processFileRecursively(string $mainFilePath): string {
+			// Check if file should be preprocessed at all
+			if (!$this->shouldPreprocess($mainFilePath)) {
+				return $mainFilePath; // Return original file path
+			}
+			
 			// Reset state for new processing run to avoid cross-contamination
 			$this->processedFiles = [];
 			$this->fileMapping = [];
@@ -71,6 +112,19 @@
 		 * @throws \Exception If file is not found
 		 */
 		private function processFileWithIncludes(string $filePath): string {
+			// Check if this specific file should be preprocessed
+			if (!$this->shouldPreprocess($filePath)) {
+				// Return original path and mark as "processed" to avoid reprocessing
+				$realPath = realpath($filePath);
+				
+				if ($realPath) {
+					$this->processedFiles[$realPath] = $realPath;
+					$this->fileMapping[$realPath] = $realPath;
+				}
+				
+				return $filePath;
+			}
+			
 			// Normalize path to prevent issues with relative paths and symlinks
 			$realPath = realpath($filePath);
 			

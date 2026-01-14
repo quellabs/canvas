@@ -32,9 +32,8 @@
 			$content = $this->replaceMysqliQueryCalls($content);
 			$content = $this->replaceMysqliPrepareCalls($content);
 			
-			// Replace PDO query methods with monitored versions
-			$content = $this->replacePdoQueryCalls($content);
-			$content = $this->replacePdoPrepareCalls($content);
+			// Replace PDO instantiation
+			$content = $this->replacePdoInstantiation($content);
 			
 			// Inject Canvas helper functions at the appropriate location
 			return $this->addCanvasHelper($content);
@@ -161,39 +160,20 @@
 		}
 		
 		/**
-		 * Replace PDO::query() calls with monitored version.
+		 * Replace new PDO() instantiation with canvas_create_pdo()
+		 * This allows wrapping the PDO instance for automatic query monitoring
 		 * @param string $content The PHP content to process
-		 * @return string Content with PDO::query() calls replaced
+		 * @return string Content with PDO instantiation replaced
 		 */
-		private function replacePdoQueryCalls(string $content): string {
-			// Pattern to match $pdo->query() calls
-			$pattern = '/(\$\w+)->query\s*\(\s*([^)]+)\s*\)/';
+		private function replacePdoInstantiation(string $content): string {
+			// Match: new PDO(...)
+			// This pattern handles:
+			// - new PDO(...)
+			// - new \PDO(...)
+			// - new \Namespace\PDO(...) - won't match, which is correct
+			$pattern = '/\bnew\s+\\\\?PDO\s*\(/';
 			
-			return preg_replace_callback($pattern, function ($matches) {
-				$pdoVar = $matches[1];
-				$query = trim($matches[2]);
-				
-				// Replace with monitored version
-				return "canvas_pdo_query({$pdoVar}, {$query})";
-			}, $content);
-		}
-		
-		/**
-		 * Replace PDO::prepare() calls with monitored version.
-		 * @param string $content The PHP content to process
-		 * @return string Content with PDO::prepare() calls replaced
-		 */
-		private function replacePdoPrepareCalls(string $content): string {
-			// Pattern to match $pdo->prepare() calls
-			$pattern = '/(\$\w+)->prepare\s*\(\s*([^)]+)\s*\)/';
-			
-			return preg_replace_callback($pattern, function ($matches) {
-				$pdoVar = $matches[1];
-				$query = trim($matches[2]);
-				
-				// Replace with monitored version
-				return "canvas_pdo_prepare({$pdoVar}, {$query})";
-			}, $content);
+			return preg_replace($pattern, 'canvas_create_pdo(', $content);
 		}
 		
 		/**
