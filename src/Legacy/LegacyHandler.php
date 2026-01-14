@@ -39,7 +39,11 @@
 		 * @param bool $preprocessingEnabled
 		 * @param array $excludedPaths
 		 */
-		public function __construct(string $legacyPath = 'legacy/', bool $preprocessingEnabled = true, array $excludedPaths=[]) {
+		public function __construct(
+			string $legacyPath = 'legacy/',
+			bool $preprocessingEnabled = true,
+			array $excludedPaths=[]
+		) {
 			// Store the legacy path
 			$this->legacyPath = $legacyPath;
 			
@@ -56,11 +60,7 @@
 			
 			// Initialize the recursive legacy preprocessor
 			if ($this->preprocessingEnabled) {
-				// Make preprocessor instance
-				$this->preprocessor = new RecursiveLegacyPreprocessor($this->cacheDir, $this->legacyPath);
-				
-				// Configure excluded paths - customize as needed
-				$this->preprocessor->setExcludedPaths($excludedPaths);
+				$this->preprocessor = new RecursiveLegacyPreprocessor($this->cacheDir, $this->legacyPath, $excludedPaths);
 			}
 			
 			// Add default resolver for standard file resolution
