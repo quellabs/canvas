@@ -146,17 +146,15 @@
 		 * Execute after aspects following controller method execution
 		 * @param array $aspects Array of aspect instances to process
 		 * @param MethodContextInterface $context Context object containing method metadata and parameters
-		 * @param Response|null $response The response object from the controller method to be modified
+		 * @param Response $response The response object from the controller method to be modified
 		 * @return void
 		 */
-		private function handleAfterAspects(array $aspects, MethodContextInterface $context, ?Response $response): void {
-			if ($response !== null) {
-				foreach ($aspects as $aspect) {
-					if ($aspect instanceof AfterAspectInterface) {
-						// After aspects modify the response object directly.
-						// No return value expected - modifications happen in-place
-						$aspect->after($context, $response);
-					}
+		private function handleAfterAspects(array $aspects, MethodContextInterface $context, Response $response): void {
+			foreach ($aspects as $aspect) {
+				if ($aspect instanceof AfterAspectInterface) {
+					// After aspects modify the response object directly.
+					// No return value expected - modifications happen in-place
+					$aspect->after($context, $response);
 				}
 			}
 		}
