@@ -56,6 +56,16 @@
 			// Initialize the recursive legacy preprocessor
 			if ($this->preprocessingEnabled) {
 				$this->preprocessor = new RecursiveLegacyPreprocessor($this->cacheDir, $this->legacyPath);
+				
+				// Configure excluded paths - customize as needed
+				/*
+				$this->preprocessor->setExcludedPaths([
+					'/vendor/',
+					'/node_modules/',
+					'/libraries/',
+					'/lib/',
+				]);
+				*/
 			}
 			
 			// Add default resolver for standard file resolution
@@ -79,6 +89,7 @@
 		 * @param Request $request The HTTP request to handle
 		 * @return Response The response from executing the legacy file
 		 * @throws RouteNotFoundException When no resolver can find a matching file
+		 * @throws \Exception
 		 */
 		public function handle(Request $request): Response {
 			// Fetch the path to resolve
