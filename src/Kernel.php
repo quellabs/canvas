@@ -35,9 +35,11 @@
 	use Quellabs\Canvas\Legacy\LegacyBridge;
 	use Quellabs\Canvas\Legacy\LegacyHandler;
 	use Quellabs\DependencyInjection\Container;
+	use Quellabs\DependencyInjection\Provider\SimpleBinding;
 	use Quellabs\Discover\Discover;
 	use Quellabs\SignalHub\HasSignals;
 	use Quellabs\SignalHub\Signal;
+	use Quellabs\SignalHub\SignalHub;
 	use Quellabs\SignalHub\SignalHubLocator;
 	use Quellabs\Support\ComposerUtils;
 	use Symfony\Component\HttpFoundation\Request;
@@ -78,12 +80,12 @@
 			
 			// Instantiate Dependency Injector and register default providers
 			$this->dependencyInjector = new Container();
-			$this->dependencyInjector->register(new KernelProvider($this));
-			$this->dependencyInjector->register(new ConfigurationProvider($this->configuration));
-			$this->dependencyInjector->register(new DiscoverProvider($this->discover));
-			$this->dependencyInjector->register(new SignalHubProvider());
+			$this->dependencyInjector->register(new SimpleBinding(Kernel::class, $this));
+			$this->dependencyInjector->register(new SimpleBinding(Configuration::class, $this->configuration));
+			$this->dependencyInjector->register(new SimpleBinding(Discover::class, $this->discover));
+			$this->dependencyInjector->register(new SimpleBinding(SignalHub::class, SignalHubLocator::getInstance()));
+			$this->dependencyInjector->register(new SimpleBinding(AnnotationReader::class, $this->annotationsReader));
 			$this->dependencyInjector->register(new CacheInterfaceProvider($this->dependencyInjector, $this->annotationsReader));
-			$this->dependencyInjector->register(new AnnotationsReaderProvider($this->annotationsReader));
 			
 			// Initialize legacy fallback handler to null explicitly to please phpstan
 			$this->legacyFallbackHandler = null;

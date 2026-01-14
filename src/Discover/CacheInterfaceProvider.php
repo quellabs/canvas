@@ -109,9 +109,19 @@
 				'config'    => $totalConfig,
 				...$context['params']
 			];
-			
+
 			// Create and store new cache instance
-			return $this->cache[$cacheKey] = $this->dependencyInjector->make($providerClass, $constructorParams);
+			$instance = $this->dependencyInjector->make($providerClass, $constructorParams);
+
+			// Ensure the instance implements CacheInterface
+			if (!$instance instanceof CacheInterface) {
+				throw new \RuntimeException(
+					"Cache provider {$providerClass} must implement CacheInterface"
+				);
+			}
+			
+			// Return the instance
+			return $this->cache[$cacheKey] = $instance;
 		}
 		
 		/**
