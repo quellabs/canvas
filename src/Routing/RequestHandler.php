@@ -5,15 +5,15 @@
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Canvas\AOP\AspectDispatcher;
 	use Quellabs\Canvas\Discover\MethodContextProvider;
-	use Quellabs\Canvas\Discover\RequestProvider;
-	use Quellabs\Canvas\Discover\SessionInterfaceProvider;
 	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
 	use Quellabs\Canvas\Kernel;
 	use Quellabs\Canvas\Routing\Context\MethodContext;
+	use Quellabs\DependencyInjection\Provider\SimpleBinding;
 	use Quellabs\Support\ComposerUtils;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
 	use Symfony\Component\HttpFoundation\Session\Session;
+	use Symfony\Component\HttpFoundation\Session\SessionInterface;
 	
 	class RequestHandler {
 		
@@ -74,8 +74,8 @@
 			}
 			
 			// Register providers with dependency injector for this request lifecycle
-			$requestProvider = new RequestProvider($request);
-			$sessionProvider = new SessionInterfaceProvider($request->getSession());
+			$requestProvider = new SimpleBinding(Request::class, $request);
+			$sessionProvider = new SimpleBinding(SessionInterface::class, $request->getSession());
 			$this->kernel->getDependencyInjector()->register($requestProvider);
 			$this->kernel->getDependencyInjector()->register($sessionProvider);
 			
