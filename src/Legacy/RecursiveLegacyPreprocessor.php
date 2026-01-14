@@ -178,6 +178,7 @@
 			$patterns = [
 				// Matches: include('file.php') or include_once('file.php')
 				'/\b(include|require|include_once|require_once)\s*\(\s*([\'"])([^\2]*?)\2\s*\)\s*;/i',
+				
 				// Matches: include 'file.php' or include_once 'file.php' (without parentheses)
 				'/\b(include|require|include_once|require_once)\s+([\'"])([^\2]*?)\2\s*;/i'
 			];
