@@ -21,8 +21,8 @@
 	 */
 	class RequestPanel implements InspectorPanelInterface {
 		
-		/** @var EventCollector Event collector for gathering debug information */
-		private EventCollector $collector;
+		/** @var EventCollectorInterface Event collector for gathering debug information */
+		private EventCollectorInterface $collector;
 		
 		/** @var array Route data extracted from canvas events */
 		private array $routeData = [];
@@ -38,7 +38,6 @@
 		
 		/**
 		 * Get signal patterns this panel listens to
-		 *
 		 * @return array Array of signal patterns to monitor
 		 */
 		public function getSignalPatterns(): array {
@@ -47,10 +46,8 @@
 		
 		/**
 		 * Process events collected by the debug event collector
-		 *
 		 * Extracts route data from canvas events and stores it for later use.
 		 * Only processes the first matching event found.
-		 *
 		 * @return void
 		 */
 		public function processEvents(): void {
@@ -66,7 +63,6 @@
 		
 		/**
 		 * Get the internal name of this panel
-		 *
 		 * @return string Panel identifier
 		 */
 		public function getName(): string {
@@ -75,7 +71,6 @@
 		
 		/**
 		 * Get the display label for the panel tab
-		 *
 		 * @return string Human-readable panel name
 		 */
 		public function getTabLabel(): string {
@@ -84,7 +79,6 @@
 		
 		/**
 		 * Get the icon for the panel tab
-		 *
 		 * @return string Unicode emoji icon
 		 */
 		public function getIcon(): string {
@@ -93,10 +87,8 @@
 		
 		/**
 		 * Get all data needed for panel display
-		 *
 		 * Combines request data extracted via RequestExtractor with
 		 * route data collected from events.
-		 *
 		 * @param Request $request The Symfony HTTP request object
 		 * @return array Associative array containing 'request' and 'route' data
 		 */
@@ -111,7 +103,6 @@
 		
 		/**
 		 * Get statistical information for the panel
-		 *
 		 * @return array Statistics to display in the debug bar (e.g., execution time)
 		 */
 		public function getStats(): array {
@@ -122,9 +113,6 @@
 		
 		/**
 		 * Get the JavaScript template for rendering the panel content
-		 *
-		 * Now uses common components for consistent styling and shows route parameters in a table.
-		 *
 		 * @return string JavaScript template code
 		 */
 		public function getJsTemplate(): string {
@@ -262,9 +250,6 @@ JS;
 		
 		/**
 		 * Get the CSS styles for the panel
-		 *
-		 * Much simpler now since most styling comes from common components.
-		 *
 		 * @return string CSS stylesheet
 		 */
 		public function getCss(): string {

@@ -78,36 +78,34 @@
 		 * @return string Complete HTML for the debug bar
 		 */
 		public function render(Request $request): string {
-			// Process events in all panels first to ensure data is up-to-date
+			$css = [];
+			$panelData = [];
+			$jsTemplates = [];
+			$stats = [];
+			
 			foreach ($this->panels as $panel) {
+				// Process once
 				$panel->processEvents();
-			}
-			
-			$css = []; // Collect JavaScript templates for dynamic panel rendering
-			$panelData = []; // Collect CSS from all panels
-			$jsTemplates = []; // Collect data from all panels with additional metadata
-			
-			foreach ($this->panels as $panel) {
-				// Generate JavaScript function name from panel name (e.g., 'database' -> 'renderDatabasePanel')
+				
+				// Collect all data in single iteration
 				$functionName = 'render' . ucfirst($panel->getName()) . 'Panel';
 				
-				// Collect panel-specific JS
 				$jsTemplates[$panel->getName()] = [
 					'function' => $functionName,
 					'code'     => $panel->getJsTemplate()
 				];
 				
-				// Collect panel-specific CSS
 				$css[] = $panel->getCss();
 				
-				// Collect panel data with additional metadata for tab rendering
 				$panelData[$panel->getName()] = array_merge($panel->getData($request), [
 					'icon'  => $panel->getIcon(),
 					'label' => $panel->getTabLabel()
 				]);
+				
+				$stats = array_merge($stats, $panel->getStats());
 			}
 			
-			return $this->renderDebugBar($jsTemplates, $css, $panelData, $this->getStats());
+			return $this->renderDebugBar($jsTemplates, $css, $panelData, $stats);
 		}
 		
 		/**
@@ -186,7 +184,7 @@
 				'stats'     => $stats,
 				'panels'    => $panelData,
 				'templates' => $templateMapping
-			], JSON_HEX_TAG | JSON_HEX_AMP);
+			], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR);
 			
 			return <<<HTML
 <!-- Canvas Inspector -->

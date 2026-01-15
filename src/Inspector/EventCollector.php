@@ -30,7 +30,7 @@
 			$signalHub->signalRegistered()->connect([$this, 'handleNewSignal']);
 			
 			// Connect to any debug signals that already exist in the hub
-			$this->connectToExistingSignals($signalHub);
+			$this->connectToCanvasQuerySignal($signalHub);
 		}
 		
 		/**
@@ -92,7 +92,7 @@
 		 * @param SignalHub $signalHub The signal hub to check for existing signals
 		 * @throws \Exception
 		 */
-		private function connectToExistingSignals(SignalHub $signalHub): void {
+		private function connectToCanvasQuerySignal(SignalHub $signalHub): void {
 			// Connect to the specific debug signal for canvas queries
 			// This is needed because the signal might already exist when this collector is created
 			$signalHub->getSignal('debug.canvas.query')->connect(function (array $data): void {

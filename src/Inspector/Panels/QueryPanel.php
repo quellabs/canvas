@@ -21,8 +21,8 @@
 		/** @var float Total execution time for all queries in milliseconds */
 		private float $totalTime = 0.0;
 		
-		/** @var EventCollector Event collector for gathering debug events */
-		private EventCollector $collector;
+		/** @var EventCollectorInterface Event collector for gathering debug events */
+		private EventCollectorInterface $collector;
 		
 		/**
 		 * Initialize the QueryPanel with a debug event collector.
