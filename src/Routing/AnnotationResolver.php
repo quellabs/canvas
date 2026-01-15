@@ -89,7 +89,7 @@
 		 * Resolves an HTTP request to find the first matching route
 		 * @param Request $request The incoming HTTP request to resolve
 		 * @return array Returns the first matched route info
-		 * @throws RouteNotFoundException|AnnotationReaderException When no matching route is found
+		 * @throws RouteNotFoundException When no matching route is found
 		 */
 		public function resolve(Request $request): array {
 			$result = $this->resolveAll($request);
@@ -154,43 +154,6 @@
 		}
 		
 		/**
-		 * Get comprehensive routing statistics including pre-filtering metrics
-		 * @return array Comprehensive routing statistics
-		 * @throws AnnotationReaderException
-		 */
-		public function getRoutingStatistics(): array {
-			$baseStats = [
-				'configuration' => [
-					'debug_mode'             => $this->debugMode,
-					'match_trailing_slashes' => $this->matchTrailingSlashes,
-					'cache_directory'        => $this->cacheDirectory,
-					'controller_directory'   => $this->controllerDirectory
-				],
-				'cache'         => $this->cacheManager->getCacheInfo(),
-				'discovery'     => $this->routeDiscovery->getDiscoveryStatistics(),
-				'index'         => $this->indexBuilder->getIndexStatistics(),
-				'performance'   => [
-					'route_index_built' => !empty($this->routeIndex)
-				]
-			];
-			
-			// Add enhanced filtering information
-			$indexStats = $this->indexBuilder->getIndexStatistics();
-			
-			$baseStats['enhanced_filtering'] = [
-				'strategies_enabled' => [
-					'http_method_filtering'        => 'Enabled',
-					'segment_count_filtering'      => 'Enabled',
-					'multi_level_static_filtering' => 'Enabled',
-					'prefix_trie_lookup'           => 'Enabled'
-				],
-				'index_metrics'      => $indexStats
-			];
-			
-			return $baseStats;
-		}
-		
-		/**
 		 * Clear all caches and force rebuild
 		 * @return bool True if all caches were cleared successfully
 		 */
@@ -221,6 +184,7 @@
 		/**
 		 * Get or build route index for fast lookups
 		 * @return array Complete route index ready for lookups
+		 * @throws AnnotationReaderException
 		 */
 		private function getRouteIndex(): array {
 			// Return cached index if available
