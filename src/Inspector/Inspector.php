@@ -6,6 +6,7 @@
 	use Quellabs\Canvas\Inspector\Helpers\HtmlAnalyzer;
 	use Quellabs\Contracts\Configuration\ConfigurationInterface;
 	use Quellabs\Contracts\Inspector\EventCollectorInterface;
+	use Random\RandomException;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
 	
@@ -21,14 +22,19 @@
 		/** @var HtmlAnalyzer Helper for analyzing and manipulating HTML content */
 		private HtmlAnalyzer $htmlAnalyzer;
 		
+		/** @var string **/
+		private string $nonce;
+		
 		/**
-		 * Initialize the debugbar with required dependencies.
+		 * Initialize the inspector with required dependencies.
 		 * @param EventCollectorInterface $eventCollector The event collector for gathering debug data
 		 * @param ConfigurationInterface $config
+		 * @throws RandomException
 		 */
 		public function __construct(EventCollectorInterface $eventCollector, ConfigurationInterface $config) {
 			$this->htmlAnalyzer = new HtmlAnalyzer();
 			$this->registry = new Registry($eventCollector, $config);
+			$this->nonce = base64_encode(random_bytes(16));
 		}
 		
 		/**

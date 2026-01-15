@@ -73,10 +73,8 @@
 				'<style'
 			];
 			
-			$contentLower = strtolower($content);
-			
 			foreach ($htmlIndicators as $indicator) {
-				if (str_contains($contentLower, $indicator)) {
+				if (stripos($content, $indicator) !== false) {
 					return true;
 				}
 			}
