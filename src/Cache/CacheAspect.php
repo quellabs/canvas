@@ -18,7 +18,6 @@
 	 * - Graceful fallback when caching fails
 	 * - Cache stampede protection via probabilistic early expiration
 	 * - Proper structured logging with context
-	 * - Cache invalidation support via tags
 	 *
 	 * The cache key is constructed by combining the method signature with method arguments.
 	 *
@@ -59,9 +58,6 @@
 		/** @var bool Whether to gracefully handle cache failures */
 		private bool $gracefulFallback;
 		
-		/** @var array Cache tags for invalidation */
-		private array $tags;
-		
 		/** @var float Beta value for probabilistic early expiration (0.0-1.0) */
 		private float $beta;
 		
@@ -69,13 +65,13 @@
 		private array $allParameters;
 		
 		/** @var int Maximum cache key length before hashing */
-		private const MAX_KEY_LENGTH = 200;
+		private const int MAX_KEY_LENGTH = 200;
 		
 		/** @var int Maximum readable prefix length when hashing long keys */
-		private const HASH_PREFIX_LENGTH = 80;
+		private const int HASH_PREFIX_LENGTH = 80;
 		
 		/** @var int Hash digest length for truncated keys */
-		private const HASH_DIGEST_LENGTH = 32;
+		private const int HASH_DIGEST_LENGTH = 32;
 		
 		/**
 		 * CacheAspect constructor
@@ -86,7 +82,6 @@
 		 * @param int $ttl Time to live in seconds (0 = never expires, default 3600 = 1 hour)
 		 * @param string $namespace Cache group for namespacing (prevents key collisions between features)
 		 * @param bool $gracefulFallback Whether to execute method if caching fails (recommended: true)
-		 * @param array $tags Cache tags for invalidation (e.g., ['products', 'user:123']) - enables bulk cache clearing
 		 * @param float $beta Probabilistic early expiration factor (0.0 = disabled, 0.5-1.0 = recommended, 1.0 = aggressive)
 		 * @param array $__all__ Special 'magic' variable that receives all InterceptWith parameters from DI
 		 */
@@ -98,7 +93,6 @@
 			int       $ttl = 3600,
 			string    $namespace = 'default',
 			bool      $gracefulFallback = true,
-			array     $tags = [],
 			float     $beta = 0.0,
 			array     $__all__ = []
 		) {
@@ -110,7 +104,6 @@
 			$this->ttl = max(0, $ttl);
 			$this->namespace = $namespace;
 			$this->gracefulFallback = $gracefulFallback;
-			$this->tags = $tags;
 			$this->beta = max(0.0, min(1.0, $beta));
 		}
 		
@@ -145,15 +138,10 @@
 				// Combines method signature with serialized arguments
 				$cacheKey = $this->resolveCacheKey($context);
 				
-				// Apply cache tags if supported
-				// Tags enable bulk invalidation (e.g., clear all 'products' cache)
-				if (!empty($this->tags) && method_exists($cache, 'tags')) {
-					$cache = $cache->tags($this->tags);
-				}
-				
 				// Check for probabilistic early expiration to prevent stampede
 				// When beta > 0, occasionally refreshes cache before expiration
 				// This prevents multiple requests from simultaneously recomputing on expiry
+				
 				if ($this->beta > 0.0 && $this->shouldRecomputeEarly($cache, $cacheKey)) {
 					// Recompute the value
 					$computeStart = microtime(true);
@@ -191,7 +179,6 @@
 				});
 				
 			} catch (\Exception $e) {
-				
 				// Log cache failure with full context for debugging
 				$this->logger->error('Cache aspect failed', [
 					'cache_key' => $cacheKey,
@@ -226,6 +213,17 @@
 		
 		/**
 		 * Resolve the cache key from method context and arguments
+		 *
+		 * Key generation strategy:
+		 * 1. Use explicit key if provided, otherwise auto-generate from method
+		 * 2. Append serialized arguments for differentiation
+		 * 3. Normalize to ensure cache system compatibility
+		 *
+		 * Example outputs:
+		 * - "product_controller.get_product.arg0:123"
+		 * - "user_controller.find_by_email.arg0:user-example.com"
+		 * - "custom_key.arg0:foo_arg1:bar"
+		 *
 		 * @param MethodContextInterface $context
 		 * @return string
 		 */
@@ -312,6 +310,16 @@
 		
 		/**
 		 * Serialize a single argument to string format
+		 *
+		 * Handles different types with appropriate serialization:
+		 * - Scalars: direct conversion
+		 * - Arrays: JSON + SHA-256 hash
+		 * - Objects: ID/toString/toArray/properties + hash
+		 * - Resources/Closures: throw exception (not cacheable)
+		 *
+		 * Uses SHA-256 for complex types to ensure collision resistance.
+		 * CRC32 would create 4-billion keyspace, causing frequent collisions.
+		 *
 		 * @param mixed $argument The argument to serialize
 		 * @param string $prefix Prefix for the argument (for readability)
 		 * @return string Serialized argument
@@ -345,29 +353,32 @@
 				return "{$prefix}:array_" . hash('sha256', $json);
 			}
 			
+			// Objects
 			if (is_object($argument)) {
 				// Validate object is serializable
 				$this->validateSerializable($argument, $prefix);
 				
-				// Strategy 1: Try to get a meaningful identifier from the object
-				// Best for entities with database IDs
 				$className = get_class($argument);
 				$shortName = substr(strrchr($className, '\\'), 1) ?: $className;
 				
+				// Strategy 1: Try to get a meaningful identifier from the object
+				// Best for entities with database IDs
 				if (method_exists($argument, 'getId')) {
+					$id = $argument->getId();
 					// Ensure ID is scalar (not another object)
-					if (!is_scalar($argument->getId())) {
+					
+					if (!is_scalar($id)) {
 						throw new \InvalidArgumentException(
 							"Object {$className}::getId() returned non-scalar value in {$prefix}"
 						);
 					}
-					return "{$prefix}:{$shortName}:" . $argument->getId();
+					return "{$prefix}:{$shortName}:" . $id;
 				}
 				
 				// Strategy 2: Use __toString if available
 				// Good for value objects with string representations
 				if (method_exists($argument, '__toString')) {
-					return "{$prefix}:{$shortName}:" . $argument;
+					return "{$prefix}:{$shortName}:" . (string)$argument;
 				}
 				
 				// Strategy 3: Use toArray if available
@@ -477,7 +488,6 @@
 				// Check object properties via reflection
 				try {
 					$reflection = new \ReflectionClass($value);
-					
 					foreach ($reflection->getProperties() as $property) {
 						$property->setAccessible(true);
 						$propValue = $property->getValue($value);
@@ -613,7 +623,6 @@
 				// Random dice roll - each request independently decides
 				// This ensures eventual recomputation without coordination
 				$roll = mt_rand() / mt_getrandmax();
-				
 				return $roll < $probability;
 				
 			} catch (\Exception $e) {
