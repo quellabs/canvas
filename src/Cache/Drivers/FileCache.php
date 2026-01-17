@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Cache\Drivers;
 	
 	use Quellabs\Contracts\Cache\CacheInterface;
+	use Quellabs\Support\ComposerUtils;
 	
 	/**
 	 * File-based cache implementation with comprehensive concurrency protection
@@ -41,7 +42,7 @@
 			}
 			
 			// Store the path to cache files
-			$this->cachePath = rtrim(FileCache . phpComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . "storage" . DIRECTORY_SEPARATOR . "cache");
+			$this->cachePath = rtrim(ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . "storage" . DIRECTORY_SEPARATOR . "cache");
 			
 			// Ensure cache directory exists at construction time
 			// This prevents directory creation race conditions later

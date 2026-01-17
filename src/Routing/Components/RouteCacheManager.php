@@ -5,7 +5,7 @@
 	use FilesystemIterator;
 	use RecursiveDirectoryIterator;
 	use RecursiveIteratorIterator;
-	use Quellabs\Cache\FileCache;
+	use Quellabs\Canvas\Cache\Drivers\FileCache;
 	
 	/**
 	 * RouteCacheManager
