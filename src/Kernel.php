@@ -25,12 +25,7 @@
 	use Quellabs\Canvas\Configuration\Configuration;
 	use Quellabs\Canvas\Routing\RequestHandler;
 	use Quellabs\Canvas\Inspector\EventCollector;
-	use Quellabs\Canvas\Discover\AnnotationsReaderProvider;
-	use Quellabs\Canvas\Discover\CacheInterfaceProvider;
-	use Quellabs\Canvas\Discover\ConfigurationProvider;
-	use Quellabs\Canvas\Discover\DiscoverProvider;
-	use Quellabs\Canvas\Discover\KernelProvider;
-	use Quellabs\Canvas\Discover\SignalHubProvider;
+	use Quellabs\Canvas\Cache\CacheInterfaceProvider;
 	use Quellabs\Canvas\Inspector\Inspector;
 	use Quellabs\Canvas\Legacy\LegacyBridge;
 	use Quellabs\Canvas\Legacy\LegacyHandler;
