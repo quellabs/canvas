@@ -30,7 +30,6 @@
     "quellabs/discover": "^1.",
     "quellabs/dependency-injection": "^1.",
     "quellabs/sculpt": "^1.",
-    "quellabs/cache": "^1.",
     "quellabs/signal-hub": "^1.",
     "quellabs/canvas-smarty": "^1.",
     "quellabs/annotation-reader": "^1.",
