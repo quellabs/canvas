@@ -4,6 +4,7 @@
 	
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Canvas\Annotations\CacheContext;
+	use Quellabs\Canvas\Cache\Drivers\FileCache;
 	use Quellabs\Contracts\Context\MethodContext;
 	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\Contracts\Cache\CacheInterface;
