@@ -169,7 +169,10 @@
 		 * @throws \RuntimeException If the configuration file exists but cannot be loaded
 		 */
 		private function loadCacheConfig(): array {
+			// Fetch the project root directory
 			$projectRoot = ComposerUtils::getProjectRoot();
+			
+			// Fetch the path to cache.php (config file)
 			$configPath = $projectRoot . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'cache.php';
 			
 			// Return empty config if the file doesn't exist or isn't readable
