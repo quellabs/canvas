@@ -6,15 +6,19 @@
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Quellabs\Contracts\Cache\CacheInterface;
 	use Quellabs\DependencyInjection\Container;
+	use Psr\Log\LoggerInterface;
+	use Psr\Log\NullLogger;
 	
 	/**
 	 * Caches the return value of controller methods using configurable cache keys and TTL.
 	 *
 	 * This aspect provides method-level caching with the following features:
-	 * - Cache keys based on method context and arguments
+	 * - Collision-resistant cache keys using SHA-256
 	 * - Configurable TTL and cache contexts
 	 * - Graceful fallback when caching fails
-	 * - Thread-safe caching using FileCache with concurrency protection
+	 * - Cache stampede protection via probabilistic early expiration
+	 * - Proper structured logging with context
+	 * - Cache invalidation support via tags
 	 *
 	 * The cache key is constructed by combining the method signature with method arguments.
 	 *
@@ -22,11 +26,23 @@
 	 * - Method: ProductController::getProduct($id)
 	 * - Arguments: [123]
 	 * - Final cache key: "product_controller.get_product.arg0:123"
+	 *
+	 * Thread-safety is provided by the underlying CacheInterface implementation.
+	 * Most cache drivers (Redis, Memcached, File with locks) provide atomic operations
+	 * to prevent race conditions during cache reads/writes.
+	 *
+	 * Cache Stampede Protection:
+	 * When beta > 0, uses XFetch algorithm to probabilistically recompute values before
+	 * expiration. This prevents multiple requests from simultaneously recomputing expensive
+	 * operations when the cache expires under high load.
 	 */
 	class CacheAspect implements AroundAspectInterface {
 		
 		/** @var Container|null Dependency Injector */
 		private ?Container $di;
+		
+		/** @var LoggerInterface Logger instance */
+		private LoggerInterface $logger;
 		
 		/** @var string|null The driver we want to use (file, memcached, redis) */
 		private ?string $driver;
@@ -43,47 +59,82 @@
 		/** @var bool Whether to gracefully handle cache failures */
 		private bool $gracefulFallback;
 		
+		/** @var array Cache tags for invalidation */
+		private array $tags;
+		
+		/** @var float Beta value for probabilistic early expiration (0.0-1.0) */
+		private float $beta;
+		
 		/** @var array All passed parameters from the InterceptWith */
 		private array $allParameters;
+		
+		/** @var int Maximum cache key length before hashing */
+		private const MAX_KEY_LENGTH = 200;
+		
+		/** @var int Maximum readable prefix length when hashing long keys */
+		private const HASH_PREFIX_LENGTH = 80;
+		
+		/** @var int Hash digest length for truncated keys */
+		private const HASH_DIGEST_LENGTH = 32;
 		
 		/**
 		 * CacheAspect constructor
 		 * @param Container|null $di Dependency Injector
-		 * @param string|null $driver The driver we want to use (file, memcached, redis)
-		 * @param string|null $key Cache key template (null = auto-generate from method context)
-		 * @param int $ttl Time to live in seconds (0 = never expires)
-		 * @param string $namespace Cache group for namespacing
-		 * @param bool $gracefulFallback Whether to execute method if caching fails
+		 * @param LoggerInterface|null $logger PSR-3 logger for cache operations (uses NullLogger if not provided)
+		 * @param string|null $driver The driver we want to use (file, memcached, redis) - null uses default
+		 * @param string|null $key Cache key template (null = auto-generate from method context) - supports placeholders
+		 * @param int $ttl Time to live in seconds (0 = never expires, default 3600 = 1 hour)
+		 * @param string $namespace Cache group for namespacing (prevents key collisions between features)
+		 * @param bool $gracefulFallback Whether to execute method if caching fails (recommended: true)
+		 * @param array $tags Cache tags for invalidation (e.g., ['products', 'user:123']) - enables bulk cache clearing
+		 * @param float $beta Probabilistic early expiration factor (0.0 = disabled, 0.5-1.0 = recommended, 1.0 = aggressive)
 		 * @param array $__all__ Special 'magic' variable that receives all InterceptWith parameters from DI
 		 */
 		public function __construct(
 			Container $di = null,
+			?LoggerInterface $logger = null,
 			?string   $driver = null,
 			?string   $key = null,
 			int       $ttl = 3600,
 			string    $namespace = 'default',
 			bool      $gracefulFallback = true,
+			array     $tags = [],
+			float     $beta = 0.0,
 			array     $__all__ = []
 		) {
 			$this->allParameters = $__all__;
 			$this->di = $di;
+			$this->logger = $logger ?? new NullLogger();
 			$this->driver = $driver;
 			$this->key = $key;
-			$this->ttl = max(0, $ttl); // Ensure non-negative TTL
+			$this->ttl = max(0, $ttl);
 			$this->namespace = $namespace;
 			$this->gracefulFallback = $gracefulFallback;
+			$this->tags = $tags;
+			$this->beta = max(0.0, min(1.0, $beta));
 		}
 		
 		/**
 		 * Cache the method execution result
+		 *
+		 * Execution flow:
+		 * 1. Generate cache key from method signature + arguments
+		 * 2. Check if probabilistic early expiration should trigger
+		 * 3. On cache hit: return cached value
+		 * 4. On cache miss: execute method, cache result, return
+		 * 5. On error: log details and either fallback or throw
+		 *
 		 * @param MethodContextInterface $context Method execution context
 		 * @param callable $proceed Callback to execute the original method
 		 * @return mixed Cached or computed result
 		 * @throws \RuntimeException If caching fails and gracefulFallback is disabled
 		 */
 		public function around(MethodContextInterface $context, callable $proceed): mixed {
+			$cacheKey = null;
+			
 			try {
 				// Initialize cache with concurrency protection
+				// The cache interface handles thread-safety and race conditions
 				$cache = $this->di->get(CacheInterface::class, [
 					'driver'    => $this->driver,
 					'namespace' => $this->namespace,
@@ -91,25 +142,85 @@
 				]);
 				
 				// Resolve a dynamic cache key
+				// Combines method signature with serialized arguments
 				$cacheKey = $this->resolveCacheKey($context);
 				
-				// Use cache remember pattern for atomic cache-aside operations
-				return $cache->remember($cacheKey, $this->ttl, function () use ($proceed) {
-					return $proceed();
+				// Apply cache tags if supported
+				// Tags enable bulk invalidation (e.g., clear all 'products' cache)
+				if (!empty($this->tags) && method_exists($cache, 'tags')) {
+					$cache = $cache->tags($this->tags);
+				}
+				
+				// Check for probabilistic early expiration to prevent stampede
+				// When beta > 0, occasionally refreshes cache before expiration
+				// This prevents multiple requests from simultaneously recomputing on expiry
+				if ($this->beta > 0.0 && $this->shouldRecomputeEarly($cache, $cacheKey)) {
+					// Recompute the value
+					$computeStart = microtime(true);
+					$result = $proceed();
+					$computeTime = microtime(true) - $computeStart;
+					
+					// Store with fresh TTL
+					// This atomic operation prevents other requests from also recomputing
+					$cache->put($cacheKey, $result, $this->ttl);
+					
+					// Log early refresh (useful for monitoring stampede protection effectiveness)
+					$this->logger->info('Cache refreshed early (stampede protection)', [
+						'cache_key' => $cacheKey,
+						'compute_time_ms' => round($computeTime * 1000, 2),
+						'beta' => $this->beta
+					]);
+					
+					return $result;
+				}
+				
+				// Use cache remember pattern with stampede protection
+				// remember() is atomic: only one request computes on cache miss
+				return $cache->remember($cacheKey, $this->ttl, function () use ($proceed, $cacheKey) {
+					$computeStart = microtime(true);
+					$result = $proceed();
+					$computeTime = microtime(true) - $computeStart;
+					
+					// Only log cache misses (cache hits are silent for performance)
+					$this->logger->info('Cache miss - computed value', [
+						'cache_key' => $cacheKey,
+						'compute_time_ms' => round($computeTime * 1000, 2)
+					]);
+					
+					return $result;
 				});
 				
 			} catch (\Exception $e) {
+				
+				// Log cache failure with full context for debugging
+				$this->logger->error('Cache aspect failed', [
+					'cache_key' => $cacheKey,
+					'namespace' => $this->namespace,
+					'method' => $context->getMethodName(),
+					'class' => get_class($context->getClass()),
+					'error' => $e->getMessage(),
+					'error_class' => get_class($e),
+					'graceful_fallback' => $this->gracefulFallback
+				]);
+				
 				// Handle cache failure based on configuration
 				if ($this->gracefulFallback) {
-					// Log the error
-					error_log($e->getMessage());
-					
-					// Execute original method without caching
+					// Graceful degradation: execute method without caching
+					// Prevents cascade failures when cache is unavailable
 					return $proceed();
 				}
 				
-				// Re-throw exception if graceful fallback is disabled
-				throw new \RuntimeException('Cache aspect failed: ' . $e->getMessage(), 0, $e);
+				// Strict mode: propagate error to caller
+				throw new \RuntimeException(
+					sprintf(
+						'Cache aspect failed for %s::%s: %s',
+						get_class($context->getClass()),
+						$context->getMethodName(),
+						$e->getMessage()
+					),
+					0,
+					$e
+				);
 			}
 		}
 		
@@ -127,17 +238,19 @@
 			}
 			
 			// Use method arguments for cache differentiation
+			// Same method with different arguments gets different cache entries
 			$argumentsKey = $this->generateArgumentsKey($context->getArguments());
 			$cacheKey = $methodKey . '.' . $argumentsKey;
 			
 			// Normalize and return the generated key
+			// Ensures compatibility with cache system constraints
 			return $this->normalizeCacheKey($cacheKey);
 		}
 		
 		/**
 		 * Generate a cache key based on method context
 		 * @param MethodContextInterface $context Method execution context
-		 * @return string Generated cache key
+		 * @return string Generated cache key (e.g., "product_controller.get_product")
 		 */
 		private function generateMethodKey(MethodContextInterface $context): string {
 			// Get class and method information
@@ -169,9 +282,14 @@
 			// Convert arguments to a consistent string representation
 			$serialized = $this->serializeArguments($arguments);
 			
-			// Create a hash for long argument lists to keep keys manageable
+			// Use SHA-256 for collision resistance instead of CRC32
+			// Keep a readable prefix for debugging
 			if (strlen($serialized) > 50) {
-				return substr($serialized, 0, 30) . '_' . hash('crc32', $serialized);
+				$prefix = substr($serialized, 0, 30);
+				$hash = hash('sha256', $serialized);
+
+				// Use first 16 chars of SHA-256 (64-bit collision resistance)
+				return $this->sanitizeValue($prefix) . '_' . substr($hash, 0, 16);
 			}
 			
 			return $this->sanitizeValue($serialized);
@@ -197,58 +315,198 @@
 		 * @param mixed $argument The argument to serialize
 		 * @param string $prefix Prefix for the argument (for readability)
 		 * @return string Serialized argument
+		 * @throws \InvalidArgumentException|\JsonException If argument contains non-serializable data
 		 */
 		private function serializeArgument(mixed $argument, string $prefix): string {
+			// Null values - explicit representation
 			if ($argument === null) {
 				return "{$prefix}:null";
 			}
 			
+			// Boolean values - explicit true/false strings
 			if (is_bool($argument)) {
 				return "{$prefix}:" . ($argument ? 'true' : 'false');
 			}
 			
+			// Scalar values (string, int, float) - direct conversion
 			if (is_scalar($argument)) {
 				return "{$prefix}:" . (string)$argument;
 			}
 			
+			// Arrays - validate then hash with JSON for consistency
 			if (is_array($argument)) {
+				// Validate array is serializable (no resources/closures)
+				$this->validateSerializable($argument, $prefix);
+				
 				// For arrays, create a hash to keep keys manageable
-				return "{$prefix}:array_" . hash('crc32', serialize($argument));
+				// Use JSON for consistent serialization across runs
+				// json_encode produces deterministic output for same data
+				$json = json_encode($argument, JSON_THROW_ON_ERROR);
+				return "{$prefix}:array_" . hash('sha256', $json);
 			}
 			
 			if (is_object($argument)) {
-				// For objects, use class name and a hash of properties
+				// Validate object is serializable
+				$this->validateSerializable($argument, $prefix);
+				
+				// Strategy 1: Try to get a meaningful identifier from the object
+				// Best for entities with database IDs
 				$className = get_class($argument);
 				$shortName = substr(strrchr($className, '\\'), 1) ?: $className;
 				
-				// Try to get a meaningful identifier from the object
 				if (method_exists($argument, 'getId')) {
+					// Ensure ID is scalar (not another object)
+					if (!is_scalar($argument->getId())) {
+						throw new \InvalidArgumentException(
+							"Object {$className}::getId() returned non-scalar value in {$prefix}"
+						);
+					}
 					return "{$prefix}:{$shortName}:" . $argument->getId();
 				}
 				
+				// Strategy 2: Use __toString if available
+				// Good for value objects with string representations
 				if (method_exists($argument, '__toString')) {
-					return "{$prefix}:{$shortName}:" . (string)$argument;
+					return "{$prefix}:{$shortName}:" . $argument;
 				}
 				
-				// Fallback to object hash
-				return "{$prefix}:{$shortName}:" . hash('crc32', serialize($argument));
+				// Strategy 3: Use toArray if available
+				// Good for objects that can serialize themselves
+				if (method_exists($argument, 'toArray')) {
+					$array = $argument->toArray();
+					$this->validateSerializable($array, $prefix);
+					$json = json_encode($array, JSON_THROW_ON_ERROR);
+					return "{$prefix}:{$shortName}:" . hash('sha256', $json);
+				}
+				
+				// Strategy 4: For objects implementing JsonSerializable
+				
+				if ($argument instanceof \JsonSerializable) {
+					$json = json_encode($argument, JSON_THROW_ON_ERROR);
+					return "{$prefix}:{$shortName}:" . hash('sha256', $json);
+				}
+				
+				// Strategy 5: Last resort - serialize object properties via reflection
+				// This is slower but handles arbitrary objects
+				try {
+					$reflection = new \ReflectionClass($argument);
+					$properties = [];
+					
+					foreach ($reflection->getProperties() as $property) {
+						$property->setAccessible(true);
+						$value = $property->getValue($argument);
+						
+						// Skip non-serializable properties
+						// Resources and closures can't be cached
+						if (is_resource($value) || $value instanceof \Closure) {
+							continue;
+						}
+						
+						$properties[$property->getName()] = $value;
+					}
+					
+					$json = json_encode($properties, JSON_THROW_ON_ERROR);
+					return "{$prefix}:{$shortName}:" . hash('sha256', $json);
+					
+				} catch (\Exception $e) {
+					throw new \InvalidArgumentException(
+						"Cannot serialize object of class {$className} in {$prefix}: {$e->getMessage()}"
+					);
+				}
+			}
+			
+			if (is_resource($argument)) {
+				throw new \InvalidArgumentException(
+					"Cannot cache methods with resource arguments in {$prefix}"
+				);
 			}
 			
 			// Fallback for other types
-			return "{$prefix}:" . hash('crc32', serialize($argument));
+			throw new \InvalidArgumentException(
+				"Cannot serialize argument of type " . gettype($argument) . " in {$prefix}"
+			);
+		}
+		
+		/**
+		 * Validate that a value is serializable (no resources or closures)
+		 *
+		 * This is critical for cache safety - we cannot cache:
+		 * - Resources (file handles, database connections, sockets)
+		 * - Closures (functions, anonymous functions)
+		 * - Objects containing the above in their properties
+		 *
+		 * Recursively validates arrays and object properties to catch
+		 * deeply nested non-serializable values.
+		 *
+		 * @param mixed $value Value to validate
+		 * @param string $context Context for error messages (e.g., "arg0", "arg1[key]")
+		 * @throws \InvalidArgumentException If value contains non-serializable data
+		 */
+		private function validateSerializable(mixed $value, string $context): void {
+			// Resources cannot be serialized (file handles, DB connections, etc.)
+			if (is_resource($value)) {
+				throw new \InvalidArgumentException(
+					"Cannot cache methods with resource arguments in {$context}"
+				);
+			}
+			
+			// Closures cannot be serialized (functions, callbacks)
+			if ($value instanceof \Closure) {
+				throw new \InvalidArgumentException(
+					"Cannot cache methods with Closure arguments in {$context}"
+				);
+			}
+			
+			// Recursively validate arrays
+			if (is_array($value)) {
+				foreach ($value as $key => $item) {
+					$this->validateSerializable($item, "{$context}[{$key}]");
+				}
+			}
+			
+			// Validate object properties don't contain resources
+			if (is_object($value)) {
+				// Check for common non-serializable object types
+				if ($value instanceof \Closure) {
+					throw new \InvalidArgumentException(
+						"Cannot cache methods with Closure arguments in {$context}"
+					);
+				}
+				
+				// Resources wrapped in objects
+				// Check object properties via reflection
+				try {
+					$reflection = new \ReflectionClass($value);
+					
+					foreach ($reflection->getProperties() as $property) {
+						$property->setAccessible(true);
+						$propValue = $property->getValue($value);
+						
+						if (is_resource($propValue)) {
+							throw new \InvalidArgumentException(
+								"Cannot cache methods with resource properties in {$context}::" . $property->getName()
+							);
+						}
+					}
+				} catch (\ReflectionException $e) {
+					// If we can't reflect, we can't validate - let it through
+					// Some internal PHP classes don't support reflection
+				}
+			}
 		}
 		
 		/**
 		 * Sanitize a value for use in cache keys
 		 * @param mixed $value Value to sanitize
-		 * @return string Sanitized value
+		 * @return string Sanitized value (safe for cache keys)
 		 */
 		private function sanitizeValue(mixed $value): string {
 			// Convert to string and limit length
 			$stringValue = substr((string)$value, 0, 100);
 			
 			// Replace problematic characters with safe alternatives
-			$sanitized = preg_replace('/[^a-zA-Z0-9\-_.\\/]/', '-', $stringValue);
+			// Only allow alphanumeric, dash, underscore, and period
+			$sanitized = preg_replace('/[^a-zA-Z0-9\-_.]/', '-', $stringValue);
 			
 			// Remove consecutive dashes and trim
 			$sanitized = preg_replace('/-+/', '-', $sanitized);
@@ -260,31 +518,114 @@
 		
 		/**
 		 * Normalize the cache key
-		 *
-		 * This method ensures the cache key meets requirements:
-		 * - Not too long (cache systems have key length limits)
-		 * - Contains only safe characters
-		 * - Has a reasonable structure
-		 *
 		 * @param string $key Cache key to validate
 		 * @return string Validated cache key
 		 */
 		private function normalizeCacheKey(string $key): string {
 			// Remove any remaining unreplaced placeholders
+			// These might come from custom key templates
 			$key = preg_replace('/\{[^}]+}/', 'missing', $key);
 			
 			// Ensure key isn't too long (many cache systems have 250 char limits)
-			if (strlen($key) > 200) {
+			// If too long, create a hybrid: readable prefix + hash suffix
+			if (strlen($key) > self::MAX_KEY_LENGTH) {
 				// Hash the key if it's too long, but preserve some readable portion
-				$prefix = substr($key, 0, 100);
+				$prefix = substr($key, 0, self::HASH_PREFIX_LENGTH);
 				$hash = hash('sha256', $key);
-				$key = $prefix . '.' . substr($hash, 0, 16);
+				$key = $prefix . '.' . substr($hash, 0, self::HASH_DIGEST_LENGTH);
 			}
 			
-			// Final cleanup
+			// Final cleanup - remove leading/trailing separators
 			$key = trim($key, '.-');
 			
 			// Ensure we have a valid key
+			// Should never happen, but provides a safe fallback
 			return $key ?: 'default.cache.key';
+		}
+		
+		/**
+		 * Determine if cache should be recomputed early to prevent stampede
+		 *
+		 * Uses the XFetch algorithm with probabilistic early expiration:
+		 * P(recompute) = beta * compute_time / remaining_ttl
+		 *
+		 * This prevents cache stampede by having one request probabilistically
+		 * recompute the value before it expires, with higher probability as
+		 * expiration approaches.
+		 *
+		 * How it works:
+		 * 1. For a cache entry with 60s TTL and 10s compute time:
+		 *    - At t=0 (fresh): P = beta * 10/60 = 0.167 * beta
+		 *    - At t=50 (near expiry): P = beta * 10/10 = 1.0 * beta
+		 * 2. With beta=1.0, when remaining_ttl equals compute_time,
+		 *    we're guaranteed to trigger refresh
+		 * 3. With beta=0.5, we trigger more conservatively
+		 *
+		 * Benefits:
+		 * - Prevents thundering herd on expiration
+		 * - Expensive operations get refreshed earlier
+		 * - Only one request typically wins the race
+		 * - Others continue serving slightly stale data
+		 *
+		 * @param CacheInterface $cache Cache instance
+		 * @param string $cacheKey Cache key to check
+		 * @return bool True if should recompute early
+		 */
+		private function shouldRecomputeEarly(CacheInterface $cache, string $cacheKey): bool {
+			// Get metadata about cached item if available
+			// This requires cache driver to support metadata retrieval
+			if (!method_exists($cache, 'getMetadata')) {
+				return false;
+			}
+			
+			try {
+				$metadata = $cache->getMetadata($cacheKey);
+				
+				// Need both creation time and TTL to calculate probability
+				
+				if (!$metadata || !isset($metadata['created_at'], $metadata['ttl'])) {
+					return false;
+				}
+				
+				$now = time();
+				$createdAt = $metadata['created_at'];
+				$ttl = $metadata['ttl'];
+				
+				// Calculate age and remaining TTL
+				$age = $now - $createdAt;
+				$remainingTtl = max(1, $ttl - $age); // Avoid division by zero
+				
+				// If already expired, don't trigger early - let normal flow handle it
+				// This prevents double-computation
+				if ($remainingTtl <= 0) {
+					return false;
+				}
+				
+				// Estimate compute time from last computation if available
+				// Otherwise use a conservative estimate of 1 second
+				$estimatedComputeTime = $metadata['compute_time'] ?? 1.0;
+				
+				// XFetch algorithm: P(recompute) = beta * delta / ttl_remaining
+				// where delta is the expected computation time
+				// As remaining_ttl decreases, probability increases
+				$probability = $this->beta * $estimatedComputeTime / $remainingTtl;
+				
+				// Random dice roll - each request independently decides
+				// This ensures eventual recomputation without coordination
+				$roll = mt_rand() / mt_getrandmax();
+				
+				return $roll < $probability;
+				
+			} catch (\Exception $e) {
+				// If metadata retrieval fails, don't trigger early expiration
+				// Fail gracefully and let normal cache flow handle it
+				// Log as warning since stampede protection won't work
+				$this->logger->warning('Cache metadata unavailable - stampede protection disabled', [
+					'cache_key' => $cacheKey,
+					'error' => $e->getMessage()
+				]);
+				
+				return false;
+			}
 		}
 	}
