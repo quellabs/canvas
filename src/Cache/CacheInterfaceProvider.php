@@ -1,12 +1,11 @@
 <?php
 	
-	namespace Quellabs\Canvas\Discover;
+	namespace Quellabs\Canvas\Cache;
 	
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Canvas\Annotations\CacheContext;
 	use Quellabs\Contracts\Context\MethodContext;
 	use Quellabs\AnnotationReader\AnnotationReader;
-	use Quellabs\Cache\FileCache;
 	use Quellabs\Contracts\Cache\CacheInterface;
 	use Quellabs\Contracts\DependencyInjection\Container;
 	use Quellabs\DependencyInjection\Provider\ServiceProvider;
