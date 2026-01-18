@@ -340,7 +340,8 @@
 		}
 		
 		/**
-		 * Load app.php
+		 * Load config file with .local.php override support
+		 * @param string $filename
 		 * @return array
 		 */
 		private function getConfigFile(string $filename): array {
@@ -351,20 +352,25 @@
 			
 			// Fetch the project root
 			$projectRoot = ComposerUtils::getProjectRoot();
+			$configPath = $projectRoot . "/config/{$filename}";
 			
-			// If the config file can't be loaded, return an empty array
-			if (
-				!file_exists($projectRoot . "/config/{$filename}") ||
-				!is_readable($projectRoot . "/config/{$filename}")
-			) {
-				return $this->contents_of_app_php[$filename] = [];
+			// If the base config file doesn't exist, start with empty array
+			if (!file_exists($configPath) || !is_readable($configPath)) {
+				$config = [];
+			} else {
+				$config = require $configPath;
 			}
 			
-			// Otherwise, grab the contents
-			$this->contents_of_app_php[$filename] = require $projectRoot . "/config/{$filename}";
+			// Check for .local.php override
+			$localPath = $projectRoot . "/config/" . pathinfo($filename, PATHINFO_FILENAME) . ".local.php";
 			
-			// And return them
-			return $this->contents_of_app_php[$filename];
+			if (file_exists($localPath) && is_readable($localPath)) {
+				$local = require $localPath;
+				$config = array_replace_recursive($config, $local);
+			}
+			
+			// Cache and return
+			return $this->contents_of_app_php[$filename] = $config;
 		}
 		
 		/**
