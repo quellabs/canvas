@@ -264,7 +264,7 @@
 		 */
 		private function getFilePath(string $key): string {
 			$hashedKey = $this->hashKey($key);
-			return $this->getContextPath() . 'FileCache.php/' . $hashedKey . '.cache';
+			return $this->getContextPath() . '/' . $hashedKey . '.cache';
 		}
 		
 		/**
@@ -275,7 +275,7 @@
 		 */
 		private function getLockFilePath(string $key): string {
 			$hashedKey = $this->hashKey($key);
-			return $this->getContextPath() . 'FileCache.php/' . $hashedKey . '.lock';
+			return $this->getContextPath() . '/' . $hashedKey . '.lock';
 		}
 		
 		/**
