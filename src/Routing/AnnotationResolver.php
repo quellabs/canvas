@@ -113,37 +113,21 @@
 		 *
 		 * @param Request $request The HTTP request object
 		 * @return array Array of matched route objects, empty if no matches found
+		 * @throws AnnotationReaderException
 		 */
 		public function resolveAll(Request $request): array {
 			$requestUrl = $this->parseRequestUrl($request->getPathInfo());
-			$routeIndex = $this->getRouteIndex();
 			
 			$candidates = $this->indexBuilder->getFilteredCandidates(
 				$requestUrl,
 				$request->getMethod(),
-				$routeIndex
+				$this->getRouteIndex()
 			);
 			
-			if (empty($candidates)) {
-				return [];
-			}
-			
-			return $this->matchCandidates($candidates, $requestUrl, $request->getRequestUri(), $request->getMethod());
-		}
-		
-		/**
-		 * Match filtered candidates against URL
-		 * @param array $candidates Pre-filtered route candidates
-		 * @param array $requestUrl Parsed URL segments
-		 * @param string $originalUrl Original URL string
-		 * @param string $requestMethod HTTP method
-		 * @return array Array of matched routes
-		 */
-		private function matchCandidates(array $candidates, array $requestUrl, string $originalUrl, string $requestMethod): array {
 			$results = [];
 			
 			foreach ($candidates as $route) {
-				$match = $this->routeMatcher->matchRoute($route, $requestUrl, $originalUrl, $requestMethod);
+				$match = $this->routeMatcher->matchRoute($route, $requestUrl, $request->getRequestUri(), $request->getMethod());
 				
 				if ($match !== null) {
 					$results[] = $match;
@@ -152,7 +136,7 @@
 			
 			return $results;
 		}
-		
+
 		/**
 		 * Clear all caches and force rebuild
 		 * @return bool True if all caches were cleared successfully
