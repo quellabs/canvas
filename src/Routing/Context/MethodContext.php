@@ -12,6 +12,7 @@
 	 */
 	class MethodContext implements MethodContextInterface {
 		
+		private array $pattern;
 		private Request $request;
 		private object $class;
 		private string $methodName;
@@ -28,12 +29,14 @@
 			Request $request,              // The request object
 			object $target,                // The original object instance
 			string $methodName,            // Method being called
-			array $arguments               // Method parameters
+			array $arguments,              // Method parameters
+			array $pattern                 // Matched pattern
 		) {
 			$this->request = $request;
 			$this->class = $target;
 			$this->methodName = $methodName;
 			$this->arguments = $arguments;
+			$this->pattern = $pattern;
 		}
 		
 		/**
@@ -83,5 +86,13 @@
 		 */
 		public function setRequest(Request $request): void {
 			$this->request = $request;
+		}
+		
+		/**
+		 * Returns the pattern that was matched
+		 * @return array
+		 */
+		public function getPattern(): array {
+			return $this->pattern;
 		}
 	}

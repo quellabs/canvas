@@ -144,6 +144,7 @@
 			
 			// All segments matched
 			return [
+				'pattern'      => $compiledPattern,
 				'http_methods' => $routeData['http_methods'],
 				'controller'   => $routeData['controller'],
 				'method'       => $routeData['method'],
@@ -183,6 +184,7 @@
 			}
 			
 			return [
+				'pattern'      => $compiledPattern,
 				'http_methods' => $routeData['http_methods'],
 				'controller'   => $routeData['controller'],
 				'method'       => $routeData['method'],
