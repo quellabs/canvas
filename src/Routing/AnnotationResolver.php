@@ -90,6 +90,7 @@
 		 * @param Request $request The incoming HTTP request to resolve
 		 * @return array Returns the first matched route info
 		 * @throws RouteNotFoundException When no matching route is found
+		 * @throws AnnotationReaderException On error reading annotations
 		 */
 		public function resolve(Request $request): array {
 			$result = $this->resolveAll($request);
