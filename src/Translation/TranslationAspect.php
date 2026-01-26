@@ -27,13 +27,10 @@
 	class TranslationAspect implements BeforeAspectInterface {
 		
 		/** Translation domain (e.g., "admin", "user") - empty means derive from controller name */
-		private string $domain = '';
+		private string $domain;
 		
 		/** Fallback locale when requested locale is unavailable or invalid */
-		private string $defaultLocale = 'en';
-		
-		/** Whitelist of supported locale codes - only these locales will be accepted */
-		private array $availableLocales = ['en', 'nl'];
+		private string $defaultLocale;
 		
 		/** Cache to prevent re-loading same translation files within request */
 		private array $loadedTranslations = [];
@@ -42,16 +39,13 @@
 		 * Construct a new TranslationAspect instance
 		 * @param string $domain Translation domain - empty to derive from controller class name (AdminController -> "admin")
 		 * @param string $defaultLocale Fallback locale when requested locale is unavailable or invalid
-		 * @param array $availableLocales Whitelist of supported locale codes
 		 */
 		public function __construct(
 			string $domain = '',
-			string $defaultLocale = 'en',
-			array $availableLocales = ['en', 'nl']
+			string $defaultLocale = 'en'
 		) {
 			$this->domain = $domain;
 			$this->defaultLocale = $defaultLocale;
-			$this->availableLocales = $availableLocales;
 		}
 		
 		/**
@@ -64,7 +58,7 @@
 			$domain = $this->domain ?: $this->deriveFromController($context);
 			
 			// Determine locale from request (query, session, cookie, header, or default)
-			$locale = $this->determineLocale($context->getRequest());
+			$locale = $this->determineLocale($context->getRequest(), $domain);
 			
 			// Load translation file for domain and locale (with fallback to default locale)
 			$translations = $this->loadTranslations($domain, $locale);
@@ -84,20 +78,21 @@
 		 * 1. Query parameter (locale) - explicit user choice for current request
 		 * 2. Session - persisted user preference across requests
 		 * 3. Cookie - fallback for sessionless persistence
-		 * 4. Accept-Language header - browser/client preference (via Symfony's getPreferredLanguage)
-		 * 5. Default locale - guaranteed fallback
+		 * 4. Accept-Language header - browser/client preference
 		 *
-		 * Only returns locales present in availableLocales whitelist
+		 * Validates locales for security (alphanumeric + underscore/hyphen only).
+		 * Filesystem determines availability - missing translation files trigger fallback.
 		 *
 		 * @param Request $request The current HTTP request
-		 * @return string Determined locale code (always valid and in availableLocales)
+		 * @param string $domain Translation domain to check filesystem for available locales
+		 * @return string Determined locale code (validated for security)
 		 */
-		private function determineLocale(Request $request): string {
+		private function determineLocale(Request $request, string $domain): string {
 			$sources = [
 				fn() => $request->query->get('locale'),
 				fn() => $request->hasSession() ? $request->getSession()->get('locale') : null,
 				fn() => $request->cookies->get('locale'),
-				fn() => $request->getPreferredLanguage($this->availableLocales),
+				fn() => $this->getPreferredLocaleFromFilesystem($request, $domain),
 			];
 			
 			foreach ($sources as $source) {
@@ -160,7 +155,7 @@
 		 * Get the file path for a translation file
 		 *
 		 * Path structure: {project_root}/translations/{locale}/{domain}.php
-		 * Example: /var/www/translations/nl/admin.php
+		 * Example: /var/www/project_root/translations/nl/admin.php
 		 *
 		 * @param string $domain Translation domain (e.g., "admin")
 		 * @param string $locale Locale code (e.g., "nl")
@@ -200,13 +195,73 @@
 		}
 		
 		/**
-		 * Check if a locale is in the list of available locales
-		 * Uses strict comparison to prevent type juggling attacks
+		 * Check if a locale code is safe to use in filesystem paths
+		 *
+		 * Validates that locale contains only:
+		 * - Lowercase letters (a-z)
+		 * - Underscores (_)
+		 * - Hyphens (-)
+		 *
+		 * This prevents path traversal attacks while allowing standard locale codes
+		 * like "en", "en_US", "pt-BR", etc.
+		 *
 		 * @param string $locale Locale code to validate
-		 * @return bool True if locale is in availableLocales, false otherwise
+		 * @return bool True if locale is safe for filesystem use, false otherwise
 		 */
 		private function isValidLocale(string $locale): bool {
-			return in_array($locale, $this->availableLocales, true);
+			// Must be non-empty and contain only safe characters
+			return $locale !== '' && preg_match('/^[a-z_-]+$/i', $locale) === 1;
+		}
+		
+		/**
+		 * Get preferred locale from Accept-Language header by checking filesystem
+		 *
+		 * Scans the translations directory to find available locales for the given domain,
+		 * then uses Symfony's getPreferredLanguage() to match against Accept-Language header.
+		 *
+		 * @param Request $request The current HTTP request
+		 * @param string $domain Translation domain to scan for available locales
+		 * @return string|null Locale code or null if no valid locale found
+		 */
+		private function getPreferredLocaleFromFilesystem(Request $request, string $domain): ?string {
+			// Determine path to translations directory
+			$translationsPath = ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . 'translations';
+			
+			// Check if translations directory exists
+			if (!is_dir($translationsPath)) {
+				return null;
+			}
+			
+			// Scan for locale directories
+			$availableLocales = [];
+			$localeDirectories = scandir($translationsPath);
+			
+			foreach ($localeDirectories as $localeDir) {
+				// Skip . and ..
+				if ($localeDir === '.' || $localeDir === '..') {
+					continue;
+				}
+				
+				// Build path
+				$localePath = $translationsPath . DIRECTORY_SEPARATOR . $localeDir;
+				
+				// Must be a directory and contain the domain translation file
+				if (is_dir($localePath)) {
+					$translationFile = $localePath . DIRECTORY_SEPARATOR . $domain . '.php';
+					
+					if ($this->isValidLocale($localeDir) && file_exists($translationFile)) {
+						$availableLocales[] = $localeDir;
+					}
+				}
+			}
+			
+			// No locales available for this domain
+			if (empty($availableLocales)) {
+				return null;
+			}
+			
+			// Use Symfony's getPreferredLanguage to match against Accept-Language header
+			return $request->getPreferredLanguage($availableLocales);
 		}
 		
 		/**
