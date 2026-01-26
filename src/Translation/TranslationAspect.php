@@ -84,7 +84,7 @@
 		 * 1. Query parameter (locale) - explicit user choice for current request
 		 * 2. Session - persisted user preference across requests
 		 * 3. Cookie - fallback for sessionless persistence
-		 * 4. Accept-Language header - browser/client preference
+		 * 4. Accept-Language header - browser/client preference (via Symfony's getPreferredLanguage)
 		 * 5. Default locale - guaranteed fallback
 		 *
 		 * Only returns locales present in availableLocales whitelist
@@ -97,7 +97,7 @@
 				fn() => $request->query->get('locale'),
 				fn() => $request->hasSession() ? $request->getSession()->get('locale') : null,
 				fn() => $request->cookies->get('locale'),
-				fn() => $this->getPreferredLanguage($request),
+				fn() => $request->getPreferredLanguage($this->availableLocales),
 			];
 			
 			foreach ($sources as $source) {
@@ -207,65 +207,6 @@
 		 */
 		private function isValidLocale(string $locale): bool {
 			return in_array($locale, $this->availableLocales, true);
-		}
-		
-		/**
-		 * Extract preferred language from Accept-Language header
-		 *
-		 * Parses header format: "en-US,en;q=0.9,nl;q=0.8"
-		 * - Extracts quality values (q parameter)
-		 * - Strips regional variants (en-US -> en)
-		 * - Sorts by quality descending
-		 * - Returns first match against availableLocales
-		 *
-		 * @param Request $request The current HTTP request
-		 * @return string|null Locale code or null if no valid match found
-		 */
-		private function getPreferredLanguage(Request $request): ?string {
-			// Get Accept-Language header from request
-			$acceptLanguage = $request->headers->get('Accept-Language');
-			
-			// No header present - cannot determine preference
-			if (!$acceptLanguage) {
-				return null;
-			}
-			
-			// Parse Accept-Language header into quality-weighted array
-			// Example: "en-US,en;q=0.9,nl;q=0.8" -> ['en-us' => 1.0, 'en' => 0.9, 'nl' => 0.8]
-			$languages = [];
-			
-			// Process each language range in the comma-separated list
-			foreach (explode(',', $acceptLanguage) as $languageRange) {
-				// Split into language code and quality value
-				// "en;q=0.9" -> ["en", "0.9"]
-				// "nl" -> ["nl"]
-				$parts = explode(';q=', $languageRange);
-				$code = strtolower(trim($parts[0]));
-				
-				// Quality defaults to 1.0 if not specified
-				$quality = isset($parts[1]) ? (float)$parts[1] : 1.0;
-				
-				// Strip regional variant (en-US -> en) to match our locale codes
-				if (str_contains($code, '-')) {
-					$code = substr($code, 0, strpos($code, '-'));
-				}
-				
-				// Store language code with its quality weight
-				$languages[$code] = $quality;
-			}
-			
-			// Sort by quality value descending (highest preference first)
-			arsort($languages);
-			
-			// Return first locale code that matches our available locales
-			foreach (array_keys($languages) as $languageCode) {
-				if ($this->isValidLocale($languageCode)) {
-					return $languageCode;
-				}
-			}
-			
-			// No matches found in available locales
-			return null;
 		}
 		
 		/**
