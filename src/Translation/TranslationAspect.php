@@ -21,8 +21,9 @@
 	 * - Each file returns an associative array of key => translation pairs
 	 *
 	 * Sets request attributes:
-	 * - 'translations': array of loaded translations
-	 * - 'locale': determined locale string
+	 * - 'translations': array of loaded translations (use this for rendering)
+	 * - 'locale': requested/determined locale (use for UI context like date/number formatting)
+	 * - 'resolved_locale': actual locale file loaded (use for debugging/logging fallback events)
 	 */
 	class TranslationAspect implements BeforeAspectInterface {
 		
@@ -35,15 +36,15 @@
 		/** Cache to prevent re-loading same translation files within request */
 		private array $loadedTranslations = [];
 		
+		/** Static cache of available locales per domain (shared across all instances) */
+		private static array $availableLocalesByDomain = [];
+		
 		/**
-		 * Construct a new TranslationAspect instance
+		 * Constructor
 		 * @param string $domain Translation domain - empty to derive from controller class name (AdminController -> "admin")
 		 * @param string $defaultLocale Fallback locale when requested locale is unavailable or invalid
 		 */
-		public function __construct(
-			string $domain = '',
-			string $defaultLocale = 'en'
-		) {
+		public function __construct(string $domain = '', string $defaultLocale = 'en') {
 			$this->domain = $domain;
 			$this->defaultLocale = $defaultLocale;
 		}
@@ -58,19 +59,32 @@
 			$domain = $this->domain ?: $this->deriveFromController($context);
 			
 			// Determine locale from request (query, session, cookie, header, or default)
-			$locale = $this->determineLocale($context->getRequest(), $domain);
+			$requestedLocale = $this->determineLocale($context->getRequest(), $domain);
 			
 			// Load translation file for domain and locale (with fallback to default locale)
-			$translations = $this->loadTranslations($domain, $locale);
+			[$translations, $resolvedLocale] = $this->loadTranslations($domain, $requestedLocale);
 			
-			// Store both translations and locale in request attributes for controller access
+			// Store translations, requested locale, and resolved locale in request attributes
 			$context->getRequest()->attributes->set('translations', $translations);
-			$context->getRequest()->attributes->set('locale', $locale);
+			$context->getRequest()->attributes->set('locale', $requestedLocale);
+			$context->getRequest()->attributes->set('resolved_locale', $resolvedLocale);
 			
 			// Return null to allow normal controller execution
 			return null;
 		}
 		
+		/**
+		 * Clear static locale cache
+		 * @param string|null $domain Optional domain to clear (null clears all)
+		 */
+		public static function clearLocaleCache(?string $domain = null): void {
+			if ($domain === null) {
+				self::$availableLocalesByDomain = [];
+			} else {
+				unset(self::$availableLocalesByDomain[$domain]);
+			}
+		}
+
 		/**
 		 * Determine the locale from request with fallback chain
 		 *
@@ -79,13 +93,21 @@
 		 * 2. Session - persisted user preference across requests
 		 * 3. Cookie - fallback for sessionless persistence
 		 * 4. Accept-Language header - browser/client preference
+		 * 5. Default locale (if translation file exists)
+		 * 6. First available locale for domain (if default doesn't exist)
+		 * 7. Default locale anyway (logical UI locale, may have no translations)
 		 *
-		 * Validates locales for security (alphanumeric + underscore/hyphen only).
-		 * Filesystem determines availability - missing translation files trigger fallback.
+		 * All locales from sources 1-4 are validated for:
+		 * - Security (alphanumeric + underscore/hyphen only)
+		 * - Availability (translation file must exist for domain)
+		 *
+		 * Final fallback (step 7) returns defaultLocale even without translations.
+		 * The 'resolved_locale' attribute indicates which file was actually loaded,
+		 * but consumers render from 'translations' array directly (no locale needed).
 		 *
 		 * @param Request $request The current HTTP request
 		 * @param string $domain Translation domain to check filesystem for available locales
-		 * @return string Determined locale code (validated for security)
+		 * @return string Determined locale code (user preference for UI context)
 		 */
 		private function determineLocale(Request $request, string $domain): string {
 			$sources = [
@@ -98,11 +120,25 @@
 			foreach ($sources as $source) {
 				$locale = $source();
 				
-				if ($locale && $this->isValidLocale($locale)) {
+				if ($locale && $this->isValidLocale($locale) && $this->hasTranslationFile($domain, $locale)) {
 					return $locale;
 				}
 			}
 			
+			// Check if default locale has translations
+			if ($this->hasTranslationFile($domain, $this->defaultLocale)) {
+				return $this->defaultLocale;
+			}
+			
+			// Default locale doesn't exist - fallback to first available locale for this domain
+			$availableLocales = $this->getAvailableLocalesForDomain($domain);
+			
+			if (!empty($availableLocales)) {
+				return $availableLocales[0];
+			}
+			
+			// No translations exist at all - return default locale anyway
+			// (loadTranslations will return empty array)
 			return $this->defaultLocale;
 		}
 		
@@ -113,42 +149,50 @@
 		 * 1. Try requested locale
 		 * 2. If file doesn't exist and locale != default, try default locale
 		 *
+		 * Returns both translations and the actual locale used (may differ from requested)
 		 * Caches loaded translations to prevent redundant file I/O within same request
 		 *
 		 * @param string $domain Translation domain (e.g., "admin", "user")
-		 * @param string $locale Locale code (e.g., "en", "nl")
-		 * @return array Translation key-value pairs (empty array if no files found)
+		 * @param string $locale Requested locale code (e.g., "en", "nl")
+		 * @return array [translations array, resolved locale string]
 		 */
 		private function loadTranslations(string $domain, string $locale): array {
-			// Determine cache key
 			$cacheKey = "{$domain}.{$locale}";
 			
-			// Return cached translations if already loaded in this request
+			// Check cache first for requested locale
 			if (isset($this->loadedTranslations[$cacheKey])) {
-				return $this->loadedTranslations[$cacheKey];
+				return [$this->loadedTranslations[$cacheKey], $locale];
 			}
 			
-			// Try to load the requested locale
+			// Not in cache - try to load the requested locale file
 			$filePath = $this->getTranslationFilePath($domain, $locale);
 			
-			// Cache and return translations for requested locale
 			if (file_exists($filePath)) {
-				return $this->loadedTranslations[$cacheKey] = $this->loadTranslationFile($filePath);
+				$this->loadedTranslations[$cacheKey] = $this->loadTranslationFile($filePath);
+				return [$this->loadedTranslations[$cacheKey], $locale];
 			}
 			
 			// Requested locale file not found - try fallback to default locale
 			if ($locale !== $this->defaultLocale) {
-				// Try to load the default locale
+				$fallbackCacheKey = "{$domain}.{$this->defaultLocale}";
+				
+				// Check cache for default locale
+				if (isset($this->loadedTranslations[$fallbackCacheKey])) {
+					return [$this->loadedTranslations[$fallbackCacheKey], $this->defaultLocale];
+				}
+				
+				// Not in cache - try to load default locale file
 				$fallbackPath = $this->getTranslationFilePath($domain, $this->defaultLocale);
 				
-				// Cache and return translations from default locale
 				if (file_exists($fallbackPath)) {
-					return $this->loadedTranslations[$cacheKey] = $this->loadTranslationFile($fallbackPath);
+					$this->loadedTranslations[$fallbackCacheKey] = $this->loadTranslationFile($fallbackPath);
+					return [$this->loadedTranslations[$fallbackCacheKey], $this->defaultLocale];
 				}
 			}
 			
-			// No translation files found - cache and return empty array
-			return $this->loadedTranslations[$cacheKey] = [];
+			// No translation files found - cache empty array to avoid repeated disk checks
+			$this->loadedTranslations[$cacheKey] = [];
+			return [[], $locale]; // Return requested locale even though no translations exist
 		}
 		
 		/**
@@ -198,25 +242,83 @@
 		 * Check if a locale code is safe to use in filesystem paths
 		 *
 		 * Validates that locale contains only:
-		 * - Lowercase letters (a-z)
+		 * - Letters (a-z, A-Z)
+		 * - Digits (0-9)
 		 * - Underscores (_)
 		 * - Hyphens (-)
 		 *
 		 * This prevents path traversal attacks while allowing standard locale codes
-		 * like "en", "en_US", "pt-BR", etc.
+		 * like "en", "en_US", "pt-BR", "zh-Hans", etc.
 		 *
 		 * @param string $locale Locale code to validate
 		 * @return bool True if locale is safe for filesystem use, false otherwise
 		 */
 		private function isValidLocale(string $locale): bool {
-			// Must be non-empty and contain only safe characters
-			return $locale !== '' && preg_match('/^[a-z_-]+$/i', $locale) === 1;
+			// Must be non-empty and contain only safe characters (alphanumeric + _ -)
+			return $locale !== '' && preg_match('/^[a-z0-9_-]+$/i', $locale) === 1;
+		}
+		/**
+		 * Get all available locales for a given domain
+		 *
+		 * Scans the translations directory and returns locales that have
+		 * translation files for the specified domain.
+		 *
+		 * @param string $domain Translation domain
+		 * @return array Array of available locale codes
+		 */
+		private function getAvailableLocalesForDomain(string $domain): array {
+			// Check static cache first
+			if (isset(self::$availableLocalesByDomain[$domain])) {
+				return self::$availableLocalesByDomain[$domain];
+			}
+			
+			$translationsPath = ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . 'translations';
+			
+			if (!is_dir($translationsPath)) {
+				self::$availableLocalesByDomain[$domain] = [];
+				return [];
+			}
+			
+			$availableLocales = [];
+			$localeDirectories = scandir($translationsPath);
+			
+			foreach ($localeDirectories as $localeDir) {
+				if ($localeDir === '.' || $localeDir === '..') {
+					continue;
+				}
+				
+				$localePath = $translationsPath . DIRECTORY_SEPARATOR . $localeDir;
+				
+				// Skip symlinks and only process real directories
+				if (is_dir($localePath) && !is_link($localePath)) {
+					$translationFile = $localePath . DIRECTORY_SEPARATOR . $domain . '.php';
+					
+					if (file_exists($translationFile) && $this->isValidLocale($localeDir)) {
+						$availableLocales[] = $localeDir;
+					}
+				}
+			}
+			
+			self::$availableLocalesByDomain[$domain] = $availableLocales;
+			return $availableLocales;
+		}
+		
+		/**
+		 * Check if a translation file exists for the given domain and locale
+		 *
+		 * @param string $domain Translation domain
+		 * @param string $locale Locale code
+		 * @return bool True if translation file exists, false otherwise
+		 */
+		private function hasTranslationFile(string $domain, string $locale): bool {
+			$filePath = $this->getTranslationFilePath($domain, $locale);
+			return file_exists($filePath);
 		}
 		
 		/**
 		 * Get preferred locale from Accept-Language header by checking filesystem
 		 *
-		 * Scans the translations directory to find available locales for the given domain,
+		 * Uses getAvailableLocalesForDomain() to find available locales,
 		 * then uses Symfony's getPreferredLanguage() to match against Accept-Language header.
 		 *
 		 * @param Request $request The current HTTP request
@@ -224,38 +326,8 @@
 		 * @return string|null Locale code or null if no valid locale found
 		 */
 		private function getPreferredLocaleFromFilesystem(Request $request, string $domain): ?string {
-			// Determine path to translations directory
-			$translationsPath = ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . 'translations';
+			$availableLocales = $this->getAvailableLocalesForDomain($domain);
 			
-			// Check if translations directory exists
-			if (!is_dir($translationsPath)) {
-				return null;
-			}
-			
-			// Scan for locale directories
-			$availableLocales = [];
-			$localeDirectories = scandir($translationsPath);
-			
-			foreach ($localeDirectories as $localeDir) {
-				// Skip . and ..
-				if ($localeDir === '.' || $localeDir === '..') {
-					continue;
-				}
-				
-				// Build path
-				$localePath = $translationsPath . DIRECTORY_SEPARATOR . $localeDir;
-				
-				// Must be a directory and contain the domain translation file
-				if (is_dir($localePath)) {
-					$translationFile = $localePath . DIRECTORY_SEPARATOR . $domain . '.php';
-					
-					if ($this->isValidLocale($localeDir) && file_exists($translationFile)) {
-						$availableLocales[] = $localeDir;
-					}
-				}
-			}
-			
-			// No locales available for this domain
 			if (empty($availableLocales)) {
 				return null;
 			}
@@ -271,12 +343,12 @@
 		 * - App\Controllers\AdminController -> "admin"
 		 * - App\Controllers\UserProfileController -> "user_profile"
 		 * - App\Controllers\APIController -> "api"
+		 * - App\Controllers\Admin -> "admin" (no suffix)
 		 *
-		 * Strips namespace and "Controller" suffix, converts to snake_case
+		 * Strips namespace and "Controller" suffix (if present), converts to snake_case
 		 *
 		 * @param MethodContextInterface $context The method execution context
-		 * @return string Derived domain name (snake_case, no "Controller" suffix)
-		 * @throws \RuntimeException If controller class name is just "Controller" with no prefix
+		 * @return string Derived domain name (snake_case)
 		 */
 		private function deriveFromController(MethodContextInterface $context): string {
 			// Get fully qualified class name
@@ -286,17 +358,19 @@
 			$parts = explode('\\', $className);
 			$shortName = end($parts);
 			
-			// Remove "Controller" suffix (AdminController -> Admin)
-			$withoutSuffix = str_replace('Controller', '', $shortName);
-			
-			// Validate that we have something left after removing suffix
-			if ($withoutSuffix === '') {
+			// Class name cannot be just "Controller" with no prefix
+			if ($shortName === 'Controller') {
 				throw new \RuntimeException(
 					"Cannot derive domain from controller '{$className}' - class name cannot be just 'Controller'"
 				);
 			}
 			
+			// Remove "Controller" suffix if present (AdminController -> Admin)
+			if (str_ends_with($shortName, 'Controller')) {
+				$shortName = substr($shortName, 0, -10); // Remove 'Controller' (10 chars)
+			}
+			
 			// Convert to snake_case (UserProfile -> user_profile)
-			return StringInflector::snakeCase($withoutSuffix);
+			return StringInflector::snakeCase($shortName);
 		}
 	}
