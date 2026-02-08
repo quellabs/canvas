@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Sanitization;
 	
 	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
+	use Quellabs\Canvas\Routing\Context\MethodContext;
 	use Quellabs\Canvas\Sanitization\Contracts\SanitizationInterface;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Quellabs\Contracts\DependencyInjection\Container;
@@ -95,13 +96,20 @@
 		 * @param array $rules The sanitization rules
 		 */
 		private function sanitizeRequestData(Request $request, array $rules): void {
-			// Sanitize POST data and replace the original request data
-			$post = $request->request->all();
-			$request->request->replace($this->applySanitization($post, $rules));
+			// Capture original data
+			$originalPost = $request->request->all();
+			$originalQuery = $request->query->all();
 			
-			// Sanitize GET data and replace the original query parameters
-			$query = $request->query->all();
-			$request->query->replace($this->applySanitization($query, $rules));
+			// Apply sanitization rules
+			$sanitizedPost = $this->applySanitization($originalPost, $rules);
+			$sanitizedQuery = $this->applySanitization($originalQuery, $rules);
+			
+			// Store sanitized results in request attributes for explicit downstream access
+			$request->attributes->set('sanitized', [
+				'post'   => $sanitizedPost,
+				'query'  => $sanitizedQuery,
+				'merged' => array_replace($sanitizedQuery, $sanitizedPost),
+			]);
 		}
 		
 		/**
