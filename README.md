@@ -37,7 +37,7 @@ Annotation-based routing, automatic controller discovery, typed route parameters
 
 ## ObjectQuel ORM
 
-Canvas includes ObjectQuel, an ORM with a query language inspired by QUEL. For simple lookups you get the familiar `find` and `findBy` methods. For complex queries, ObjectQuel's declarative syntax reads closer to intent than DQL or query builders:
+Canvas integrates with ObjectQuel through the `quellabs/canvas-objectquel` package, giving you an ORM with a query language inspired by QUEL. For simple lookups you get the familiar `find` and `findBy` methods. For complex queries, ObjectQuel's declarative syntax reads closer to intent than DQL or query builders:
 
 ```php
 $results = $this->em()->executeQuery("
