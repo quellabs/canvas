@@ -34,6 +34,7 @@
 		 * @param array|null $urlData
 		 * @param bool $isLegacyPath
 		 * @return Response HTTP response to be sent back to the client
+		 * @throws AnnotationReaderException|RouteNotFoundException
 		 */
 		public function handle(Request $request, ?array &$urlData, bool &$isLegacyPath): Response {
 			// Initialize variables to track route resolution and performance metrics
@@ -44,15 +45,17 @@
 			$providers = $this->prepareRequest($request);
 			
 			try {
-				try {
-					$response = $this->modernResolve($request, $urlData);
-				} catch (RouteNotFoundException $e) {
-					$response = $this->legacyResolve($request, $isLegacyPath);
+				$response = $this->modernResolve($request, $urlData);
+			} catch (RouteNotFoundException $e) {
+				// Check if legacy routing is enabled and a handler is configured
+				// If not, rethrow the exception
+				if (!$this->kernel->isLegacyEnabled() || !$this->kernel->getLegacyHandler()) {
+					// No legacy fallback configured,
+					throw $e;
 				}
-			} catch (\Exception $e) {
-				// Handle any unexpected errors during request processing
-				$response = $this->kernel->createErrorResponse($e);
-				$isLegacyPath = false;
+				
+				// Resolve the legacy path
+				$response = $this->legacyResolve($request, $isLegacyPath);
 			} finally {
 				// Always clean up request resources, regardless of success/failure
 				$this->cleanupRequest($providers);
@@ -120,24 +123,14 @@
 		 * @param Request $request The incoming HTTP request to resolve
 		 * @param bool $isLegacyPath Reference parameter - set to true if legacy routing is used
 		 * @return Response The response from legacy handler or 404 if routing fails
+		 * @throws RouteNotFoundException
 		 */
 		private function legacyResolve(Request $request, bool &$isLegacyPath): Response {
-			// Check if legacy routing is enabled and a handler is configured
-			if (!$this->kernel->isLegacyEnabled() || !$this->kernel->getLegacyHandler()) {
-				// No legacy fallback configured, return 404 response
-				return $this->createNotFoundResponse($request, $this->kernel->isLegacyEnabled());
-			}
+			// Mark that we're using legacy routing for this request
+			$isLegacyPath = true;
 			
-			try {
-				// Mark that we're using legacy routing for this request
-				$isLegacyPath = true;
-				
-				// Delegate to the legacy routing handler
-				return $this->kernel->getLegacyHandler()->handle($request);
-			} catch (RouteNotFoundException $e) {
-				// Legacy routing also failed - return 404 response
-				return $this->createNotFoundResponse($request, $this->kernel->isLegacyEnabled());
-			}
+			// Delegate to the legacy routing handler
+			return $this->kernel->getLegacyHandler()->handle($request);
 		}
 	
 		/**
@@ -179,57 +172,5 @@
 				// Always unregister context, even if exception occurs
 				$this->kernel->getDependencyInjector()->unregister($methodContextProvider);
 			}
-		}
-		
-		/**
-		 * Create a 404 Not Found response
-		 * @param Request $request The Request object
-		 * @param bool $legacyAttempted Whether legacy fallthrough was attempted
-		 * @return Response
-		 */
-		private function createNotFoundResponse(Request $request, bool $legacyAttempted = false): Response {
-			$isDevelopment = $this->kernel->getConfiguration()->getAs('debug_mode', 'bool', false);
-			$legacyPath = ComposerUtils::normalizePath($this->kernel->getConfiguration()->get('legacy_path', ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . 'legacy'));
-			$notFoundFile = $legacyPath . '404.php';
-			
-			if ($isDevelopment) {
-				// In development, show helpful debug information
-				if ($legacyAttempted) {
-					$legacyMessage = "No Canvas route found. Legacy fallback also has no matching file.\n\n";
-				} elseif ($this->kernel->isLegacyEnabled()) {
-					$legacyMessage = "No Canvas route found. No matching legacy file exists.\n\n";
-				} else {
-					$legacyMessage = "No Canvas route found.\n\n";
-				}
-				
-				if ($this->kernel->isLegacyEnabled() && file_exists($notFoundFile)) {
-					$customizationHelp = "Custom 404 file found at: {$notFoundFile}\n- This will be used in production mode\n- Or add a Canvas route for this path";
-				} elseif ($this->kernel->isLegacyEnabled()) {
-					$customizationHelp = "To customize this page:\n- Create a 404.php file in your legacy directory ({$legacyPath})\n- Or add a Canvas route for this path";
-				} else {
-					$customizationHelp = "To customize this page:\n- Add a Canvas route for this path\n- Or enable legacy mode and create a 404.php file";
-				}
-				
-				$content = sprintf(
-					"404 Not Found\n\nRequested: %s %s\n\n%s%s",
-					$request->getMethod(),
-					$request->getPathInfo(),
-					$legacyMessage,
-					$customizationHelp
-				);
-				
-				return new Response($content, Response::HTTP_NOT_FOUND, ['Content-Type' => 'text/plain']);
-			}
-			
-			// In production, try to include a custom 404.php file if it exists and legacy is enabled
-			if ($this->kernel->isLegacyEnabled() && file_exists($notFoundFile)) {
-				ob_start();
-				include $notFoundFile;
-				$content = ob_get_clean();
-				return new Response($content, Response::HTTP_NOT_FOUND);
-			}
-			
-			// Ultimate fallback - simple text
-			return new Response('Page not found', Response::HTTP_NOT_FOUND);
 		}
 	}
