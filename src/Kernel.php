@@ -78,7 +78,8 @@
 			$this->annotationsReader = $this->createAnnotationReader();
 			
 			// Register error handlers
-			$this->errorHandlers = ComposerUtils::findClassesInDirectory(ComposerUtils::getProjectRoot() . "/src/Error", function($e) {
+			$errorHandlerDirectory = $this->configuration->get("error_handler_directory", ComposerUtils::getProjectRoot() . "/src/Errors");
+			$this->errorHandlers = ComposerUtils::findClassesInDirectory($errorHandlerDirectory, function($e) {
 				return class_exists($e) && is_subclass_of($e, ErrorHandlerInterface::class);
 			});
 			
