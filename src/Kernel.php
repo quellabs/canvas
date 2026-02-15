@@ -78,8 +78,8 @@
 			$this->annotationsReader = $this->createAnnotationReader();
 			
 			// Register error handlers
-			$this->errorHandlers = ComposerUtils::findClassesInDirectory(ComposerUtils::getProjectRoot() . "/src/Errors", function($e) {
-				return is_subclass_of($e, ErrorHandlerInterface::class);
+			$this->errorHandlers = ComposerUtils::findClassesInDirectory(ComposerUtils::getProjectRoot() . "/src/Error", function($e) {
+				return class_exists($e) && is_subclass_of($e, ErrorHandlerInterface::class);
 			});
 			
 			// Instantiate Dependency Injector and register default providers

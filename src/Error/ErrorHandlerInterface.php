@@ -12,10 +12,10 @@
 		
 		/**
 		 * Determine whether this handler supports the given exception.
-		 * @param \Throwable $exception The thrown exception.
+		 * @param \Throwable $e The thrown exception.
 		 * @return bool True if this handler can handle the exception, false otherwise.
 		 */
-		public function supports(\Throwable $exception): bool;
+		public static function supports(\Throwable $e): bool;
 		
 		/**
 		 * Convert the given exception into an HTTP response.
@@ -26,9 +26,9 @@
 		 * - Setting the correct HTTP status code
 		 * - Returning a fully constructed Response instance
 		 *
-		 * @param \Throwable $exception The thrown exception being handled.
+		 * @param \Throwable $e The thrown exception being handled.
 		 * @param Request $request The current HTTP request.
 		 * @return Response The HTTP response representing the error.
 		 */
-		public function handle(\Throwable $exception, Request $request): Response;
+		public function handle(\Throwable $e, Request $request): Response;
 	}
