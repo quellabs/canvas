@@ -142,6 +142,15 @@ const WakaPACPanel = {
     /** @type {boolean}       True while a capture session is active */
     isCapturing: false,
 
+    /**
+     * Which tab is currently visible: 'live' or 'recording'.
+     * Switches to 'recording' automatically when recording starts so the user
+     * can watch messages arrive in real time. Stays on 'recording' after stop
+     * so the frozen data remains accessible while the live buffer keeps rolling.
+     * @type {string}
+     */
+    activeTab: 'live',
+
     /** @type {number|null}   Hook handle returned by installMessageHook(), used for cleanup */
     hhook: null,
 
@@ -264,19 +273,16 @@ const WakaPACPanel = {
 
             const entry = {
                 // HH:MM:SS.mmm — readable timestamp without the date component
-                time:    new Date().toISOString().slice(11, 23),
-                
+                time:    new Date().toISOString().substr(11, 12),
                 // pac-id of the container this message is dispatched to
                 pacId:   event.pacId ?? '—',
                 message: event.message,
                 wParam:  event.wParam,
                 lParam:  event.lParam,
-                
                 // The DOM element that originated the event — may be a descendant
                 // of the container (e.g. a <button> inside a PAC container).
                 // Stored as a reference; formatting happens at render time.
                 target:  event.target ?? null,
-                
                 // Repeat counter — incremented when consecutive identical collapsible
                 // messages arrive for the same container instead of pushing a new row.
                 count:   1,
@@ -310,23 +316,32 @@ const WakaPACPanel = {
             });
         });
 
-        // Capture button: toggle between live and capture mode
+        // Wire up tab buttons
+        panelEl.querySelectorAll('.wakapac-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                this.activeTab = tab.getAttribute('data-tab');
+                this.refresh();
+            });
+        });
+
+        // Record button: start/stop a recording session.
+        // Starting switches to the Recording tab so the user can watch messages
+        // arrive live. Stopping freezes the tab — data persists until next record.
         panelEl.querySelector('.wakapac-btn-capture')?.addEventListener('click', () => {
             if (this.isCapturing) {
-                // Stop: freeze the capture list so the user can inspect it without it scrolling
                 this.isCapturing = false;
             } else {
-                // Start: discard the previous capture and begin collecting fresh
                 this.captureBuffer = [];
                 this.isCapturing   = true;
+                this.activeTab     = 'recording'; // switch to recording tab on start
             }
 
             this.refresh();
         });
 
-        // Clear button: wipes whichever buffer is currently displayed
+        // Clear button: wipes the active tab's buffer
         panelEl.querySelector('.wakapac-btn-clear')?.addEventListener('click', () => {
-            if (this.isCapturing) {
+            if (this.activeTab === 'recording') {
                 this.captureBuffer = [];
             } else {
                 this.ringBuffer.length = 0;
@@ -407,15 +422,39 @@ const WakaPACPanel = {
     // ── Rendering ─────────────────────────────────────────────────────────────
 
     /**
-     * Full panel refresh: table, mode label, capture button state, counter.
+     * Full panel refresh: tabs, table, capture button state, counter.
      * Called after every state mutation.
      */
     refresh() {
-        const entries = this.isCapturing ? this.captureBuffer : this.ringBuffer;
+        const entries = this.activeTab === 'recording' ? this.captureBuffer : this.ringBuffer;
+        this.updateTabs();
         this.renderTable(entries);
         this.updateCaptureButton();
-        this.updateModeLabel();
         this.updateCounter();
+    },
+
+    /**
+     * Updates tab active states and their message count badges.
+     */
+    updateTabs() {
+        this.panelEl.querySelectorAll('.wakapac-tab').forEach(tab => {
+            const name    = tab.getAttribute('data-tab');
+            const isActive = name === this.activeTab;
+            tab.classList.toggle('wakapac-tab-active', isActive);
+
+            // Show message count in the Recording tab label
+            const badge = tab.querySelector('.wakapac-tab-count');
+
+            if (badge) {
+                if (name === 'recording') {
+                    badge.textContent = this.captureBuffer.length > 0
+                        ? ' (' + this.captureBuffer.length + ')'
+                        : '';
+                    // Pulse red while recording is active
+                    badge.classList.toggle('is-recording', this.isCapturing);
+                }
+            }
+        });
     },
 
     /**
@@ -425,10 +464,7 @@ const WakaPACPanel = {
      */
     renderTable(entries) {
         const tbody = this.panelEl.querySelector('.wakapac-tbody');
-        
-        if (!tbody){
-            return;
-		}
+        if (!tbody) return;
 
         if (entries.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" class="wakapac-empty">No messages yet</td></tr>';
@@ -466,26 +502,9 @@ const WakaPACPanel = {
      */
     updateCaptureButton() {
         const btn = this.panelEl.querySelector('.wakapac-btn-capture');
-        
-        if (!btn){
-            return;
-		}
-        
-        btn.textContent = this.isCapturing ? '⏹ Stop' : '⏺ Capture';
+        if (!btn) return;
+        btn.textContent = this.isCapturing ? '⏹ Stop' : '⏺ Record';
         btn.classList.toggle('wakapac-btn-active', this.isCapturing);
-    },
-
-    /**
-     * Updates the mode label to reflect live vs. capture mode.
-     */
-    updateModeLabel() {
-        const label = this.panelEl.querySelector('.wakapac-mode-label');
-        
-        if (!label){
-            return;
-		}
-        
-        label.textContent = this.isCapturing ? 'Capturing' : 'Live (last ' + RING_BUFFER_SIZE + ')';
     },
 
     /**
@@ -493,10 +512,7 @@ const WakaPACPanel = {
      */
     updateCounter() {
         const counter = this.panelEl.querySelector('.wakapac-counter');
-        
-        if (counter){
-            counter.textContent = this.totalSeen;
-		}
+        if (counter) counter.textContent = this.totalSeen;
     },
 
     // ── Formatters ────────────────────────────────────────────────────────────
@@ -529,14 +545,10 @@ const WakaPACPanel = {
      * @returns {string}
      */
     formatTarget(target) {
-        if (!target || !(target instanceof Element)){
-            return '—';
-		}
+        if (!target || !(target instanceof Element)) return '—';
 
         // Target is the container itself — redundant with the Container column
-        if (target.hasAttribute('data-pac-id')){
-            return '—';
-		}
+        if (target.hasAttribute('data-pac-id')) return '—';
 
         const tag = target.tagName.toLowerCase();
 
@@ -650,32 +662,14 @@ const WakaPACPanel = {
 
         // Decode wParam modifier bitmask into named flags
         const modifiers = [];
-        
-        if (wParam & wakaPAC.MK_LBUTTON){
-            modifiers.push('LButton');
-		}
-        
-        if (wParam & wakaPAC.MK_RBUTTON){
-            modifiers.push('RButton');
-		}
-        
-        if (wParam & wakaPAC.MK_MBUTTON){
-            modifiers.push('MButton');
-		}
-        
-        if (wParam & wakaPAC.MK_SHIFT){
-            modifiers.push('Shift');
-		}
-        
-        if (wParam & wakaPAC.MK_CONTROL){
-            modifiers.push('Ctrl');
-		}
-        
-        if (wParam & wakaPAC.MK_ALT){
-            modifiers.push('Alt');
-		}
+        if (wParam & wakaPAC.MK_LBUTTON)  modifiers.push('LButton');
+        if (wParam & wakaPAC.MK_RBUTTON)  modifiers.push('RButton');
+        if (wParam & wakaPAC.MK_MBUTTON)  modifiers.push('MButton');
+        if (wParam & wakaPAC.MK_SHIFT)    modifiers.push('Shift');
+        if (wParam & wakaPAC.MK_CONTROL)  modifiers.push('Ctrl');
+        if (wParam & wakaPAC.MK_ALT)      modifiers.push('Alt');
 
-        const modStr = modifiers.length > 0 ? ' (' + modifiers.join('+') + ')' : '';
+        const modStr = modifiers.length > 0 ? '  ' + modifiers.join('+') : '';
         return 'x=' + x + ', y=' + y + modStr;
     },
 
@@ -700,20 +694,11 @@ const WakaPACPanel = {
         const y = (lParam >> 16)    << 16 >> 16;
 
         const mods = [];
-        
-        if (modifiers & wakaPAC.MK_SHIFT){
-            mods.push('Shift');
-		}
-        
-        if (modifiers & wakaPAC.MK_CONTROL){
-            mods.push('Ctrl');
-		}
-        
-        if (modifiers & wakaPAC.MK_ALT){
-            mods.push('Alt');
-		}
+        if (modifiers & wakaPAC.MK_SHIFT)   mods.push('Shift');
+        if (modifiers & wakaPAC.MK_CONTROL) mods.push('Ctrl');
+        if (modifiers & wakaPAC.MK_ALT)     mods.push('Alt');
 
-        const modStr    = mods.length > 0 ? ' (' + mods.join('+') + ')' : '';
+        const modStr    = mods.length > 0 ? '  ' + mods.join('+') : '';
         const direction = delta > 0 ? '▲' : '▼';
         return direction + ' delta=' + delta + ', x=' + x + ', y=' + y + modStr;
     },
@@ -731,21 +716,13 @@ const WakaPACPanel = {
      */
     formatKeyDetails(wParam, lParam) {
         const vkName = this.getVkName(wParam);
-        const modifiers = [];
-        
-        if (lParam & wakaPAC.KM_SHIFT){
-            modifiers.push('Shift');
-		}
-        
-        if (lParam & wakaPAC.KM_CONTROL){
-            modifiers.push('Ctrl');
-		}
-        
-        if (lParam & wakaPAC.KM_ALT){
-            modifiers.push('Alt');
-		}
 
-        const modStr = modifiers.length > 0 ? ' (' + modifiers.join('+') + ')' : '';
+        const modifiers = [];
+        if (lParam & wakaPAC.KM_SHIFT)   modifiers.push('Shift');
+        if (lParam & wakaPAC.KM_CONTROL) modifiers.push('Ctrl');
+        if (lParam & wakaPAC.KM_ALT)     modifiers.push('Alt');
+
+        const modStr = modifiers.length > 0 ? '  ' + modifiers.join('+') : '';
         return vkName + modStr;
     },
 
@@ -828,10 +805,7 @@ const WakaPACPanel = {
 // WakaPACPanel.init() until after the current call stack (renderPanels) completes.
 setTimeout(function() {
     const panelEl = document.getElementById('panel-wakapac');
-    
-    if (panelEl){
-        WakaPACPanel.init(panelEl);
-	}
+    if (panelEl) WakaPACPanel.init(panelEl);
 }, 0);
 
 // ── Initial HTML ──────────────────────────────────────────────────────────────
@@ -844,12 +818,12 @@ return `
 
         <div class="wakapac-toolbar">
             <div class="wakapac-toolbar-left">
-                <span class="wakapac-mode-label">Live (last {$ringBufferSize})</span>
-                &nbsp;·&nbsp;
-                <span class="wakapac-counter">0</span>&nbsp;messages seen
+                <button class="wakapac-tab wakapac-tab-active" data-tab="live">Live · last {$ringBufferSize}</button>
+                <button class="wakapac-tab" data-tab="recording">Recording<span class="wakapac-tab-count"></span></button>
             </div>
             <div class="wakapac-toolbar-right">
-                <button class="wakapac-btn wakapac-btn-capture">⏺ Capture</button>
+                <span class="wakapac-counter">0</span>&nbsp;seen
+                <button class="wakapac-btn wakapac-btn-capture">⏺ Record</button>
                 <button class="wakapac-btn wakapac-btn-clear">🗑 Clear</button>
             </div>
         </div>
@@ -909,7 +883,7 @@ JS;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 6px 12px;
+    padding: 0 12px 0 0;
     border-bottom: 1px solid #dee2e6;
     background: #f8f9fa;
     flex-shrink: 0;
@@ -919,22 +893,55 @@ JS;
 
 #panel-wakapac .wakapac-toolbar-left {
     display: flex;
-    align-items: center;
+    align-items: stretch;
 }
 
 #panel-wakapac .wakapac-toolbar-right {
     display: flex;
+    align-items: center;
     gap: 6px;
 }
 
-#panel-wakapac .wakapac-mode-label {
+/* ── Tabs ── */
+#panel-wakapac .wakapac-tab {
+    padding: 7px 14px;
+    font-size: 11px;
     font-weight: 600;
+    border: none;
+    border-right: 1px solid #dee2e6;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    color: #6c757d;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    white-space: nowrap;
+}
+
+#panel-wakapac .wakapac-tab:hover {
     color: #495057;
+    background: #e9ecef;
+}
+
+#panel-wakapac .wakapac-tab-active {
+    color: #0d6efd;
+    border-bottom-color: #0d6efd;
+    background: #fff;
+}
+
+#panel-wakapac .wakapac-tab-count {
+    font-weight: 400;
+    color: #6c757d;
+}
+
+#panel-wakapac .wakapac-tab-count.is-recording {
+    color: #dc3545;
+    font-weight: 700;
 }
 
 #panel-wakapac .wakapac-counter {
     font-weight: 700;
     color: #0d6efd;
+    font-size: 11px;
 }
 
 /* ── Filter bar ── */
