@@ -36,17 +36,7 @@
 		 * Older entries are silently discarded as new ones arrive.
 		 */
 		private const int RING_BUFFER_SIZE = 8;
-		
-		/** @var EventCollectorInterface */
-		private EventCollectorInterface $collector;
-		
-		/**
-		 * @param EventCollectorInterface $collector
-		 */
-		public function __construct(EventCollectorInterface $collector) {
-			$this->collector = $collector;
-		}
-		
+	
 		/**
 		 * This panel does not listen to any server-side signals.
 		 * All data is collected client-side via the WakaPAC hook.
@@ -73,7 +63,7 @@
 		 * @return string
 		 */
 		public function getTabLabel(): string {
-			return 'WakaPAC';
+			return 'WakaPAC Spy';
 		}
 		
 		/**

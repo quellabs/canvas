@@ -22,19 +22,14 @@
 		/** @var HtmlAnalyzer Helper for analyzing and manipulating HTML content */
 		private HtmlAnalyzer $htmlAnalyzer;
 		
-		/** @var string **/
-		private string $nonce;
-		
 		/**
 		 * Initialize the inspector with required dependencies.
 		 * @param EventCollectorInterface $eventCollector The event collector for gathering debug data
 		 * @param ConfigurationInterface $config
-		 * @throws RandomException
 		 */
 		public function __construct(EventCollectorInterface $eventCollector, ConfigurationInterface $config) {
 			$this->htmlAnalyzer = new HtmlAnalyzer();
 			$this->registry = new Registry($eventCollector, $config);
-			$this->nonce = base64_encode(random_bytes(16));
 		}
 		
 		/**
@@ -44,6 +39,7 @@
 		 * @param Response $response The HTTP response object to modify
 		 */
 		public function inject(Request $request, Response $response): void {
+			// Fetch the response that came out of the controller
 			$content = $response->getContent();
 			
 			// Only inject debug info into HTML responses
@@ -111,16 +107,16 @@
 			if ($this->htmlAnalyzer->looksLikeHtml($content)) {
 				// Create a complete HTML document structure
 				$newContent = sprintf("
-                <!DOCTYPE html>
-                <html lang='en'>
-                <head>
-                    <title>Debug</title>
-                </head>
-                <body>
-                    %s
-                    %s
-                </body>
-                </html>
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <title>Debug</title>
+</head>
+<body>
+    %s
+    %s
+</body>
+</html>
             ",
 					$content,  // Original content
 					$debugHtml // Debug information
