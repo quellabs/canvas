@@ -36,7 +36,7 @@
 		 * Older entries are silently discarded as new ones arrive.
 		 */
 		private const int RING_BUFFER_SIZE = 8;
-	
+		
 		/**
 		 * This panel does not listen to any server-side signals.
 		 * All data is collected client-side via the WakaPAC hook.
@@ -152,6 +152,14 @@ const WakaPACPanel = {
     /** @type {Object}   Reverse map from numeric message id → MSG_* constant name */
     messageNames: {},
 
+    /**
+     * Message types that are collapsed into a single row with a repeat counter
+     * when consecutive identical messages arrive for the same container.
+     * Populated in init() once wakaPAC constants are available.
+     * @type {Set<number>}
+     */
+    collapsibleMessages: new Set(),
+
     /** @type {HTMLElement|null}  Cached reference to the outer panel element */
     panelEl: null,
 
@@ -187,6 +195,15 @@ const WakaPACPanel = {
                 .map(([key, value]) => [value, key])
         );
 
+        // High-frequency message types that are collapsed into a single row
+        // with a repeat counter instead of flooding the table.
+        // When a different message type arrives, the counter resets.
+        this.collapsibleMessages = new Set([
+            wakaPAC.MSG_MOUSEMOVE,
+            wakaPAC.MSG_TIMER,
+            wakaPAC.MSG_MOUSEWHEEL,
+        ]);
+
         // Install the message hook.
         // Equivalent to Win32 WH_CALLWNDPROC: fires before msgProc receives the message.
         // Arrow function preserves `this` so the hook body can access panel state.
@@ -195,22 +212,26 @@ const WakaPACPanel = {
                 // HH:MM:SS.mmm — readable timestamp without the date component
                 time:    new Date().toISOString().substr(11, 12),
                 // Resolve the container's pac-id; fall back to em-dash when unavailable
-                pacId:   event.target?.getAttribute?.('data-pac-id') ?? '—',
+                pacId:   event.pacId ?? '—',
                 message: event.message,
                 wParam:  event.wParam,
                 lParam:  event.lParam,
+                // The actual DOM element that originated the event — may be a descendant
+                // of the container (e.g. a <button> inside a pac container).
+                // Stored as a reference; formatting happens at render time.
+                target:  event.target ?? null,
+                // Repeat counter — incremented when consecutive identical collapsible
+                // messages arrive for the same container instead of pushing a new row.
+                count:   1,
             };
 
-            // Always update the ring buffer, evicting the oldest entry when full
-            this.ringBuffer.push(entry);
+            // Collapse high-frequency consecutive messages of the same type and container
+            // into the last entry rather than flooding the buffer with individual rows.
+            // wParam/lParam are updated to the most recent values (e.g. latest mouse position).
+            this.pushEntry(this.ringBuffer, entry, RING_BUFFER_SIZE);
 
-            if (this.ringBuffer.length > RING_BUFFER_SIZE) {
-                this.ringBuffer.shift();
-            }
-
-            // Additionally append to the capture buffer during an active session
             if (this.isCapturing) {
-                this.captureBuffer.push(entry);
+                this.pushEntry(this.captureBuffer, entry, Infinity);
             }
 
             this.totalSeen++;
@@ -249,6 +270,47 @@ const WakaPACPanel = {
         this.refresh();
     },
 
+    // ── Buffer management ─────────────────────────────────────────────────────
+
+    /**
+     * Pushes an entry into a buffer, collapsing it into the previous entry
+     * if the message type is collapsible and matches the last entry's type
+     * and container. Evicts the oldest entry when the buffer exceeds maxSize.
+     *
+     * Collapsing updates wParam/lParam to the latest values so the most recent
+     * state (e.g. mouse position) is always shown, while count reflects how
+     * many events were received since the last non-collapsible message.
+     *
+     * @param {Array}  buffer   Ring or capture buffer to push into
+     * @param {Object} entry    The new entry to push or merge
+     * @param {number} maxSize  Maximum buffer length before eviction
+     */
+    pushEntry(buffer, entry, maxSize) {
+        const last = buffer[buffer.length - 1];
+
+        // Collapse into the previous row if:
+        //   - the message type is in the collapsible set
+        //   - the previous entry has the same message type and container
+        if (
+            last &&
+            this.collapsibleMessages.has(entry.message) &&
+            last.message === entry.message &&
+            last.pacId   === entry.pacId
+        ) {
+            last.count++;
+            last.wParam = entry.wParam; // update to most recent (e.g. mouse position)
+            last.lParam = entry.lParam;
+            last.time   = entry.time;   // update timestamp to most recent occurrence
+            return;
+        }
+
+        buffer.push(entry);
+
+        if (buffer.length > maxSize) {
+            buffer.shift();
+        }
+    },
+
     // ── Rendering ─────────────────────────────────────────────────────────────
 
     /**
@@ -273,7 +335,7 @@ const WakaPACPanel = {
         if (!tbody) return;
 
         if (entries.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="wakapac-empty">No messages yet</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="wakapac-empty">No messages yet</td></tr>';
             return;
         }
 
@@ -283,18 +345,24 @@ const WakaPACPanel = {
     /**
      * Builds the HTML for a single message row.
      * Alternating row classes provide visual separation without borders.
+     * Collapsed high-frequency messages show a count badge after the message name.
      * @param {Object} entry
      * @param {number} index
      * @returns {string}
      */
     renderMessageRow(entry, index) {
-        const rowClass = index % 2 === 0 ? 'wakapac-row-even' : 'wakapac-row-odd';
+        const rowClass  = index % 2 === 0 ? 'wakapac-row-even' : 'wakapac-row-odd';
+        const countBadge = entry.count > 1
+            ? ' <span class="wakapac-count-badge">x' + entry.count + '</span>'
+            : '';
+
         return '<tr class="' + rowClass + '">'
-            + '<td class="wakapac-cell wakapac-cell-time">'  + escapeHtml(entry.time)                          + '</td>'
-            + '<td class="wakapac-cell wakapac-cell-pac">'   + escapeHtml(entry.pacId)                         + '</td>'
-            + '<td class="wakapac-cell wakapac-cell-msg">'   + escapeHtml(this.formatMessageId(entry.message)) + '</td>'
-            + '<td class="wakapac-cell wakapac-cell-param">' + escapeHtml(this.formatParam(entry.wParam))      + '</td>'
-            + '<td class="wakapac-cell wakapac-cell-param">' + escapeHtml(this.formatParam(entry.lParam))      + '</td>'
+            + '<td class="wakapac-cell wakapac-cell-time">'   + escapeHtml(entry.time)                                   + '</td>'
+            + '<td class="wakapac-cell wakapac-cell-pac">'    + escapeHtml(entry.pacId)                                  + '</td>'
+            + '<td class="wakapac-cell wakapac-cell-msg">'    + escapeHtml(this.formatMessageId(entry.message)) + countBadge + '</td>'
+            + '<td class="wakapac-cell wakapac-cell-target">' + escapeHtml(this.formatTarget(entry.target))               + '</td>'
+            + '<td class="wakapac-cell wakapac-cell-param">'  + escapeHtml(this.formatParam(entry.wParam))                + '</td>'
+            + '<td class="wakapac-cell wakapac-cell-param">'  + escapeHtml(this.formatParam(entry.lParam))                + '</td>'
             + '</tr>';
     },
 
@@ -351,6 +419,44 @@ const WakaPACPanel = {
         if (value === 0) return '0';
         const hex = '0x' + (value >>> 0).toString(16).toUpperCase().padStart(8, '0');
         return value + ' (' + hex + ')';
+    },
+
+    /**
+     * Formats a DOM element reference into a concise human-readable descriptor.
+     * Shows the tag name, id (if present), or first class (if present).
+     * Returns '—' when the target is the container itself (redundant with Container column)
+     * or when no target is available.
+     *
+     * Examples:
+     *   <button id="submit">        → "button#submit"
+     *   <span class="icon active">  → "span.icon"
+     *   <input type="text">         → "input"
+     *   <div data-pac-id="...">     → "—"
+     *
+     * @param {Element|null} target
+     * @returns {string}
+     */
+    formatTarget(target) {
+        if (!target || !(target instanceof Element)) return '—';
+
+        // Target is the container itself — redundant with the Container column
+        if (target.hasAttribute('data-pac-id')) return '—';
+
+        const tag = target.tagName.toLowerCase();
+
+        // Prefer id — more specific and stable than class names
+        if (target.id) {
+            return tag + '#' + target.id;
+        }
+
+        // First non-empty class as a secondary identifier
+        const firstClass = Array.from(target.classList).find(c => c.length > 0);
+
+        if (firstClass) {
+            return tag + '.' + firstClass;
+        }
+
+        return tag;
     },
 };
 
@@ -515,10 +621,25 @@ JS;
     vertical-align: middle;
 }
 
-#panel-wakapac .wakapac-cell-time  { color: #6c757d; width: 95px; }
-#panel-wakapac .wakapac-cell-pac   { color: #0d6efd; }
-#panel-wakapac .wakapac-cell-msg   { color: #198754; font-weight: 500; }
-#panel-wakapac .wakapac-cell-param { color: #6f42c1; }
+#panel-wakapac .wakapac-cell-time   { color: #6c757d; width: 95px; }
+#panel-wakapac .wakapac-cell-pac    { color: #0d6efd; }
+#panel-wakapac .wakapac-cell-msg    { color: #198754; font-weight: 500; }
+#panel-wakapac .wakapac-cell-target { color: #e67e00; }
+#panel-wakapac .wakapac-cell-param  { color: #6f42c1; }
+
+/* Count badge shown on collapsed high-frequency message rows */
+#panel-wakapac .wakapac-count-badge {
+    display: inline-block;
+    margin-left: 5px;
+    padding: 0 5px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+    color: #fff;
+    background: #6c757d;
+    border-radius: 8px;
+    vertical-align: middle;
+}
 
 #panel-wakapac .wakapac-row-even { background: #fff; }
 #panel-wakapac .wakapac-row-odd  { background: #f8f9fa; }
