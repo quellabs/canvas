@@ -35,7 +35,17 @@
 		 * Number of messages retained in the live ring buffer.
 		 * Older entries are silently discarded as new ones arrive.
 		 */
-		private const int RING_BUFFER_SIZE = 8;
+		private const int RING_BUFFER_SIZE = 12;
+		
+		/** @var EventCollectorInterface */
+		private EventCollectorInterface $collector;
+		
+		/**
+		 * @param EventCollectorInterface $collector
+		 */
+		public function __construct(EventCollectorInterface $collector) {
+			$this->collector = $collector;
+		}
 		
 		/**
 		 * This panel does not listen to any server-side signals.
@@ -97,7 +107,7 @@
 		/**
 		 * Returns a JavaScript function body that:
 		 *   1. Defines WakaPACPanel — a self-contained object holding all state and behaviour
-		 *   2. Defers initPanel() via setTimeout until Registry has inserted the HTML into the DOM
+		 *   2. Defers init() via setTimeout until Registry has inserted the HTML into the DOM
 		 *   3. Returns the initial panel HTML string (required by Registry.renderPanels)
 		 *
 		 * Execution context: Registry wraps this code in
@@ -134,22 +144,22 @@ const WakaPACPanel = {
 
     // ── State ─────────────────────────────────────────────────────────────────
 
-    /** @type {Array}    Ring buffer — always holds the last RING_BUFFER_SIZE messages */
+    /** @type {Array}         Ring buffer — always holds the last RING_BUFFER_SIZE messages */
     ringBuffer: [],
 
-    /** @type {Array}    Capture buffer — populated only during an active capture session */
+    /** @type {Array}         Capture buffer — populated only during an active capture session */
     captureBuffer: [],
 
-    /** @type {boolean}  True while a capture session is active */
+    /** @type {boolean}       True while a capture session is active */
     isCapturing: false,
 
-    /** @type {number|null}  Hook handle returned by installMessageHook(), used for cleanup */
+    /** @type {number|null}   Hook handle returned by installMessageHook(), used for cleanup */
     hhook: null,
 
-    /** @type {number}   Running total of all messages seen since the page loaded */
+    /** @type {number}        Running total of all messages seen since the page loaded */
     totalSeen: 0,
 
-    /** @type {Object}   Reverse map from numeric message id → MSG_* constant name */
+    /** @type {Object}        Reverse map from numeric message id to MSG_* constant name */
     messageNames: {},
 
     /**
@@ -211,13 +221,13 @@ const WakaPACPanel = {
             const entry = {
                 // HH:MM:SS.mmm — readable timestamp without the date component
                 time:    new Date().toISOString().substr(11, 12),
-                // Resolve the container's pac-id; fall back to em-dash when unavailable
+                // pac-id of the container this message is dispatched to
                 pacId:   event.pacId ?? '—',
                 message: event.message,
                 wParam:  event.wParam,
                 lParam:  event.lParam,
-                // The actual DOM element that originated the event — may be a descendant
-                // of the container (e.g. a <button> inside a pac container).
+                // The DOM element that originated the event — may be a descendant
+                // of the container (e.g. a <button> inside a PAC container).
                 // Stored as a reference; formatting happens at render time.
                 target:  event.target ?? null,
                 // Repeat counter — incremented when consecutive identical collapsible
@@ -335,7 +345,7 @@ const WakaPACPanel = {
         if (!tbody) return;
 
         if (entries.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="wakapac-empty">No messages yet</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="wakapac-empty">No messages yet</td></tr>';
             return;
         }
 
@@ -351,18 +361,17 @@ const WakaPACPanel = {
      * @returns {string}
      */
     renderMessageRow(entry, index) {
-        const rowClass  = index % 2 === 0 ? 'wakapac-row-even' : 'wakapac-row-odd';
+        const rowClass   = index % 2 === 0 ? 'wakapac-row-even' : 'wakapac-row-odd';
         const countBadge = entry.count > 1
             ? ' <span class="wakapac-count-badge">x' + entry.count + '</span>'
             : '';
 
         return '<tr class="' + rowClass + '">'
-            + '<td class="wakapac-cell wakapac-cell-time">'   + escapeHtml(entry.time)                                   + '</td>'
-            + '<td class="wakapac-cell wakapac-cell-pac">'    + escapeHtml(entry.pacId)                                  + '</td>'
-            + '<td class="wakapac-cell wakapac-cell-msg">'    + escapeHtml(this.formatMessageId(entry.message)) + countBadge + '</td>'
-            + '<td class="wakapac-cell wakapac-cell-target">' + escapeHtml(this.formatTarget(entry.target))               + '</td>'
-            + '<td class="wakapac-cell wakapac-cell-param">'  + escapeHtml(this.formatParam(entry.wParam))                + '</td>'
-            + '<td class="wakapac-cell wakapac-cell-param">'  + escapeHtml(this.formatParam(entry.lParam))                + '</td>'
+            + '<td class="wakapac-cell wakapac-cell-time">'    + escapeHtml(entry.time)                                                            + '</td>'
+            + '<td class="wakapac-cell wakapac-cell-pac">'     + escapeHtml(entry.pacId)                                                           + '</td>'
+            + '<td class="wakapac-cell wakapac-cell-msg">'     + escapeHtml(this.formatMessageId(entry.message)) + countBadge                      + '</td>'
+            + '<td class="wakapac-cell wakapac-cell-target">'  + escapeHtml(this.formatTarget(entry.target))                                       + '</td>'
+            + '<td class="wakapac-cell wakapac-cell-details">' + escapeHtml(this.formatDetails(entry.message, entry.wParam, entry.lParam))         + '</td>'
             + '</tr>';
     },
 
@@ -410,28 +419,16 @@ const WakaPACPanel = {
     },
 
     /**
-     * Formats a wParam or lParam value as signed decimal with hex annotation.
-     * Zero is displayed as plain '0' without redundant annotation.
-     * @param {number} value
-     * @returns {string}
-     */
-    formatParam(value) {
-        if (value === 0) return '0';
-        const hex = '0x' + (value >>> 0).toString(16).toUpperCase().padStart(8, '0');
-        return value + ' (' + hex + ')';
-    },
-
-    /**
      * Formats a DOM element reference into a concise human-readable descriptor.
      * Shows the tag name, id (if present), or first class (if present).
-     * Returns '—' when the target is the container itself (redundant with Container column)
-     * or when no target is available.
+     * Returns em-dash when the target is the container itself (redundant with
+     * the Container column) or when no target element is available.
      *
      * Examples:
-     *   <button id="submit">        → "button#submit"
-     *   <span class="icon active">  → "span.icon"
-     *   <input type="text">         → "input"
-     *   <div data-pac-id="...">     → "—"
+     *   <button id="submit">        =>  "button#submit"
+     *   <span class="icon active">  =>  "span.icon"
+     *   <input type="text">         =>  "input"
+     *   <div data-pac-id="...">     =>  "—"
      *
      * @param {Element|null} target
      * @returns {string}
@@ -457,6 +454,236 @@ const WakaPACPanel = {
         }
 
         return tag;
+    },
+
+    /**
+     * Dispatches wParam/lParam decoding to a message-type-specific formatter.
+     * Returns a human-readable details string for the Details column, replacing
+     * the raw wParam/lParam hex values that were shown previously.
+     * Falls back to raw hex for unknown or custom messages (MSG_USER+).
+     * @param {number} message
+     * @param {number} wParam
+     * @param {number} lParam
+     * @returns {string}
+     */
+    formatDetails(message, wParam, lParam) {
+        switch (message) {
+            case wakaPAC.MSG_MOUSEMOVE:
+            case wakaPAC.MSG_LBUTTONDOWN:
+            case wakaPAC.MSG_LBUTTONUP:
+            case wakaPAC.MSG_LBUTTONDBLCLK:
+            case wakaPAC.MSG_LCLICK:
+            case wakaPAC.MSG_RBUTTONDOWN:
+            case wakaPAC.MSG_RBUTTONUP:
+            case wakaPAC.MSG_RCLICK:
+            case wakaPAC.MSG_MBUTTONDOWN:
+            case wakaPAC.MSG_MBUTTONUP:
+            case wakaPAC.MSG_MCLICK:
+            case wakaPAC.MSG_MOUSEENTER:
+            case wakaPAC.MSG_MOUSELEAVE:
+            case wakaPAC.MSG_MOUSEENTER_DESCENDANT:
+            case wakaPAC.MSG_MOUSELEAVE_DESCENDANT:
+            case wakaPAC.MSG_DRAGENTER:
+            case wakaPAC.MSG_DRAGOVER:
+            case wakaPAC.MSG_DRAGLEAVE:
+            case wakaPAC.MSG_DROP:
+                return this.formatMouseDetails(wParam, lParam);
+
+            case wakaPAC.MSG_MOUSEWHEEL:
+                return this.formatMouseWheelDetails(wParam, lParam);
+
+            case wakaPAC.MSG_KEYDOWN:
+            case wakaPAC.MSG_KEYUP:
+                return this.formatKeyDetails(wParam, lParam);
+
+            case wakaPAC.MSG_CHAR:
+                return this.formatCharDetails(wParam);
+
+            case wakaPAC.MSG_SIZE:
+                return this.formatSizeDetails(wParam, lParam);
+
+            case wakaPAC.MSG_TIMER:
+                return 'timerId=' + wParam;
+
+            case wakaPAC.MSG_GESTURE:
+                return this.formatGestureDetails(wParam, lParam);
+
+            case wakaPAC.MSG_SETFOCUS:
+            case wakaPAC.MSG_KILLFOCUS:
+            case wakaPAC.MSG_SUBMIT:
+            case wakaPAC.MSG_COPY:
+            case wakaPAC.MSG_PASTE:
+            case wakaPAC.MSG_CAPTURECHANGED:
+            case wakaPAC.MSG_CHANGE:
+            case wakaPAC.MSG_INPUT:
+            case wakaPAC.MSG_INPUT_COMPLETE:
+                // No meaningful wParam/lParam for these messages
+                return '—';
+
+            default:
+                // Unknown or custom message (MSG_USER+) — show raw values as fallback
+                return 'wParam=0x' + (wParam >>> 0).toString(16).toUpperCase().padStart(8, '0')
+                    + ' lParam=0x' + (lParam >>> 0).toString(16).toUpperCase().padStart(8, '0');
+        }
+    },
+
+    /**
+     * Decodes mouse message wParam/lParam into readable coordinates and modifiers.
+     *
+     * wParam is a bitmask of modifier/button states (MK_* flags):
+     *   bit 0 = MK_LBUTTON, bit 1 = MK_RBUTTON, bit 2 = MK_MBUTTON
+     *   bit 3 = MK_SHIFT,   bit 4 = MK_CONTROL,  bit 5 = MK_ALT
+     *
+     * lParam encodes cursor position as two packed 16-bit signed integers:
+     *   low word  = x coordinate (client space)
+     *   high word = y coordinate (client space)
+     *
+     * @param {number} wParam
+     * @param {number} lParam
+     * @returns {string}
+     */
+    formatMouseDetails(wParam, lParam) {
+        // Extract x/y from the two 16-bit halves of lParam.
+        // Treat as signed (<<16>>16) to handle negative coordinates
+        // (e.g. when the cursor is outside the viewport during capture).
+        const x = (lParam & 0xFFFF) << 16 >> 16;
+        const y = (lParam >> 16)    << 16 >> 16;
+
+        // Decode wParam modifier bitmask into named flags
+        const modifiers = [];
+        if (wParam & wakaPAC.MK_LBUTTON)  modifiers.push('LButton');
+        if (wParam & wakaPAC.MK_RBUTTON)  modifiers.push('RButton');
+        if (wParam & wakaPAC.MK_MBUTTON)  modifiers.push('MButton');
+        if (wParam & wakaPAC.MK_SHIFT)    modifiers.push('Shift');
+        if (wParam & wakaPAC.MK_CONTROL)  modifiers.push('Ctrl');
+        if (wParam & wakaPAC.MK_ALT)      modifiers.push('Alt');
+
+        const modStr = modifiers.length > 0 ? '  ' + modifiers.join('+') : '';
+        return 'x=' + x + ', y=' + y + modStr;
+    },
+
+    /**
+     * Decodes mousewheel wParam/lParam.
+     *
+     * wParam high word = signed wheel delta (positive = forward, negative = backward).
+     * Each notch of a standard wheel produces ±120 (WHEEL_DELTA).
+     * wParam low word  = modifier bitmask (same MK_* flags as mouse messages).
+     * lParam           = cursor position, same encoding as other mouse messages.
+     *
+     * @param {number} wParam
+     * @param {number} lParam
+     * @returns {string}
+     */
+    formatMouseWheelDetails(wParam, lParam) {
+        // High word of wParam is a signed 16-bit delta
+        const delta     = (wParam >> 16) << 16 >> 16;
+        const modifiers = wParam & 0xFFFF;
+
+        const x = (lParam & 0xFFFF) << 16 >> 16;
+        const y = (lParam >> 16)    << 16 >> 16;
+
+        const mods = [];
+        if (modifiers & wakaPAC.MK_SHIFT)   mods.push('Shift');
+        if (modifiers & wakaPAC.MK_CONTROL) mods.push('Ctrl');
+        if (modifiers & wakaPAC.MK_ALT)     mods.push('Alt');
+
+        const modStr    = mods.length > 0 ? '  ' + mods.join('+') : '';
+        const direction = delta > 0 ? '▲' : '▼';
+        return direction + ' delta=' + delta + ', x=' + x + ', y=' + y + modStr;
+    },
+
+    /**
+     * Decodes keyboard message wParam/lParam.
+     *
+     * wParam = virtual key code (VK_* constant).
+     * lParam = modifier bitmask using KM_* flags:
+     *   bit 25 = KM_SHIFT, bit 26 = KM_CONTROL, bit 29 = KM_ALT
+     *
+     * @param {number} wParam
+     * @param {number} lParam
+     * @returns {string}
+     */
+    formatKeyDetails(wParam, lParam) {
+        const vkName = this.getVkName(wParam);
+
+        const modifiers = [];
+        if (lParam & wakaPAC.KM_SHIFT)   modifiers.push('Shift');
+        if (lParam & wakaPAC.KM_CONTROL) modifiers.push('Ctrl');
+        if (lParam & wakaPAC.KM_ALT)     modifiers.push('Alt');
+
+        const modStr = modifiers.length > 0 ? '  ' + modifiers.join('+') : '';
+        return vkName + modStr;
+    },
+
+    /**
+     * Decodes MSG_CHAR wParam.
+     * wParam = Unicode code point of the character typed.
+     * @param {number} wParam
+     * @returns {string}
+     */
+    formatCharDetails(wParam) {
+        const char = String.fromCodePoint(wParam);
+        return 'char="' + char + '" (U+' + wParam.toString(16).toUpperCase().padStart(4, '0') + ')';
+    },
+
+    /**
+     * Decodes MSG_SIZE wParam/lParam.
+     *
+     * wParam = sizing type constant (SIZE_RESTORED, SIZE_HIDDEN, SIZE_FULLSCREEN).
+     * lParam encodes new element dimensions:
+     *   low word  = new width  in pixels
+     *   high word = new height in pixels
+     *
+     * @param {number} wParam
+     * @param {number} lParam
+     * @returns {string}
+     */
+    formatSizeDetails(wParam, lParam) {
+        const width  =  lParam & 0xFFFF;
+        const height = (lParam >> 16) & 0xFFFF;
+
+        const typeNames = {
+            [wakaPAC.SIZE_RESTORED]:   'restored',
+            [wakaPAC.SIZE_HIDDEN]:     'hidden',
+            [wakaPAC.SIZE_FULLSCREEN]: 'fullscreen',
+        };
+
+        const typeName = typeNames[wParam] ?? 'unknown(' + wParam + ')';
+        return width + 'x' + height + '  ' + typeName;
+    },
+
+    /**
+     * Decodes MSG_GESTURE wParam/lParam.
+     * wParam = gesture type identifier.
+     * lParam = packed coordinates (same encoding as mouse messages).
+     * @param {number} wParam
+     * @param {number} lParam
+     * @returns {string}
+     */
+    formatGestureDetails(wParam, lParam) {
+        const x = (lParam & 0xFFFF) << 16 >> 16;
+        const y = (lParam >> 16)    << 16 >> 16;
+        return 'type=' + wParam + ', x=' + x + ', y=' + y;
+    },
+
+    /**
+     * Resolves a virtual key code to its VK_* constant name by scanning
+     * the exported constants on wakaPAC. The result is cached after first call.
+     * Falls back to "VK_0x{hex}" for codes not present in the constants.
+     * @param {number} vkCode
+     * @returns {string}
+     */
+    getVkName(vkCode) {
+        // Build the VK_* reverse map lazily and cache it on the object
+        if (!this._vkNames) {
+            this._vkNames = Object.fromEntries(
+                Object.entries(wakaPAC)
+                    .filter(([key]) => key.startsWith('VK_'))
+                    .map(([key, value]) => [value, key])
+            );
+        }
+
+        return this._vkNames[vkCode] ?? 'VK_0x' + vkCode.toString(16).toUpperCase().padStart(2, '0');
     },
 };
 
@@ -497,8 +724,8 @@ return `
                         <th class="wakapac-th">Time</th>
                         <th class="wakapac-th">Container</th>
                         <th class="wakapac-th">Message</th>
-                        <th class="wakapac-th">wParam</th>
-                        <th class="wakapac-th">lParam</th>
+                        <th class="wakapac-th">Target</th>
+                        <th class="wakapac-th">Details</th>
                     </tr>
                 </thead>
                 <tbody class="wakapac-tbody">
@@ -621,11 +848,14 @@ JS;
     vertical-align: middle;
 }
 
-#panel-wakapac .wakapac-cell-time   { color: #6c757d; width: 95px; }
-#panel-wakapac .wakapac-cell-pac    { color: #0d6efd; }
-#panel-wakapac .wakapac-cell-msg    { color: #198754; font-weight: 500; }
-#panel-wakapac .wakapac-cell-target { color: #e67e00; }
-#panel-wakapac .wakapac-cell-param  { color: #6f42c1; }
+#panel-wakapac .wakapac-cell-time    { color: #6c757d; width: 95px; }
+#panel-wakapac .wakapac-cell-pac     { color: #0d6efd; }
+#panel-wakapac .wakapac-cell-msg     { color: #198754; font-weight: 500; }
+#panel-wakapac .wakapac-cell-target  { color: #e67e00; }
+#panel-wakapac .wakapac-cell-details { color: #495057; }
+
+#panel-wakapac .wakapac-row-even { background: #fff; }
+#panel-wakapac .wakapac-row-odd  { background: #f8f9fa; }
 
 /* Count badge shown on collapsed high-frequency message rows */
 #panel-wakapac .wakapac-count-badge {
@@ -640,9 +870,6 @@ JS;
     border-radius: 8px;
     vertical-align: middle;
 }
-
-#panel-wakapac .wakapac-row-even { background: #fff; }
-#panel-wakapac .wakapac-row-odd  { background: #f8f9fa; }
 
 #panel-wakapac .wakapac-empty {
     padding: 20px;
