@@ -23,9 +23,7 @@
 		 * Default panels shipped with the Canvas inspector
 		 */
 		private const array DEFAULT_PANELS = [
-			RequestPanel::class,
-			QueryPanel::class,
-			WakaPACPanel::class,
+			RequestPanel::class
 		];
 		
 		/**
