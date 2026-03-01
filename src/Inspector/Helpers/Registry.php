@@ -44,10 +44,14 @@
 		 */
 		public function __construct(EventCollectorInterface $eventCollector, ConfigurationInterface $config) {
 			$this->eventCollector = $eventCollector;
-			$panels = $config->get('panels', []) ?: self::DEFAULT_PANELS;
+			
+			// Merge default panels with user-defined panels, ensuring defaults appear first
+			// in tab order and duplicates are removed
+			$panels = array_unique(array_merge(self::DEFAULT_PANELS, $config->get('panels', [])));
+			
+			// Instantiate the requested panels
 			$this->initializePanels($panels);
 		}
-		
 		/**
 		 * Register a new debug panel
 		 * @param InspectorPanelInterface $panel The panel to add to the registry
