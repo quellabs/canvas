@@ -26,6 +26,12 @@
 			RequestPanel::class
 		];
 		
+		
+		/**
+		 * @var EventCollectorInterface Event collector
+		 */
+		private EventCollectorInterface $eventCollector;
+		
 		/**
 		 * @var InspectorPanelInterface[] Array of registered panels indexed by name
 		 */
@@ -37,8 +43,9 @@
 		 * @param ConfigurationInterface $config Inspector configuration
 		 */
 		public function __construct(EventCollectorInterface $eventCollector, ConfigurationInterface $config) {
+			$this->eventCollector = $eventCollector;
 			$panels = $config->get('panels', []) ?: self::DEFAULT_PANELS;
-			$this->initializePanels($eventCollector, $panels);
+			$this->initializePanels($panels);
 		}
 		
 		/**
@@ -75,35 +82,38 @@
 			$jsTemplates = [];
 			
 			foreach ($this->panels as $panel) {
-				// Process once
-				$panel->processEvents();
+				// Let the panel pull its relevant events from the collector
+				$panel->processEvents($this->eventCollector);
 				
-				// Collect all data in single iteration
+				// Build a unique JS function name for client-side rendering (e.g. "renderQueryPanel")
 				$functionName = 'render' . ucfirst($panel->getName()) . 'Panel';
 				
+				// Store the JS template with its function name for later registration on window
 				$jsTemplates[$panel->getName()] = [
 					'function' => $functionName,
 					'code'     => $panel->getJsTemplate()
 				];
 				
+				// Collect panel-specific CSS
 				$css[] = $panel->getCss();
 				
+				// Merge the panel's data with its display metadata (icon, tab label)
 				$panelData[$panel->getName()] = array_merge($panel->getData($request), [
 					'icon'  => $panel->getIcon(),
 					'label' => $panel->getTabLabel()
 				]);
 			}
 			
+			// Combine everything into the final debug bar HTML
 			return $this->renderDebugBar($jsTemplates, $css, $panelData, $this->getStats());
 		}
 		
 		/**
 		 * Initialize panels from a list of class names
-		 * @param EventCollectorInterface $eventCollector Service for collecting debug events
 		 * @param array $panels Array of fully qualified panel class names
 		 * @return void
 		 */
-		private function initializePanels(EventCollectorInterface $eventCollector, array $panels): void {
+		private function initializePanels(array $panels): void {
 			foreach ($panels as $className) {
 				try {
 					// Validate that the class exists
@@ -117,7 +127,7 @@
 					}
 					
 					// Create the panel
-					$panel = new $className($eventCollector);
+					$panel = new $className();
 					
 					// Register the panel
 					$this->addPanel($panel);

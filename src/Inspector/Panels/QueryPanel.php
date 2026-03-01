@@ -21,32 +21,13 @@
 		/** @var float Total execution time for all queries in milliseconds */
 		private float $totalTime = 0.0;
 		
-		/** @var EventCollectorInterface Event collector for gathering debug events */
-		private EventCollectorInterface $collector;
-		
-		/**
-		 * Initialize the QueryPanel with a debug event collector.
-		 * @param EventCollector $collector The event collector instance
-		 */
-		public function __construct(EventCollectorInterface $collector) {
-			$this->collector = $collector;
-		}
-		
-		/**
-		 * Define which event signals this panel should listen for.
-		 * @return array<string> Array of signal patterns to match
-		 */
-		public function getSignalPatterns(): array {
-			return ['debug.database.query'];
-		}
-		
 		/**
 		 * Process collected events and extract query data.
 		 * @return void
 		 */
-		public function processEvents(): void {
+		public function processEvents(EventCollectorInterface $collector): void {
 			// Get filtered events from collector based on our signal patterns
-			$queryEvents = $this->collector->getEventsBySignals($this->getSignalPatterns());
+			$queryEvents = $collector->getEventsBySignals(['debug.database.query']);
 			
 			foreach ($queryEvents as $event) {
 				// Store the complete event data for later display
