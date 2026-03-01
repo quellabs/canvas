@@ -2,7 +2,6 @@
 	
 	namespace Quellabs\Canvas\Inspector\Panels;
 	
-	use Quellabs\Contracts\Inspector\EventCollectorInterface;
 	use Quellabs\Contracts\Inspector\InspectorPanelInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	
@@ -36,16 +35,6 @@
 		 * Older entries are silently discarded as new ones arrive.
 		 */
 		private const int RING_BUFFER_SIZE = 12;
-		
-		/** @var EventCollectorInterface */
-		private EventCollectorInterface $collector;
-		
-		/**
-		 * @param EventCollectorInterface $collector
-		 */
-		public function __construct(EventCollectorInterface $collector) {
-			$this->collector = $collector;
-		}
 		
 		/**
 		 * This panel does not listen to any server-side signals.
@@ -163,12 +152,38 @@ const WakaPACPanel = {
     messageNames: {},
 
     /**
-     * Message types that are collapsed into a single row with a repeat counter
-     * when consecutive identical messages arrive for the same container.
+     * Message types collapsed into a single row with a repeat counter when
+     * consecutive identical messages arrive for the same container.
      * Populated in init() once wakaPAC constants are available.
      * @type {Set<number>}
      */
     collapsibleMessages: new Set(),
+
+    /**
+     * Filter state — one boolean per category key.
+     * true = show messages of this category, false = hide them.
+     * Move and Timer start off by default; all others start on.
+     * Messages not belonging to any category (MSG_USER+) are always shown.
+     * @type {Object<string,boolean>}
+     */
+    filters: {
+        mouse: true,
+        move:  false,
+        key:   true,
+        focus: true,
+        timer: false,
+        wheel: false,
+        drag:  true,
+        input: true,
+        size:  true,
+    },
+
+    /**
+     * Maps each filter category key to the set of message type constants it covers.
+     * Populated in init() after wakaPAC constants are available.
+     * @type {Object<string,Set<number>>}
+     */
+    filterCategories: {},
 
     /** @type {HTMLElement|null}  Cached reference to the outer panel element */
     panelEl: null,
@@ -214,30 +229,59 @@ const WakaPACPanel = {
             wakaPAC.MSG_MOUSEWHEEL,
         ]);
 
+        // Map each filter category to the exact set of message types it covers.
+        // Messages that don't appear in any category (custom MSG_USER+) are always shown.
+        this.filterCategories = {
+            mouse: new Set([
+                wakaPAC.MSG_LBUTTONDOWN, wakaPAC.MSG_LBUTTONUP, wakaPAC.MSG_LCLICK, wakaPAC.MSG_LBUTTONDBLCLK,
+                wakaPAC.MSG_RBUTTONDOWN, wakaPAC.MSG_RBUTTONUP, wakaPAC.MSG_RCLICK,
+                wakaPAC.MSG_MBUTTONDOWN, wakaPAC.MSG_MBUTTONUP, wakaPAC.MSG_MCLICK,
+                wakaPAC.MSG_MOUSEENTER,  wakaPAC.MSG_MOUSELEAVE,
+                wakaPAC.MSG_MOUSEENTER_DESCENDANT, wakaPAC.MSG_MOUSELEAVE_DESCENDANT,
+                wakaPAC.MSG_CAPTURECHANGED,
+            ]),
+            move:  new Set([ wakaPAC.MSG_MOUSEMOVE ]),
+            key:   new Set([ wakaPAC.MSG_KEYDOWN, wakaPAC.MSG_KEYUP, wakaPAC.MSG_CHAR ]),
+            focus: new Set([ wakaPAC.MSG_SETFOCUS, wakaPAC.MSG_KILLFOCUS ]),
+            timer: new Set([ wakaPAC.MSG_TIMER ]),
+            wheel: new Set([ wakaPAC.MSG_MOUSEWHEEL ]),
+            drag:  new Set([ wakaPAC.MSG_DRAGENTER, wakaPAC.MSG_DRAGOVER, wakaPAC.MSG_DRAGLEAVE, wakaPAC.MSG_DROP ]),
+            input: new Set([ wakaPAC.MSG_CHANGE, wakaPAC.MSG_INPUT, wakaPAC.MSG_INPUT_COMPLETE, wakaPAC.MSG_SUBMIT, wakaPAC.MSG_COPY, wakaPAC.MSG_PASTE ]),
+            size:  new Set([ wakaPAC.MSG_SIZE, wakaPAC.MSG_GESTURE ]),
+        };
+
         // Install the message hook.
         // Equivalent to Win32 WH_CALLWNDPROC: fires before msgProc receives the message.
         // Arrow function preserves `this` so the hook body can access panel state.
         this.hhook = wakaPAC.installMessageHook((event, callNextHook) => {
+            // Drop the message immediately if its category is filtered out.
+            // Filtering at intake means the buffer only ever contains messages
+            // the user actually wants to see.
+            if (!this.isVisible(event.message)) {
+                callNextHook();
+                return;
+            }
+
             const entry = {
                 // HH:MM:SS.mmm — readable timestamp without the date component
-                time:    new Date().toISOString().substr(11, 12),
+                time:    new Date().toISOString().slice(11, 23),
+                
                 // pac-id of the container this message is dispatched to
                 pacId:   event.pacId ?? '—',
                 message: event.message,
                 wParam:  event.wParam,
                 lParam:  event.lParam,
+                
                 // The DOM element that originated the event — may be a descendant
                 // of the container (e.g. a <button> inside a PAC container).
                 // Stored as a reference; formatting happens at render time.
                 target:  event.target ?? null,
+                
                 // Repeat counter — incremented when consecutive identical collapsible
                 // messages arrive for the same container instead of pushing a new row.
                 count:   1,
             };
 
-            // Collapse high-frequency consecutive messages of the same type and container
-            // into the last entry rather than flooding the buffer with individual rows.
-            // wParam/lParam are updated to the most recent values (e.g. latest mouse position).
             this.pushEntry(this.ringBuffer, entry, RING_BUFFER_SIZE);
 
             if (this.isCapturing) {
@@ -249,6 +293,21 @@ const WakaPACPanel = {
 
             // Pass the message through — spy hooks never swallow
             callNextHook();
+        });
+
+        // Wire up filter toggle buttons — each button carries a data-filter attribute
+        // matching a key in this.filters. Clicking toggles the filter and re-renders.
+        panelEl.querySelectorAll('.wakapac-filter-btn').forEach(btn => {
+            const category = btn.getAttribute('data-filter');
+
+            // Apply initial active state to reflect the default filter values
+            btn.classList.toggle('wakapac-filter-btn-active', this.filters[category] === true);
+
+            btn.addEventListener('click', () => {
+                this.filters[category] = !this.filters[category];
+                btn.classList.toggle('wakapac-filter-btn-active', this.filters[category]);
+                this.refresh();
+            });
         });
 
         // Capture button: toggle between live and capture mode
@@ -321,6 +380,30 @@ const WakaPACPanel = {
         }
     },
 
+    // ── Filtering ─────────────────────────────────────────────────────────────
+
+    /**
+     * Returns true if the given message type should be buffered given the
+     * current filter state. Called at hook intake — messages that return false
+     * are dropped before they reach the buffer.
+     *
+     * Messages that don't belong to any known category (MSG_USER+ custom messages)
+     * are always accepted — they are intentional application-level dispatches.
+     *
+     * @param {number} message
+     * @returns {boolean}
+     */
+    isVisible(message) {
+        for (const [category, messageSet] of Object.entries(this.filterCategories)) {
+            if (messageSet.has(message)) {
+                return this.filters[category] === true;
+            }
+        }
+
+        // Not in any category — always show (custom/user messages)
+        return true;
+    },
+
     // ── Rendering ─────────────────────────────────────────────────────────────
 
     /**
@@ -337,12 +420,15 @@ const WakaPACPanel = {
 
     /**
      * Re-renders the message tbody with the given entries.
-     * Shows a placeholder row when the list is empty.
+     * Shows a placeholder row when no entries are present.
      * @param {Array} entries
      */
     renderTable(entries) {
         const tbody = this.panelEl.querySelector('.wakapac-tbody');
-        if (!tbody) return;
+        
+        if (!tbody){
+            return;
+		}
 
         if (entries.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" class="wakapac-empty">No messages yet</td></tr>';
@@ -367,11 +453,11 @@ const WakaPACPanel = {
             : '';
 
         return '<tr class="' + rowClass + '">'
-            + '<td class="wakapac-cell wakapac-cell-time">'    + escapeHtml(entry.time)                                                            + '</td>'
-            + '<td class="wakapac-cell wakapac-cell-pac">'     + escapeHtml(entry.pacId)                                                           + '</td>'
-            + '<td class="wakapac-cell wakapac-cell-msg">'     + escapeHtml(this.formatMessageId(entry.message)) + countBadge                      + '</td>'
-            + '<td class="wakapac-cell wakapac-cell-target">'  + escapeHtml(this.formatTarget(entry.target))                                       + '</td>'
-            + '<td class="wakapac-cell wakapac-cell-details">' + escapeHtml(this.formatDetails(entry.message, entry.wParam, entry.lParam))         + '</td>'
+            + '<td class="wakapac-cell wakapac-cell-time">'    + escapeHtml(entry.time)                                                    + '</td>'
+            + '<td class="wakapac-cell wakapac-cell-pac">'     + escapeHtml(entry.pacId)                                                   + '</td>'
+            + '<td class="wakapac-cell wakapac-cell-msg">'     + escapeHtml(this.formatMessageId(entry.message)) + countBadge             + '</td>'
+            + '<td class="wakapac-cell wakapac-cell-target">'  + escapeHtml(this.formatTarget(entry.target))                              + '</td>'
+            + '<td class="wakapac-cell wakapac-cell-details">' + escapeHtml(this.formatDetails(entry.message, entry.wParam, entry.lParam)) + '</td>'
             + '</tr>';
     },
 
@@ -380,7 +466,11 @@ const WakaPACPanel = {
      */
     updateCaptureButton() {
         const btn = this.panelEl.querySelector('.wakapac-btn-capture');
-        if (!btn) return;
+        
+        if (!btn){
+            return;
+		}
+        
         btn.textContent = this.isCapturing ? '⏹ Stop' : '⏺ Capture';
         btn.classList.toggle('wakapac-btn-active', this.isCapturing);
     },
@@ -390,10 +480,12 @@ const WakaPACPanel = {
      */
     updateModeLabel() {
         const label = this.panelEl.querySelector('.wakapac-mode-label');
-        if (!label) return;
-        label.textContent = this.isCapturing
-            ? 'Capturing'
-            : 'Live (last ' + RING_BUFFER_SIZE + ')';
+        
+        if (!label){
+            return;
+		}
+        
+        label.textContent = this.isCapturing ? 'Capturing' : 'Live (last ' + RING_BUFFER_SIZE + ')';
     },
 
     /**
@@ -401,7 +493,10 @@ const WakaPACPanel = {
      */
     updateCounter() {
         const counter = this.panelEl.querySelector('.wakapac-counter');
-        if (counter) counter.textContent = this.totalSeen;
+        
+        if (counter){
+            counter.textContent = this.totalSeen;
+		}
     },
 
     // ── Formatters ────────────────────────────────────────────────────────────
@@ -434,10 +529,14 @@ const WakaPACPanel = {
      * @returns {string}
      */
     formatTarget(target) {
-        if (!target || !(target instanceof Element)) return '—';
+        if (!target || !(target instanceof Element)){
+            return '—';
+		}
 
         // Target is the container itself — redundant with the Container column
-        if (target.hasAttribute('data-pac-id')) return '—';
+        if (target.hasAttribute('data-pac-id')){
+            return '—';
+		}
 
         const tag = target.tagName.toLowerCase();
 
@@ -551,14 +650,32 @@ const WakaPACPanel = {
 
         // Decode wParam modifier bitmask into named flags
         const modifiers = [];
-        if (wParam & wakaPAC.MK_LBUTTON)  modifiers.push('LButton');
-        if (wParam & wakaPAC.MK_RBUTTON)  modifiers.push('RButton');
-        if (wParam & wakaPAC.MK_MBUTTON)  modifiers.push('MButton');
-        if (wParam & wakaPAC.MK_SHIFT)    modifiers.push('Shift');
-        if (wParam & wakaPAC.MK_CONTROL)  modifiers.push('Ctrl');
-        if (wParam & wakaPAC.MK_ALT)      modifiers.push('Alt');
+        
+        if (wParam & wakaPAC.MK_LBUTTON){
+            modifiers.push('LButton');
+		}
+        
+        if (wParam & wakaPAC.MK_RBUTTON){
+            modifiers.push('RButton');
+		}
+        
+        if (wParam & wakaPAC.MK_MBUTTON){
+            modifiers.push('MButton');
+		}
+        
+        if (wParam & wakaPAC.MK_SHIFT){
+            modifiers.push('Shift');
+		}
+        
+        if (wParam & wakaPAC.MK_CONTROL){
+            modifiers.push('Ctrl');
+		}
+        
+        if (wParam & wakaPAC.MK_ALT){
+            modifiers.push('Alt');
+		}
 
-        const modStr = modifiers.length > 0 ? '  ' + modifiers.join('+') : '';
+        const modStr = modifiers.length > 0 ? ' (' + modifiers.join('+') + ')' : '';
         return 'x=' + x + ', y=' + y + modStr;
     },
 
@@ -583,11 +700,20 @@ const WakaPACPanel = {
         const y = (lParam >> 16)    << 16 >> 16;
 
         const mods = [];
-        if (modifiers & wakaPAC.MK_SHIFT)   mods.push('Shift');
-        if (modifiers & wakaPAC.MK_CONTROL) mods.push('Ctrl');
-        if (modifiers & wakaPAC.MK_ALT)     mods.push('Alt');
+        
+        if (modifiers & wakaPAC.MK_SHIFT){
+            mods.push('Shift');
+		}
+        
+        if (modifiers & wakaPAC.MK_CONTROL){
+            mods.push('Ctrl');
+		}
+        
+        if (modifiers & wakaPAC.MK_ALT){
+            mods.push('Alt');
+		}
 
-        const modStr    = mods.length > 0 ? '  ' + mods.join('+') : '';
+        const modStr    = mods.length > 0 ? ' (' + mods.join('+') + ')' : '';
         const direction = delta > 0 ? '▲' : '▼';
         return direction + ' delta=' + delta + ', x=' + x + ', y=' + y + modStr;
     },
@@ -605,13 +731,21 @@ const WakaPACPanel = {
      */
     formatKeyDetails(wParam, lParam) {
         const vkName = this.getVkName(wParam);
-
         const modifiers = [];
-        if (lParam & wakaPAC.KM_SHIFT)   modifiers.push('Shift');
-        if (lParam & wakaPAC.KM_CONTROL) modifiers.push('Ctrl');
-        if (lParam & wakaPAC.KM_ALT)     modifiers.push('Alt');
+        
+        if (lParam & wakaPAC.KM_SHIFT){
+            modifiers.push('Shift');
+		}
+        
+        if (lParam & wakaPAC.KM_CONTROL){
+            modifiers.push('Ctrl');
+		}
+        
+        if (lParam & wakaPAC.KM_ALT){
+            modifiers.push('Alt');
+		}
 
-        const modStr = modifiers.length > 0 ? '  ' + modifiers.join('+') : '';
+        const modStr = modifiers.length > 0 ? ' (' + modifiers.join('+') + ')' : '';
         return vkName + modStr;
     },
 
@@ -694,7 +828,10 @@ const WakaPACPanel = {
 // WakaPACPanel.init() until after the current call stack (renderPanels) completes.
 setTimeout(function() {
     const panelEl = document.getElementById('panel-wakapac');
-    if (panelEl) WakaPACPanel.init(panelEl);
+    
+    if (panelEl){
+        WakaPACPanel.init(panelEl);
+	}
 }, 0);
 
 // ── Initial HTML ──────────────────────────────────────────────────────────────
@@ -715,6 +852,19 @@ return `
                 <button class="wakapac-btn wakapac-btn-capture">⏺ Capture</button>
                 <button class="wakapac-btn wakapac-btn-clear">🗑 Clear</button>
             </div>
+        </div>
+
+        <div class="wakapac-filterbar">
+            <span class="wakapac-filter-label">Show:</span>
+            <button class="wakapac-filter-btn" data-filter="mouse" title="Mouse buttons, clicks, enter/leave">🖱 Mouse</button>
+            <button class="wakapac-filter-btn" data-filter="move"  title="MSG_MOUSEMOVE">💨 Move</button>
+            <button class="wakapac-filter-btn" data-filter="wheel" title="MSG_MOUSEWHEEL">〰 Wheel</button>
+            <button class="wakapac-filter-btn" data-filter="key"   title="Keydown, keyup, char">⌨ Key</button>
+            <button class="wakapac-filter-btn" data-filter="focus" title="Setfocus, killfocus">🎯 Focus</button>
+            <button class="wakapac-filter-btn" data-filter="timer" title="MSG_TIMER">⏱ Timer</button>
+            <button class="wakapac-filter-btn" data-filter="drag"  title="Drag enter/over/leave/drop">↕ Drag</button>
+            <button class="wakapac-filter-btn" data-filter="input" title="Change, input, submit, copy, paste">✉ Input</button>
+            <button class="wakapac-filter-btn" data-filter="size"  title="MSG_SIZE, MSG_GESTURE">⤡ Size</button>
         </div>
 
         <div class="wakapac-table-wrapper">
@@ -787,7 +937,56 @@ JS;
     color: #0d6efd;
 }
 
-/* ── Buttons ── */
+/* ── Filter bar ── */
+#panel-wakapac .wakapac-filterbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 12px;
+    border-bottom: 1px solid #dee2e6;
+    background: #f8f9fa;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+#panel-wakapac .wakapac-filter-label {
+    font-size: 11px;
+    color: #6c757d;
+    margin-right: 2px;
+    white-space: nowrap;
+}
+
+#panel-wakapac .wakapac-filter-btn {
+    padding: 2px 8px;
+    font-size: 11px;
+    border: 1px solid #ced4da;
+    border-radius: 10px;
+    background: #fff;
+    cursor: pointer;
+    color: #6c757d;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    white-space: nowrap;
+}
+
+#panel-wakapac .wakapac-filter-btn:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+    color: #495057;
+}
+
+/* Active filter buttons use a filled style to indicate "on" */
+#panel-wakapac .wakapac-filter-btn-active {
+    background: #0d6efd;
+    border-color: #0d6efd;
+    color: #fff;
+}
+
+#panel-wakapac .wakapac-filter-btn-active:hover {
+    background: #0b5ed7;
+    border-color: #0b5ed7;
+}
+
+/* ── Action buttons ── */
 #panel-wakapac .wakapac-btn {
     padding: 3px 10px;
     font-size: 11px;
