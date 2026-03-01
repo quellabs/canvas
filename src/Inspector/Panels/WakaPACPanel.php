@@ -34,7 +34,7 @@
 		 * Number of messages retained in the live ring buffer.
 		 * Older entries are silently discarded as new ones arrive.
 		 */
-		private const int RING_BUFFER_SIZE = 12;
+		private const int RING_BUFFER_SIZE = 8;
 		
 		/**
 		 * This panel does not listen to any server-side signals.
@@ -464,7 +464,7 @@ const WakaPACPanel = {
      */
     renderTable(entries) {
         const tbody = this.panelEl.querySelector('.wakapac-tbody');
-        if (!tbody) return;
+        if (!tbody) { return; }
 
         if (entries.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" class="wakapac-empty">No messages yet</td></tr>';
@@ -502,7 +502,7 @@ const WakaPACPanel = {
      */
     updateCaptureButton() {
         const btn = this.panelEl.querySelector('.wakapac-btn-capture');
-        if (!btn) return;
+        if (!btn) { return; }
         btn.textContent = this.isCapturing ? '⏹ Stop' : '⏺ Record';
         btn.classList.toggle('wakapac-btn-active', this.isCapturing);
     },
@@ -512,7 +512,7 @@ const WakaPACPanel = {
      */
     updateCounter() {
         const counter = this.panelEl.querySelector('.wakapac-counter');
-        if (counter) counter.textContent = this.totalSeen;
+        if (counter) { counter.textContent = this.totalSeen; }
     },
 
     // ── Formatters ────────────────────────────────────────────────────────────
@@ -545,10 +545,10 @@ const WakaPACPanel = {
      * @returns {string}
      */
     formatTarget(target) {
-        if (!target || !(target instanceof Element)) return '—';
+        if (!target || !(target instanceof Element)) { return '—'; }
 
         // Target is the container itself — redundant with the Container column
-        if (target.hasAttribute('data-pac-id')) return '—';
+        if (target.hasAttribute('data-pac-id')) { return '—'; }
 
         const tag = target.tagName.toLowerCase();
 
@@ -662,12 +662,12 @@ const WakaPACPanel = {
 
         // Decode wParam modifier bitmask into named flags
         const modifiers = [];
-        if (wParam & wakaPAC.MK_LBUTTON)  modifiers.push('LButton');
-        if (wParam & wakaPAC.MK_RBUTTON)  modifiers.push('RButton');
-        if (wParam & wakaPAC.MK_MBUTTON)  modifiers.push('MButton');
-        if (wParam & wakaPAC.MK_SHIFT)    modifiers.push('Shift');
-        if (wParam & wakaPAC.MK_CONTROL)  modifiers.push('Ctrl');
-        if (wParam & wakaPAC.MK_ALT)      modifiers.push('Alt');
+        if (wParam & wakaPAC.MK_LBUTTON)  { modifiers.push('LButton'); }
+        if (wParam & wakaPAC.MK_RBUTTON)  { modifiers.push('RButton'); }
+        if (wParam & wakaPAC.MK_MBUTTON)  { modifiers.push('MButton'); }
+        if (wParam & wakaPAC.MK_SHIFT)    { modifiers.push('Shift'); }
+        if (wParam & wakaPAC.MK_CONTROL)  { modifiers.push('Ctrl'); }
+        if (wParam & wakaPAC.MK_ALT)      { modifiers.push('Alt'); }
 
         const modStr = modifiers.length > 0 ? '  ' + modifiers.join('+') : '';
         return 'x=' + x + ', y=' + y + modStr;
@@ -694,9 +694,9 @@ const WakaPACPanel = {
         const y = (lParam >> 16)    << 16 >> 16;
 
         const mods = [];
-        if (modifiers & wakaPAC.MK_SHIFT)   mods.push('Shift');
-        if (modifiers & wakaPAC.MK_CONTROL) mods.push('Ctrl');
-        if (modifiers & wakaPAC.MK_ALT)     mods.push('Alt');
+        if (modifiers & wakaPAC.MK_SHIFT)   { mods.push('Shift'); }
+        if (modifiers & wakaPAC.MK_CONTROL) { mods.push('Ctrl'); }
+        if (modifiers & wakaPAC.MK_ALT)     { mods.push('Alt'); }
 
         const modStr    = mods.length > 0 ? '  ' + mods.join('+') : '';
         const direction = delta > 0 ? '▲' : '▼';
@@ -718,9 +718,9 @@ const WakaPACPanel = {
         const vkName = this.getVkName(wParam);
 
         const modifiers = [];
-        if (lParam & wakaPAC.KM_SHIFT)   modifiers.push('Shift');
-        if (lParam & wakaPAC.KM_CONTROL) modifiers.push('Ctrl');
-        if (lParam & wakaPAC.KM_ALT)     modifiers.push('Alt');
+        if (lParam & wakaPAC.KM_SHIFT)   { modifiers.push('Shift'); }
+        if (lParam & wakaPAC.KM_CONTROL) { modifiers.push('Ctrl'); }
+        if (lParam & wakaPAC.KM_ALT)     { modifiers.push('Alt'); }
 
         const modStr = modifiers.length > 0 ? '  ' + modifiers.join('+') : '';
         return vkName + modStr;
@@ -805,7 +805,7 @@ const WakaPACPanel = {
 // WakaPACPanel.init() until after the current call stack (renderPanels) completes.
 setTimeout(function() {
     const panelEl = document.getElementById('panel-wakapac');
-    if (panelEl) WakaPACPanel.init(panelEl);
+    if (panelEl) { WakaPACPanel.init(panelEl); }
 }, 0);
 
 // ── Initial HTML ──────────────────────────────────────────────────────────────
