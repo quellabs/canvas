@@ -189,6 +189,9 @@ const WakaPACPanel = {
     /** @type {HTMLElement|null}  Cached reference to the outer panel element */
     panelEl: null,
 
+    /** @type {string}  localStorage key used to persist filter toggle states across page loads */
+    storageKey: 'wakapac-spy-filters',
+
     // ── Initialisation ────────────────────────────────────────────────────────
 
     /**
@@ -293,6 +296,10 @@ const WakaPACPanel = {
             callNextHook();
         });
 
+        // Restore saved filter toggles from localStorage before wiring up buttons,
+        // so their initial active state reflects the persisted values.
+        this.loadFilters();
+
         // Wire up filter toggle buttons — each button carries a data-filter attribute
         // matching a key in this.filters. Clicking toggles the filter and re-renders.
         panelEl.querySelectorAll('.wakapac-filter-btn').forEach(btn => {
@@ -304,6 +311,7 @@ const WakaPACPanel = {
             btn.addEventListener('click', () => {
                 this.filters[category] = !this.filters[category];
                 btn.classList.toggle('wakapac-filter-btn-active', this.filters[category]);
+                this.saveFilters();
                 this.refresh();
             });
         });
@@ -409,6 +417,43 @@ const WakaPACPanel = {
 
         // Not in any category — always show (custom/user messages)
         return true;
+    },
+
+    // ── Persistence ─────────────────────────────────────────────────────────
+
+    /**
+     * Restores saved filter states from localStorage, merging them into the
+     * existing defaults. Unknown keys in storage are silently ignored; new
+     * filter categories not yet in storage keep their compiled-in default.
+     */
+    loadFilters() {
+        try {
+            const json = localStorage.getItem(this.storageKey);
+            if (!json) { return; }
+
+            const saved = JSON.parse(json);
+            if (typeof saved !== 'object' || saved === null) { return; }
+
+            for (const key of Object.keys(this.filters)) {
+                if (typeof saved[key] === 'boolean') {
+                    this.filters[key] = saved[key];
+                }
+            }
+        } catch (_) {
+            // localStorage unavailable or corrupted — keep compiled-in defaults
+        }
+    },
+
+    /**
+     * Persists the current filter state to localStorage.
+     * Failures are silently ignored (private browsing, quota exceeded, etc.).
+     */
+    saveFilters() {
+        try {
+            localStorage.setItem(this.storageKey, JSON.stringify(this.filters));
+        } catch (_) {
+            // Silently ignore — persistence is best-effort
+        }
     },
 
     // ── Rendering ─────────────────────────────────────────────────────────────
