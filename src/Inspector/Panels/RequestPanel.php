@@ -21,28 +21,8 @@
 	 */
 	class RequestPanel implements InspectorPanelInterface {
 		
-		/** @var EventCollectorInterface Event collector for gathering debug information */
-		private EventCollectorInterface $collector;
-		
 		/** @var array Route data extracted from canvas events */
 		private array $routeData = [];
-		
-		/**
-		 * Constructor
-		 *
-		 * @param EventCollector $collector The event collector instance
-		 */
-		public function __construct(EventCollectorInterface $collector) {
-			$this->collector = $collector;
-		}
-		
-		/**
-		 * Get signal patterns this panel listens to
-		 * @return array Array of signal patterns to monitor
-		 */
-		public function getSignalPatterns(): array {
-			return ['debug.canvas.query'];
-		}
 		
 		/**
 		 * Process events collected by the debug event collector
@@ -50,9 +30,9 @@
 		 * Only processes the first matching event found.
 		 * @return void
 		 */
-		public function processEvents(): void {
+		public function processEvents(EventCollectorInterface $collector): void {
 			// Get route data from canvas events
-			$canvasEvents = $this->collector->getEventsBySignals($this->getSignalPatterns());
+			$canvasEvents = $collector->getEventsBySignals(['debug.canvas.query']);
 			
 			foreach ($canvasEvents as $event) {
 				// Merge event data with default legacy file field

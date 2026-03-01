@@ -2,6 +2,7 @@
 	
 	namespace Quellabs\Canvas\Inspector\Panels;
 	
+	use Quellabs\Contracts\Inspector\EventCollectorInterface;
 	use Quellabs\Contracts\Inspector\InspectorPanelInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	
@@ -37,19 +38,10 @@
 		private const int RING_BUFFER_SIZE = 8;
 		
 		/**
-		 * This panel does not listen to any server-side signals.
-		 * All data is collected client-side via the WakaPAC hook.
-		 * @return array
-		 */
-		public function getSignalPatterns(): array {
-			return [];
-		}
-		
-		/**
 		 * No server-side events to process — all message data is client-side.
 		 * @return void
 		 */
-		public function processEvents(): void {}
+		public function processEvents(EventCollectorInterface $collector): void {}
 		
 		/**
 		 * @return string
