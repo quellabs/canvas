@@ -37,6 +37,7 @@
 		 * This is the main entry point for adding the debugbar to responses.
 		 * @param Request $request The HTTP request object
 		 * @param Response $response The HTTP response object to modify
+		 * @throws \JsonException
 		 */
 		public function inject(Request $request, Response $response): void {
 			// Fetch the response that came out of the controller

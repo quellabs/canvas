@@ -35,7 +35,7 @@
 		 * Number of messages retained in the live ring buffer.
 		 * Older entries are silently discarded as new ones arrive.
 		 */
-		private const int RING_BUFFER_SIZE = 8;
+		private const int RING_BUFFER_SIZE = 12;
 		
 		/**
 		 * No server-side events to process — all message data is client-side.
