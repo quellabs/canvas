@@ -168,15 +168,16 @@ const WakaPACPanel = {
      * @type {Object<string,boolean>}
      */
     filters: {
-        mouse: true,
-        move:  false,
-        key:   true,
-        focus: true,
-        timer: false,
-        wheel: false,
-        drag:  true,
-        input: true,
-        size:  true,
+        mouse:   true,
+        move:    false,
+        key:     true,
+        focus:   true,
+        timer:   false,
+        wheel:   false,
+        drag:    true,
+        input:   true,
+        size:    true,
+        gesture: true,
     },
 
     /**
@@ -250,8 +251,9 @@ const WakaPACPanel = {
             timer: new Set([ wakaPAC.MSG_TIMER ]),
             wheel: new Set([ wakaPAC.MSG_MOUSEWHEEL ]),
             drag:  new Set([ wakaPAC.MSG_DRAGENTER, wakaPAC.MSG_DRAGOVER, wakaPAC.MSG_DRAGLEAVE, wakaPAC.MSG_DROP ]),
-            input: new Set([ wakaPAC.MSG_CHANGE, wakaPAC.MSG_INPUT, wakaPAC.MSG_INPUT_COMPLETE, wakaPAC.MSG_SUBMIT, wakaPAC.MSG_COPY, wakaPAC.MSG_PASTE ]),
-            size:  new Set([ wakaPAC.MSG_SIZE, wakaPAC.MSG_GESTURE ]),
+            input:   new Set([ wakaPAC.MSG_CHANGE, wakaPAC.MSG_INPUT, wakaPAC.MSG_INPUT_COMPLETE, wakaPAC.MSG_SUBMIT, wakaPAC.MSG_COPY, wakaPAC.MSG_PASTE ]),
+            size:    new Set([ wakaPAC.MSG_SIZE ]),
+            gesture: new Set([ wakaPAC.MSG_GESTURE ]),
         };
 
         // Install the message hook.
@@ -268,19 +270,31 @@ const WakaPACPanel = {
 
             const entry = {
                 // HH:MM:SS.mmm — readable timestamp without the date component
-                time:    new Date().toISOString().substr(11, 12),
+                time:    new Date().toISOString().slice(11, 12),
+                
                 // pac-id of the container this message is dispatched to
                 pacId:   event.pacId ?? '—',
                 message: event.message,
                 wParam:  event.wParam,
                 lParam:  event.lParam,
+                
                 // The DOM element that originated the event — may be a descendant
                 // of the container (e.g. a <button> inside a PAC container).
                 // Stored as a reference; formatting happens at render time.
                 target:  event.target ?? null,
+                
                 // Repeat counter — incremented when consecutive identical collapsible
                 // messages arrive for the same container instead of pushing a new row.
                 count:   1,
+
+                // Gesture-specific fields — only present on MSG_GESTURE events.
+                // These are richer than wParam/lParam alone and decoded at render time.
+                gesture: event.message === wakaPAC.MSG_GESTURE ? {
+                    pattern:    event.detail.pattern    ?? null,   // Named pattern (e.g. 'back') or raw directions string
+                    directions: event.detail.directions ?? [],     // Array of direction codes e.g. ['R', 'D', 'L']
+                    duration:   event.detail.duration   ?? null,   // Milliseconds from mousedown to mouseup
+                    bounds:     event.detail.bounds     ?? null,   // Bounding box of the drawn path
+                } : null,
             };
 
             this.pushEntry(this.ringBuffer, entry, RING_BUFFER_SIZE);
@@ -530,7 +544,7 @@ const WakaPACPanel = {
             + '<td class="wakapac-cell wakapac-cell-pac">'     + escapeHtml(entry.pacId)                                                   + '</td>'
             + '<td class="wakapac-cell wakapac-cell-msg">'     + escapeHtml(this.formatMessageId(entry.message)) + countBadge             + '</td>'
             + '<td class="wakapac-cell wakapac-cell-target">'  + escapeHtml(this.formatTarget(entry.target))                              + '</td>'
-            + '<td class="wakapac-cell wakapac-cell-details">' + escapeHtml(this.formatDetails(entry.message, entry.wParam, entry.lParam)) + '</td>'
+            + '<td class="wakapac-cell wakapac-cell-details">' + escapeHtml(this.formatDetails(entry.message, entry.wParam, entry.lParam, entry.gesture)) + '</td>'
             + '</tr>';
     },
 
@@ -614,7 +628,7 @@ const WakaPACPanel = {
      * @param {number} lParam
      * @returns {string}
      */
-    formatDetails(message, wParam, lParam) {
+    formatDetails(message, wParam, lParam, gesture = null) {
         switch (message) {
             case wakaPAC.MSG_MOUSEMOVE:
             case wakaPAC.MSG_LBUTTONDOWN:
@@ -654,7 +668,7 @@ const WakaPACPanel = {
                 return 'timerId=' + wParam;
 
             case wakaPAC.MSG_GESTURE:
-                return this.formatGestureDetails(wParam, lParam);
+                return this.formatGestureDetails(wParam, lParam, gesture);
 
             case wakaPAC.MSG_SETFOCUS:
             case wakaPAC.MSG_KILLFOCUS:
@@ -801,17 +815,51 @@ const WakaPACPanel = {
     },
 
     /**
-     * Decodes MSG_GESTURE wParam/lParam.
-     * wParam = gesture type identifier.
-     * lParam = packed coordinates (same encoding as mouse messages).
-     * @param {number} wParam
-     * @param {number} lParam
+     * Decodes MSG_GESTURE event data into a human-readable details string.
+     *
+     * Prefers the rich gesture object captured from the event (pattern, directions,
+     * duration, bounds) over the raw wParam/lParam, which only carry the packed
+     * center coordinates and are insufficient on their own.
+     *
+     * Output examples:
+     *   "back  R→D  42ms  120×80"
+     *   "R→D→L  (unrecognised)  95ms  200×60"
+     *
+     * @param {number}      wParam
+     * @param {number}      lParam
+     * @param {Object|null} gesture  Rich gesture data captured from the event, or null
      * @returns {string}
      */
-    formatGestureDetails(wParam, lParam) {
-        const x = (lParam & 0xFFFF) << 16 >> 16;
-        const y = (lParam >> 16)    << 16 >> 16;
-        return 'type=' + wParam + ', x=' + x + ', y=' + y;
+    formatGestureDetails(wParam, lParam, gesture) {
+        if (!gesture) {
+            // Fallback: only raw lParam coordinates available
+            const x = (lParam & 0xFFFF) << 16 >> 16;
+            const y = (lParam >> 16)    << 16 >> 16;
+            return 'center=' + x + ',' + y;
+        }
+
+        const parts = [];
+
+        // Pattern name (registered alias) or raw direction arrow sequence
+        const dirArrows = Array.isArray(gesture.directions) && gesture.directions.length > 0
+            ? gesture.directions.map(d => ({ R: '→', L: '←', U: '↑', D: '↓' }[d] ?? d)).join('')
+            : null;
+
+        if (gesture.pattern && dirArrows && gesture.pattern !== dirArrows) {
+            // Named pattern with its raw path shown alongside: "back (→↓)"
+            parts.push(gesture.pattern + ' (' + dirArrows + ')');
+        } else if (gesture.pattern) {
+            parts.push(gesture.pattern);
+        } else if (dirArrows) {
+            parts.push(dirArrows + '  (unrecognised)');
+        }
+
+        // Duration
+        if (gesture.duration != null) {
+            parts.push(Math.round(gesture.duration) + 'ms');
+        }
+
+        return parts.join('  ') || '—';
     },
 
     /**
@@ -874,8 +922,9 @@ return `
             <button class="wakapac-filter-btn" data-filter="focus" title="Setfocus, killfocus">🎯 Focus</button>
             <button class="wakapac-filter-btn" data-filter="timer" title="MSG_TIMER">⏱ Timer</button>
             <button class="wakapac-filter-btn" data-filter="drag"  title="Drag enter/over/leave/drop">↕ Drag</button>
-            <button class="wakapac-filter-btn" data-filter="input" title="Change, input, submit, copy, paste">✉ Input</button>
-            <button class="wakapac-filter-btn" data-filter="size"  title="MSG_SIZE, MSG_GESTURE">⤡ Size</button>
+            <button class="wakapac-filter-btn" data-filter="input"   title="Change, input, submit, copy, paste">✉ Input</button>
+            <button class="wakapac-filter-btn" data-filter="size"    title="MSG_SIZE">⤡ Size</button>
+            <button class="wakapac-filter-btn" data-filter="gesture" title="MSG_GESTURE — mouse gesture patterns">👆 Gesture</button>
         </div>
 
         <div class="wakapac-table-wrapper">
