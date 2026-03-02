@@ -103,7 +103,7 @@ $results = $this->em()->executeQuery("
 
 Pattern matching, regex, full-text search, and relationship traversal are first-class query expressions — not raw SQL escapes. ObjectQuel can also join database entities with JSON files in a single query via `json_source()`, something no other PHP ORM supports.
 
-## Quick start
+## How to Install
 
 ```bash
 # New project
@@ -112,6 +112,8 @@ composer create-project quellabs/canvas-skeleton my-app
 # Existing project
 composer require quellabs/canvas
 ```
+
+## Quick start
 
 ```php
 class BlogController extends BaseController {
