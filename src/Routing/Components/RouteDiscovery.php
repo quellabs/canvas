@@ -6,6 +6,7 @@
 	use Quellabs\Discover\Discover;
 	use Quellabs\Discover\Scanner\ComposerScanner;
 	use Quellabs\Discover\Scanner\MetadataCollector;
+	use Quellabs\Discover\Utilities\ComposerInstalledLoader;
 	use Quellabs\Support\ComposerUtils;
 	use ReflectionException;
 	use Quellabs\Canvas\Annotations\Route;
