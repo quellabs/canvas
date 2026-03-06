@@ -26,12 +26,12 @@
 		 */
 		public function __construct(ConsoleInput $input, ConsoleOutput $output, ?ProviderInterface $provider = null) {
 			parent::__construct($input, $output, $provider);
-
+			
 			// Config for AnnotationsReader
 			// Instantiate annotation listing class
 			$this->lister = new AnnotationLister();
 		}
-
+		
 		/**
 		 * Discovers and builds a complete list of all routes in the application
 		 * by scanning controller classes and their annotated methods
