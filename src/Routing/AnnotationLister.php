@@ -7,10 +7,18 @@
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Canvas\Annotations\Route;
 	use Quellabs\Canvas\AOP\AspectResolver;
+	use Quellabs\Canvas\Kernel;
+	use Quellabs\Canvas\Routing\Components\ControllersDiscovery;
+	use Quellabs\Canvas\Routing\Components\RouteDiscovery;
 	use Quellabs\Sculpt\ConfigurationManager;
 	use Quellabs\Support\ComposerUtils;
 	
 	class AnnotationLister extends AnnotationBase {
+		
+		/**
+		 * @var Kernel Application kernel
+		 */
+		private Kernel $kernel;
 		
 		/**
 		 * Cache for repeated route fetching
@@ -26,8 +34,8 @@
 		 * AnnotationLister constructor
 		 */
 		public function __construct() {
-			$annotationsReaderConfig = new Configuration();
-			parent::__construct(new AnnotationReader($annotationsReaderConfig));
+			$this->kernel = new Kernel();
+			parent::__construct($this->kernel->getAnnotationsReader());
 		}
 		
 		/**
@@ -43,58 +51,60 @@
 				return $this->cache;
 			}
 			
-			// Scan the Controller directory to find all controller classes
-			// This assumes controllers are located in /src/Controller relative to project root
-			$controllers = ComposerUtils::findClassesInDirectory(ComposerUtils::getProjectRoot() . "/src/Controllers");
-			
-			// Iterate through each discovered controller class
 			$result = [];
 			
-			foreach ($controllers as $controller) {
-				// Create a reflection object to inspect the controller class structure
-				$classReflection = new \ReflectionClass($controller);
-				
-				// Fetch the route prefix, if any
-				$routePrefix = $this->getRoutePrefix($controller);
-				
-				// Examine each method in the current controller
-				foreach ($classReflection->getMethods() as $method) {
-					// Look for Route annotations on this method
-					// Only methods with Route annotations are considered route handlers
-					$routes = $this->annotationsReader->getMethodAnnotations(
-						$method->getDeclaringClass()->getName(),
-						$method->getName(),
-						Route::class
-					);
+			// Iterate through each discovered controller class
+			$controllerDiscovery = new ControllersDiscovery($this->kernel);
+			
+			foreach($controllerDiscovery->fetch() as $directory) {
+				// Scan the Controller directory to find all controller classes
+				// This assumes controllers are located in /src/Controller relative to project root
+				foreach (ComposerUtils::findClassesInDirectory($directory) as $controller) {
+					// Create a reflection object to inspect the controller class structure
+					$classReflection = new \ReflectionClass($controller);
 					
-					// A single method can have multiple Route annotations (multiple routes to same handler)
-					foreach ($routes as $routeAnnotation) {
-						// Extract the route path pattern (e.g., "/users/{id}", "/api/products")
-						$routePath = $routeAnnotation->getRoute();
+					// Fetch the route prefix, if any
+					$routePrefix = $this->getRoutePrefix($controller);
+					
+					// Examine each method in the current controller
+					foreach ($classReflection->getMethods() as $method) {
+						// Look for Route annotations on this method
+						// Only methods with Route annotations are considered route handlers
+						$routes = $this->annotationsReader->getMethodAnnotations(
+							$method->getDeclaringClass()->getName(),
+							$method->getName(),
+							Route::class
+						);
 						
-						// Combine route with prefix
-						$completeRoutePath = "/" . $routePrefix . ltrim($routePath, "/");
-						
-						// Create the record
-						$record = [
-							'name'         => $routeAnnotation->getName(),    // The name of the route (can be null)
-							'http_methods' => $routeAnnotation->getMethods(), // A list of http methods
-							'controller'   => $controller,                    // Controller class name
-							'method'       => $method->getName(),             // Method name that handles this route
-							'route'        => $completeRoutePath,             // Route string
-							'aspects'      => $this->getAspectsOfMethod(      // Any interceptors/middleware for this method
-								$method->getDeclaringClass()->getName(),
-								$method->getName()
-							),
-						];
-						
-						// Add to named cache
-						if ($routeAnnotation->getName() !== null) {
-							$this->routeNameCache[$routeAnnotation->getName()] = $record;
+						// A single method can have multiple Route annotations (multiple routes to same handler)
+						foreach ($routes as $routeAnnotation) {
+							// Extract the route path pattern (e.g., "/users/{id}", "/api/products")
+							$routePath = $routeAnnotation->getRoute();
+							
+							// Combine route with prefix
+							$completeRoutePath = "/" . $routePrefix . ltrim($routePath, "/");
+							
+							// Create the record
+							$record = [
+								'name'         => $routeAnnotation->getName(),    // The name of the route (can be null)
+								'http_methods' => $routeAnnotation->getMethods(), // A list of http methods
+								'controller'   => $controller,                    // Controller class name
+								'method'       => $method->getName(),             // Method name that handles this route
+								'route'        => $completeRoutePath,             // Route string
+								'aspects'      => $this->getAspectsOfMethod(      // Any interceptors/middleware for this method
+									$method->getDeclaringClass()->getName(),
+									$method->getName()
+								),
+							];
+							
+							// Add to named cache
+							if ($routeAnnotation->getName() !== null) {
+								$this->routeNameCache[$routeAnnotation->getName()] = $record;
+							}
+							
+							// Build complete route configuration including metadata
+							$result[] = $record;
 						}
-						
-						// Build complete route configuration including metadata
-						$result[] = $record;
 					}
 				}
 			}

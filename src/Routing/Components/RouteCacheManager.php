@@ -55,7 +55,7 @@
 	class RouteCacheManager {
 		
 		private FileCache $cache;
-		private RouteDiscovery $routeDiscovery;
+		private ControllersDiscovery $controllersDiscovery;
 		private bool $debugMode;
 		private int $defaultTtl;
 		
@@ -70,19 +70,19 @@
 		/**
 		 * RouteCacheManager constructor
 		 * @param FileCache $cache
-		 * @param RouteDiscovery $routeDiscovery
+		 * @param ControllersDiscovery $controllersDiscovery
 		 * @param bool $debugMode
 		 * @param int $defaultTtl
 		 */
 		public function __construct(
 			FileCache $cache,
-			RouteDiscovery $routeDiscovery,
+			ControllersDiscovery $controllersDiscovery,
 			bool      $debugMode,
 			int       $defaultTtl = 86400 // 24 hours default
 		) {
 			$this->cache = $cache;
+			$this->controllersDiscovery = $controllersDiscovery;
 			$this->debugMode = $debugMode;
-			$this->routeDiscovery = $routeDiscovery;
 			$this->defaultTtl = $defaultTtl;
 		}
 		
@@ -158,7 +158,7 @@
 		 */
 		public function getLastControllerModification(): int {
 			// Fetch the controller directories
-			$controllerDirectories = $this->routeDiscovery->getControllerDirectories();
+			$controllerDirectories = $this->controllersDiscovery->fetch();
 			
 			// If no controller directories present, bail.
 			if (empty($controllerDirectories)) {

@@ -4,6 +4,7 @@
 	
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Canvas\Kernel;
+	use Quellabs\Canvas\Routing\Components\ControllersDiscovery;
 	use Quellabs\Support\ComposerUtils;
 	use Symfony\Component\HttpFoundation\Request;
 	use Quellabs\Canvas\Cache\Drivers\FileCache;
@@ -202,6 +203,8 @@
 		 * @return void
 		 */
 		private function initializeComponents(): void {
+			$controllerDiscovery = new ControllersDiscovery($this->kernel);
+			
 			// Create analyzer for parsing and validating route segments (URL parts)
 			$segmentAnalyzer = new RouteSegmentAnalyzer();
 			
@@ -235,7 +238,7 @@
 			// and controller directory for locating route definitions
 			$this->cacheManager = new RouteCacheManager(
 				$fileCache,                   // File-based cache storage
-				$this->routeDiscovery,        // Discovery component
+				$controllerDiscovery,         // Discovery component
 				$this->debugMode,             // Debug mode flag (affects cache invalidation)
 			);
 		}

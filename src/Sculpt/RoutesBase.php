@@ -2,6 +2,7 @@
 	
 	namespace Quellabs\Canvas\Sculpt;
 	
+	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Canvas\Routing\AnnotationLister;
 	use Quellabs\Contracts\Discovery\ProviderInterface;
 	use Quellabs\Sculpt\ConfigurationManager;
@@ -37,6 +38,10 @@
 		 * @return array Array of route configurations with controller, method, route, and aspects info
 		 */
 		protected function getRoutes(ConfigurationManager $config): array {
-			return $this->lister->getRoutes($config);
+			try {
+				return $this->lister->getRoutes($config);
+			} catch (AnnotationReaderException|\ReflectionException $e) {
+				return [];
+			}
 		}
 	}
