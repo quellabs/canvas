@@ -56,7 +56,7 @@
 		
 		private FileCache $cache;
 		private bool $debugMode;
-		private string $controllerDirectory;
+		private array $controllerDirectories;
 		private ?int $lastControllerModification = null;
 		private int $defaultTtl;
 		
@@ -74,18 +74,18 @@
 		 * RouteCacheManager constructor
 		 * @param FileCache $cache
 		 * @param bool $debugMode
-		 * @param string $controllerDirectory
+		 * @param array $controllerDirectories
 		 * @param int $defaultTtl
 		 */
 		public function __construct(
 			FileCache $cache,
 			bool      $debugMode,
-			string    $controllerDirectory,
+			array     $controllerDirectories,
 			int       $defaultTtl = 86400 // 24 hours default
 		) {
 			$this->cache = $cache;
 			$this->debugMode = $debugMode;
-			$this->controllerDirectory = $controllerDirectory;
+			$this->controllerDirectories = $controllerDirectories;
 			$this->defaultTtl = $defaultTtl;
 		}
 		
@@ -157,71 +157,56 @@
 		}
 		
 		/**
-		 * Get cache statistics and information
-		 * @return array Associative array with cache statistics
-		 */
-		public function getCacheInfo(): array {
-			return [
-				'debug_mode'                     => $this->debugMode,
-				'controller_directory'           => $this->controllerDirectory,
-				'cache_context'                  => 'routes', // Assuming routes context
-				'routes_cached'                  => $this->cache->has(self::ROUTES_CACHE_KEY),
-				'cache_valid'                    => $this->isCacheValid(),
-				'last_controller_modification'   => $this->getLastControllerModification(),
-				'cached_controller_modification' => $this->cache->get(self::CONTROLLER_MTIME_KEY, 0),
-				'controllers_changed'            => $this->haveControllersChanged()
-			];
-		}
-
-		/**
 		 * Get last modification time of controller files
-		 * @return int Unix timestamp of the most recently modified controller file
+		 * @return int Unix timestamp of the most recently modified controller file,
+		 *             or current time if directories are unconfigured/unreadable (forces cache miss)
 		 */
 		public function getLastControllerModification(): int {
 			// Use cached result if available to avoid expensive filesystem operations
-			// on subsequent calls within the same request
 			if ($this->lastControllerModification !== null) {
 				return $this->lastControllerModification;
 			}
-			
-			// Return 0 if controller directory is not set or doesn't exist
-			// This indicates no controllers are available for modification checking
-			if (!$this->controllerDirectory || !is_dir($this->controllerDirectory)) {
+
+			// If no controller directories present, bail.
+			if (empty($this->controllerDirectories)) {
 				return $this->lastControllerModification = 0;
 			}
 			
-			// Initialize with 0 to track the maximum modification time found
+			// Track the maximum modification time across ALL directories
 			$maxTime = 0;
 			
-			try {
-				// Create recursive iterator to traverse all subdirectories
-				// RecursiveDirectoryIterator explores directory structure recursively
-				// FilesystemIterator::SKIP_DOTS excludes "." and ".." entries
-				$iterator = new RecursiveIteratorIterator(
-					new RecursiveDirectoryIterator($this->controllerDirectory, FilesystemIterator::SKIP_DOTS)
-				);
-				
-				// Iterate through each file in the directory tree
-				foreach ($iterator as $file) {
-					// Only process PHP files since controllers are typically PHP files
-					if ($file->getExtension() === 'php') {
-						// Update maxTime with the latest modification time found
-						// getMTime() returns the Unix timestamp of last modification
-						$maxTime = max($maxTime, $file->getMTime());
-					}
+			foreach ($this->controllerDirectories as $controllerDirectory) {
+				if (!is_dir($controllerDirectory)) {
+					// A configured directory that doesn't exist is a deployment/config problem.
+					// Force cache invalidation so the issue surfaces immediately rather than
+					// serving stale routes silently.
+					error_log("RouteCacheManager: Configured controller directory does not exist: {$controllerDirectory}");
+					return $this->lastControllerModification = time();
 				}
-			} catch (\Exception $e) {
-				// Log any filesystem errors (permissions, missing files, etc.)
-				// This prevents the application from crashing due to filesystem issues
-				error_log("RouteCacheManager: Error scanning controller directory: " . $e->getMessage());
 				
-				// Return current timestamp as fallback to force cache invalidation
-				// This ensures the system remains functional even when file scanning fails
+				try {
+					$iterator = new RecursiveIteratorIterator(
+						new RecursiveDirectoryIterator($controllerDirectory, FilesystemIterator::SKIP_DOTS)
+					);
+					
+					foreach ($iterator as $file) {
+						if ($file->getExtension() === 'php') {
+							$maxTime = max($maxTime, $file->getMTime());
+						}
+					}
+				} catch (\Exception $e) {
+					error_log("RouteCacheManager: Error scanning controller directory: {$e->getMessage()}");
+					return $this->lastControllerModification = time();
+				}
+			}
+			
+			// If $maxTime is still 0, no PHP files exist in any configured directory.
+			// Use current time to force a cache miss — an empty controllers set likely
+			// means something is wrong, and we don't want to cache that state.
+			if ($maxTime === 0) {
 				return $this->lastControllerModification = time();
 			}
 			
-			// Cache and return the maximum modification time found
-			// If no PHP files were found, maxTime remains 0
 			return $this->lastControllerModification = $maxTime;
 		}
 		

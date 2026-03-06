@@ -61,7 +61,7 @@
 		private bool $debugMode;
 		private bool $matchTrailingSlashes;
 		private string $cacheDirectory;
-		private string $controllerDirectory;
+		private array $controllerDirectories;
 		
 		// Component dependencies
 		private RouteMatcher $routeMatcher;
@@ -196,7 +196,7 @@
 			$this->debugMode = $config->getAs('debug_mode', 'bool', false);
 			$this->matchTrailingSlashes = $config->getAs('match_trailing_slashes', 'bool', false);
 			$this->cacheDirectory = $config->get('cache_dir', ComposerUtils::getProjectRoot() . "/storage/cache");
-			$this->controllerDirectory = $this->getControllerDirectory();
+			$this->controllerDirectories = $this->getControllerDirectories();
 		}
 		
 		/**
@@ -236,9 +236,9 @@
 			// Uses file cache for persistence, debug mode affects caching behavior,
 			// and controller directory for locating route definitions
 			$this->cacheManager = new RouteCacheManager(
-				$fileCache,              // File-based cache storage
-				$this->debugMode,        // Debug mode flag (affects cache invalidation)
-				$this->controllerDirectory // Path to controller files
+				$fileCache,                   // File-based cache storage
+				$this->debugMode,             // Debug mode flag (affects cache invalidation)
+				$this->controllerDirectories  // Path to controller files
 			);
 		}
 		
@@ -259,15 +259,15 @@
 		
 		/**
 		 * Get the absolute path to the controllers directory
-		 * @return string Absolute path to controllers directory
+		 * @return array Absolute path to controllers directory
 		 */
-		private function getControllerDirectory(): string {
+		private function getControllerDirectories(): array {
 			$fullPath = ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "Controllers";
 			
 			if (!is_dir($fullPath)) {
-				return "";
+				return [];
 			}
 			
-			return realpath($fullPath) ?: "";
+			return [realpath($fullPath) ?: ""];
 		}
 	}
