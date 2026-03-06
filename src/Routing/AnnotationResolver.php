@@ -61,7 +61,6 @@
 		private bool $debugMode;
 		private bool $matchTrailingSlashes;
 		private string $cacheDirectory;
-		private array $controllerDirectories;
 		
 		// Component dependencies
 		private RouteMatcher $routeMatcher;
@@ -196,7 +195,6 @@
 			$this->debugMode = $config->getAs('debug_mode', 'bool', false);
 			$this->matchTrailingSlashes = $config->getAs('match_trailing_slashes', 'bool', false);
 			$this->cacheDirectory = $config->get('cache_dir', ComposerUtils::getProjectRoot() . "/storage/cache");
-			$this->controllerDirectories = $this->getControllerDirectories();
 		}
 		
 		/**
@@ -237,8 +235,8 @@
 			// and controller directory for locating route definitions
 			$this->cacheManager = new RouteCacheManager(
 				$fileCache,                   // File-based cache storage
+				$this->routeDiscovery,        // Discovery component
 				$this->debugMode,             // Debug mode flag (affects cache invalidation)
-				$this->controllerDirectories  // Path to controller files
 			);
 		}
 		
@@ -255,19 +253,5 @@
 				error_log("AnnotationResolver: Cannot create cache directory: {$this->cacheDirectory}");
 				$this->debugMode = true;
 			}
-		}
-		
-		/**
-		 * Get the absolute path to the controllers directory
-		 * @return array Absolute path to controllers directory
-		 */
-		private function getControllerDirectories(): array {
-			$fullPath = ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "Controllers";
-			
-			if (!is_dir($fullPath)) {
-				return [];
-			}
-			
-			return [realpath($fullPath) ?: ""];
 		}
 	}

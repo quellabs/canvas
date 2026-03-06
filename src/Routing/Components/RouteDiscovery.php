@@ -3,6 +3,9 @@
 	namespace Quellabs\Canvas\Routing\Components;
 	
 	use Quellabs\Canvas\Annotations\RoutePrefix;
+	use Quellabs\Discover\Discover;
+	use Quellabs\Discover\Scanner\ComposerScanner;
+	use Quellabs\Discover\Scanner\MetadataCollector;
 	use Quellabs\Support\ComposerUtils;
 	use ReflectionException;
 	use Quellabs\Canvas\Annotations\Route;
@@ -86,27 +89,29 @@
 		 */
 		public function buildRoutesFromControllers(): array {
 			// Fetch the controller directory
-			$controllerDir = $this->getControllerDirectory();
+			$controllerDirectories = $this->getControllerDirectories();
 			
-			if (!$controllerDir) {
+			if (empty($controllerDirectories)) {
 				return [];
 			}
 			
 			// Discover and process all controller classes in the directory
 			$result = [];
-
-			foreach (ComposerUtils::findClassesInDirectory($controllerDir) as $controller) {
-				// Extract route definitions from the current controller
-				$controllerRoutes = $this->getRoutesFromController($controller);
-				
-				// Compile route patterns for performance optimization
-				foreach ($controllerRoutes as &$route) {
-					// Store the compiled pattern alongside the original route data
-					$route['compiled_pattern'] = $this->patternCompiler->compileRoute($route['route_path']);
+			
+			foreach($controllerDirectories as $controllerDirectory) {
+				foreach (ComposerUtils::findClassesInDirectory($controllerDirectory) as $controller) {
+					// Extract route definitions from the current controller
+					$controllerRoutes = $this->getRoutesFromController($controller);
+					
+					// Compile route patterns for performance optimization
+					foreach ($controllerRoutes as &$route) {
+						// Store the compiled pattern alongside the original route data
+						$route['compiled_pattern'] = $this->patternCompiler->compileRoute($route['route_path']);
+					}
+					
+					// Merge the processed routes from this controller into the main result
+					$result = array_merge($result, $controllerRoutes);
 				}
-				
-				// Merge the processed routes from this controller into the main result
-				$result = array_merge($result, $controllerRoutes);
 			}
 			
 			// Sort all routes by priority (highest priority first)
@@ -166,77 +171,6 @@
 		}
 		
 		/**
-		 * Get all controllers in the controller directory
-		 * @return array Array of fully qualified controller class names
-		 */
-		public function getAllControllers(): array {
-			// Get the controller directory path from configuration
-			$controllerDir = $this->getControllerDirectory();
-			
-			// Return empty array if no controller directory is configured or found
-			if (!$controllerDir) {
-				return [];
-			}
-			
-			// Use the kernel's discovery service to scan the directory and find all controller classes
-			// This will return an array of fully qualified class names (FQCN) for each controller
-			return ComposerUtils::findClassesInDirectory($controllerDir);
-		}
-		
-		/**
-		 * Get route statistics from discovered controllers
-		 * @return array Associative array with discovery statistics
-		 * @throws AnnotationReaderException
-		 */
-		public function getDiscoveryStatistics(): array {
-			// Get all discovered controller classes from the configured directory
-			$controllers = $this->getAllControllers();
-			
-			// Initialize counters for statistical calculations
-			$totalRoutes = 0;                    // Total number of routes across all controllers
-			$controllersWithRoutes = 0;          // Count of controllers that have at least one route
-			$routesByController = [];            // Map of controller class name to route count
-			
-			// Process each controller to extract route information
-			foreach ($controllers as $controller) {
-				// Extract routes from the current controller using annotation parsing
-				// This may throw AnnotationReaderException if annotations are malformed
-				$routes = $this->getRoutesFromController($controller);
-				
-				// Count the number of routes found in this controller
-				$routeCount = count($routes);
-				
-				// Track controllers that actually define routes (not empty controllers)
-				if ($routeCount > 0) {
-					$controllersWithRoutes++;
-				}
-				
-				// Accumulate total route count across all controllers
-				$totalRoutes += $routeCount;
-				
-				// Store per-controller route count for detailed breakdown
-				$routesByController[$controller] = $routeCount;
-			}
-			
-			return [
-				// Basic counts
-				'total_controllers'             => count($controllers),
-				'controllers_with_routes'       => $controllersWithRoutes,
-				'total_routes'                  => $totalRoutes,
-				
-				// Calculated average with protection against division by zero
-				// Rounds to 2 decimal places for readability
-				'average_routes_per_controller' => count($controllers) > 0 ? round($totalRoutes / count($controllers), 2, PHP_ROUND_HALF_UP) : 0,
-				
-				// Detailed breakdown showing route count per controller class
-				'routes_by_controller'          => $routesByController,
-				
-				// Context information about where controllers were discovered
-				'controller_directory'          => $this->getControllerDirectory()
-			];
-		}
-		
-		/**
 		 * Get route prefix from controller class annotation
 		 * @param string $controller Fully qualified controller class name
 		 * @return string Route prefix (without leading slash)
@@ -255,6 +189,42 @@
 			return ltrim($classAnnotations[0]->getRoutePrefix(), '/');
 		}
 		
+		/**
+		 * Gets the absolute paths to all controller directories
+		 * @return array Absolute paths to controller directories
+		 */
+		public function getControllerDirectories(): array {
+			$configuration = $this->kernel->getConfiguration();
+			
+			// Build the default controller path relative to the project root
+			$defaultRouterPath = ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "Controllers";
+			
+			// Allow the controller directory to be overridden via configuration
+			$routerPath = $configuration->get('controller_directory', $defaultRouterPath);
+			
+			// Only include the configured path if it actually exists on disk
+			$result = [];
+			
+			if (is_dir($routerPath)) {
+				$result[] = $routerPath;
+			}
+			
+			// Discover additional controller directories registered by installed packages
+			$discover = new Discover();
+			$discover->addScanner(new MetadataCollector("canvas"));
+			$discover->discover();
+			
+			// Merge local controller path with any paths advertised by packages,
+			// filtering out any that don't exist on disk
+			$packagePaths = array_filter(
+				$discover->getFamilyValues('canvas', 'controller'),
+				fn($path) => is_dir($path)
+			);
+			
+			// Return result
+			return array_merge($result, $packagePaths);
+		}
+
 		/**
 		 * Clear the reflection cache
 		 * @return void
@@ -292,13 +262,13 @@
 
 				foreach ($methods as $method) {
 					// Skip magic methods and constructor
-					if ($this->shouldSkipMethod($method->getName())) {
+					if (str_starts_with($method->getName(), '__')) {
 						continue;
 					}
 					
 					// Use the annotation reader to extract Route annotations from this method
 					$annotations = $this->kernel->getAnnotationsReader()->getMethodAnnotations(
-						$controller,
+						$className,
 						$method->getName(),
 						Route::class
 					);
@@ -345,47 +315,5 @@
 			}
 			
 			return "/{$routePath}";
-		}
-		
-		/**
-		 * Check if a method should be skipped during route discovery
-		 * @param string $methodName Method name to check
-		 * @return bool True if method should be skipped
-		 */
-		private function shouldSkipMethod(string $methodName): bool {
-			// Skip magic methods, constructor, and common framework methods
-			$skipMethods = [
-				'__construct',
-				'__destruct',
-				'__call',
-				'__callStatic',
-				'__get',
-				'__set',
-				'__isset',
-				'__unset',
-				'__sleep',
-				'__wakeup',
-				'__toString',
-				'__invoke',
-				'__set_state',
-				'__clone',
-				'__debugInfo'
-			];
-			
-			return in_array($methodName, $skipMethods) || str_starts_with($methodName, '__');
-		}
-		
-		/**
-		 * Gets the absolute path to the controllers directory
-		 * @return string|null Absolute path to controllers directory or null if not found
-		 */
-		private function getControllerDirectory(): ?string {
-			$fullPath = ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "Controllers";
-			
-			if (!is_dir($fullPath)) {
-				return null;
-			}
-			
-			return realpath($fullPath);
 		}
 	}

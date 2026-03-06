@@ -30,11 +30,11 @@
 	 * - Configurable TTL: Default 24-hour cache lifetime with override support
 	 *
 	 * Cache validation process:
-	 * 1. Checks if cached routes exist
+	 * 1. Checks if cached routes exist (including embedded mtime)
 	 * 2. Compares current controller modification times with cached times
 	 * 3. Invalidates cache if any controller files changed
 	 * 4. Falls back to route rebuilding if cache is stale or missing
-	 * 5. Stores new controller modification times alongside routes
+	 * 5. Stores new controller modification times atomically alongside routes
 	 *
 	 * File monitoring:
 	 * - Recursive directory scanning for PHP files
@@ -55,42 +55,39 @@
 	class RouteCacheManager {
 		
 		private FileCache $cache;
+		private RouteDiscovery $routeDiscovery;
 		private bool $debugMode;
-		private array $controllerDirectories;
-		private ?int $lastControllerModification = null;
 		private int $defaultTtl;
 		
 		/**
-		 * Cache key for storing compiled routes
+		 * Cache key for storing compiled routes bundled with their mtime snapshot.
+		 * Structure: ['mtime' => int, 'routes' => array]
+		 * Bundling both values in one key makes reads and writes atomic,
+		 * eliminating the race window that existed when they were stored separately.
 		 */
 		private const string ROUTES_CACHE_KEY = 'compiled_routes';
 		
 		/**
-		 * Cache key for storing controller modification times
-		 */
-		private const string CONTROLLER_MTIME_KEY = 'controller_modification_time';
-		
-		/**
 		 * RouteCacheManager constructor
 		 * @param FileCache $cache
+		 * @param RouteDiscovery $routeDiscovery
 		 * @param bool $debugMode
-		 * @param array $controllerDirectories
 		 * @param int $defaultTtl
 		 */
 		public function __construct(
 			FileCache $cache,
+			RouteDiscovery $routeDiscovery,
 			bool      $debugMode,
-			array     $controllerDirectories,
 			int       $defaultTtl = 86400 // 24 hours default
 		) {
 			$this->cache = $cache;
 			$this->debugMode = $debugMode;
-			$this->controllerDirectories = $controllerDirectories;
+			$this->routeDiscovery = $routeDiscovery;
 			$this->defaultTtl = $defaultTtl;
 		}
 		
 		/**
-		 * Get cached routes if available and valid
+		 * Get cached routes if available and valid, rebuilding if stale or missing.
 		 * @param callable $routeBuilder Callback to build routes if cache miss
 		 * @return array Cached or freshly built routes array
 		 */
@@ -100,32 +97,34 @@
 				return $routeBuilder();
 			}
 			
-			// Check if controller files have been modified since last cache
-			// This must happen BEFORE trying to retrieve from cache
-			if ($this->haveControllersChanged()) {
-				// Controllers changed, clear related cache and rebuild
-				$this->clearCache();
+			$currentMtime = $this->getLastControllerModification();
+			$cached = $this->cache->get(self::ROUTES_CACHE_KEY);
+			
+			// Cache hit: entry exists and mtime still matches
+			if (
+				$cached !== null &&
+				isset($cached['mtime'], $cached['routes']) &&
+				$cached['mtime'] === $currentMtime
+			) {
+				return $cached['routes'];
 			}
 			
-			// Use FileCache remember() for intelligent caching with concurrency protection
-			return $this->cache->remember(
+			// Cache miss or stale: rebuild and store atomically
+			$routes = $routeBuilder();
+			
+			$this->cache->set(
 				self::ROUTES_CACHE_KEY,
-				$this->defaultTtl,
-				function () use ($routeBuilder) {
-					// Build fresh routes
-					$routes = $routeBuilder();
-					
-					// Cache the current controller modification time
-					$this->cacheControllerModificationTime();
-					
-					// Return the routes
-					return $routes;
-				}
+				['mtime' => $currentMtime, 'routes' => $routes],
+				$this->defaultTtl
 			);
+			
+			return $routes;
 		}
 		
 		/**
-		 * Check if cache is valid by comparing modification times
+		 * Check if cache is valid by comparing modification times.
+		 * Pure read — no filesystem side effects beyond what getLastControllerModification
+		 * already documents.
 		 * @return bool True if cache is still valid, false if stale
 		 */
 		public function isCacheValid(): bool {
@@ -133,13 +132,13 @@
 				return false;
 			}
 			
-			// Check if routes exist in the cache
-			if (!$this->cache->has(self::ROUTES_CACHE_KEY)) {
+			$cached = $this->cache->get(self::ROUTES_CACHE_KEY);
+			
+			if ($cached === null || !isset($cached['mtime'], $cached['routes'])) {
 				return false;
 			}
 			
-			// Check if controller modification time has changed
-			return !$this->haveControllersChanged();
+			return $cached['mtime'] === $this->getLastControllerModification();
 		}
 		
 		/**
@@ -147,41 +146,35 @@
 		 * @return bool True if cache was cleared successfully
 		 */
 		public function clearCache(): bool {
-			$routesCleared = $this->cache->forget(self::ROUTES_CACHE_KEY);
-			$mtimeCleared = $this->cache->forget(self::CONTROLLER_MTIME_KEY);
-			
-			// Reset in-memory cache
-			$this->lastControllerModification = null;
-			
-			return $routesCleared && $mtimeCleared;
+			return $this->cache->forget(self::ROUTES_CACHE_KEY);
 		}
 		
 		/**
-		 * Get last modification time of controller files
+		 * Get last modification time of controller files.
+		 * Always performs a fresh filesystem scan — no in-memory caching —
+		 * so long-running processes (PHP-FPM workers) always see current state.
 		 * @return int Unix timestamp of the most recently modified controller file,
 		 *             or current time if directories are unconfigured/unreadable (forces cache miss)
 		 */
 		public function getLastControllerModification(): int {
-			// Use cached result if available to avoid expensive filesystem operations
-			if ($this->lastControllerModification !== null) {
-				return $this->lastControllerModification;
-			}
-
+			// Fetch the controller directories
+			$controllerDirectories = $this->routeDiscovery->getControllerDirectories();
+			
 			// If no controller directories present, bail.
-			if (empty($this->controllerDirectories)) {
-				return $this->lastControllerModification = 0;
+			if (empty($controllerDirectories)) {
+				return 0;
 			}
 			
 			// Track the maximum modification time across ALL directories
 			$maxTime = 0;
 			
-			foreach ($this->controllerDirectories as $controllerDirectory) {
+			foreach ($controllerDirectories as $controllerDirectory) {
 				if (!is_dir($controllerDirectory)) {
 					// A configured directory that doesn't exist is a deployment/config problem.
 					// Force cache invalidation so the issue surfaces immediately rather than
 					// serving stale routes silently.
 					error_log("RouteCacheManager: Configured controller directory does not exist: {$controllerDirectory}");
-					return $this->lastControllerModification = time();
+					return time();
 				}
 				
 				try {
@@ -196,7 +189,7 @@
 					}
 				} catch (\Exception $e) {
 					error_log("RouteCacheManager: Error scanning controller directory: {$e->getMessage()}");
-					return $this->lastControllerModification = time();
+					return time();
 				}
 			}
 			
@@ -204,28 +197,9 @@
 			// Use current time to force a cache miss — an empty controllers set likely
 			// means something is wrong, and we don't want to cache that state.
 			if ($maxTime === 0) {
-				return $this->lastControllerModification = time();
+				return time();
 			}
 			
-			return $this->lastControllerModification = $maxTime;
-		}
-		
-		/**
-		 * Check if controller files have been modified since last cache
-		 * @return bool True if controllers have changed since last cache
-		 */
-		private function haveControllersChanged(): bool {
-			$currentModificationTime = $this->getLastControllerModification();
-			$cachedModificationTime = $this->cache->get(self::CONTROLLER_MTIME_KEY, 0);
-			return $currentModificationTime > $cachedModificationTime;
-		}
-		
-		/**
-		 * Cache the current controller modification time
-		 * @return void True if successfully cached
-		 */
-		private function cacheControllerModificationTime(): void {
-			$currentTime = $this->getLastControllerModification();
-			$this->cache->set(self::CONTROLLER_MTIME_KEY, $currentTime, $this->defaultTtl);
+			return $maxTime;
 		}
 	}
