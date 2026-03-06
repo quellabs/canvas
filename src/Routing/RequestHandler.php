@@ -147,7 +147,7 @@
 			
 			// Register controller signals with the hub
 			$hub = $this->kernel->getSignalHub();
-			$hub->registerSignals($controller);
+			$hub->discoverSignals($controller);
 			
 			// Create method context containing all execution metadata
 			$context = new MethodContext(
