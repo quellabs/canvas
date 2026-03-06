@@ -145,6 +145,10 @@
 			// Get the controller instance from the dependency injection container
 			$controller = $this->kernel->getDependencyInjector()->get($urlData["controller"]);
 			
+			// Register controller signals with the hub
+			$hub = $this->kernel->getSignalHub();
+			$hub->registerSignals($controller);
+			
 			// Create method context containing all execution metadata
 			$context = new MethodContext(
 				request: $request,
@@ -171,6 +175,9 @@
 			} finally {
 				// Always unregister context, even if exception occurs
 				$this->kernel->getDependencyInjector()->unregister($methodContextProvider);
+				
+				// Unregister signals
+				$hub->unregisterSignals($controller);
 			}
 		}
 	}
