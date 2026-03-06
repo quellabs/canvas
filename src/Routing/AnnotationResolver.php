@@ -137,7 +137,7 @@
 			
 			return $results;
 		}
-
+		
 		/**
 		 * Clear all caches and force rebuild
 		 * @return bool True if all caches were cleared successfully
@@ -145,7 +145,6 @@
 		public function clearAllCaches(): bool {
 			$this->routeIndex = [];
 			$this->indexBuilder->clearIndex();
-			$this->routeDiscovery->clearReflectionCache();
 			return $this->cacheManager->clearCache();
 		}
 		
@@ -229,6 +228,7 @@
 			// and compiler for pattern compilation
 			$this->routeDiscovery = new RouteDiscovery(
 				$this->kernel,           // Application kernel instance
+				$controllerDiscovery,    // Controller discovery service
 				$segmentAnalyzer,        // Route segment parsing service
 				$patternCompiler         // Route pattern compilation service
 			);
