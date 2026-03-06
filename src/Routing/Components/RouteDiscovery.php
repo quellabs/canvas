@@ -90,7 +90,7 @@
 		 */
 		public function buildRoutesFromControllers(): array {
 			// Fetch the controller directory
-			$controllersDiscovery = new ControllersDiscovery($this->kernel);
+			$controllersDiscovery = new ControllersDiscovery($this->kernel->getConfiguration());
 			$controllerDirectories = $controllersDiscovery->fetch();
 			
 			if (empty($controllerDirectories)) {
