@@ -3,10 +3,6 @@
 	namespace Quellabs\Canvas\Routing\Components;
 	
 	use Quellabs\Canvas\Annotations\RoutePrefix;
-	use Quellabs\Discover\Discover;
-	use Quellabs\Discover\Scanner\ComposerScanner;
-	use Quellabs\Discover\Scanner\MetadataCollector;
-	use Quellabs\Discover\Utilities\ComposerInstalledLoader;
 	use Quellabs\Support\ComposerUtils;
 	use ReflectionException;
 	use Quellabs\Canvas\Annotations\Route;
@@ -45,131 +41,63 @@
 	 * - Wildcard segments (lower priority)
 	 * - Route length (longer routes slightly favored)
 	 * - Fully static routes (highest priority bonus)
-	 *
-	 * Performance optimizations:
-	 * - Reflection result caching to avoid repeated class inspection
-	 * - Magic method filtering to skip framework methods
-	 * - Lazy compilation only when routes are actually needed
-	 * - Memory-efficient processing of large controller sets
-	 *
-	 * The discovery process is expensive and typically runs only during cache
-	 * rebuilds or in development mode. Results are cached for production use.
 	 */
 	class RouteDiscovery {
 		
 		private Kernel $kernel;
+		private ControllersDiscovery $controllersDiscovery;
 		private RouteSegmentAnalyzer $segmentAnalyzer;
 		private RoutePatternCompiler $patternCompiler;
-		
-		/** @var array Cache for reflection results to avoid repeated reflection operations */
-		private array $reflectionCache = [];
 		
 		/**
 		 * RouteDiscovery constructor
 		 * @param Kernel $kernel
+		 * @param ControllersDiscovery $controllersDiscovery
 		 * @param RouteSegmentAnalyzer $segmentAnalyzer
 		 * @param RoutePatternCompiler $patternCompiler
 		 */
 		public function __construct(
 			Kernel               $kernel,
+			ControllersDiscovery $controllersDiscovery,
 			RouteSegmentAnalyzer $segmentAnalyzer,
 			RoutePatternCompiler $patternCompiler
 		) {
 			$this->kernel = $kernel;
+			$this->controllersDiscovery = $controllersDiscovery;
 			$this->segmentAnalyzer = $segmentAnalyzer;
 			$this->patternCompiler = $patternCompiler;
 		}
 		
 		/**
-		 * This method discovers all controller classes in the controller directory,
-		 * extracts their route definitions, and pre-compiles the route patterns
-		 * for optimal runtime performance. The compiled routes are sorted by
-		 * priority to ensure correct matching order during request processing.
+		 * Discovers all controller classes, extracts their route definitions, and
+		 * pre-compiles the route patterns for optimal runtime performance. The compiled
+		 * routes are sorted by priority to ensure correct matching order during request
+		 * processing.
 		 * @return array Array of compiled route definitions sorted by priority (highest first)
 		 * @throws AnnotationReaderException
 		 */
 		public function buildRoutesFromControllers(): array {
-			// Fetch the controller directory
-			$controllersDiscovery = new ControllersDiscovery($this->kernel->getConfiguration());
-			$controllerDirectories = $controllersDiscovery->fetch();
+			$controllerDirectories = $this->controllersDiscovery->fetch();
 			
 			if (empty($controllerDirectories)) {
 				return [];
 			}
 			
-			// Discover and process all controller classes in the directory
 			$result = [];
 			
-			foreach($controllerDirectories as $controllerDirectory) {
+			foreach ($controllerDirectories as $controllerDirectory) {
 				foreach (ComposerUtils::findClassesInDirectory($controllerDirectory) as $controller) {
-					// Extract route definitions from the current controller
-					$controllerRoutes = $this->getRoutesFromController($controller);
-					
-					// Compile route patterns for performance optimization
-					foreach ($controllerRoutes as &$route) {
-						// Store the compiled pattern alongside the original route data
+					foreach ($this->getRoutesFromController($controller) as &$route) {
 						$route['compiled_pattern'] = $this->patternCompiler->compileRoute($route['route_path']);
+						$result[] = $route;
 					}
-					
-					// Merge the processed routes from this controller into the main result
-					$result = array_merge($result, $controllerRoutes);
 				}
 			}
 			
 			// Sort all routes by priority (highest priority first)
 			usort($result, fn($a, $b) => $b['priority'] <=> $a['priority']);
 			
-			// Return result
 			return $result;
-		}
-		
-		/**
-		 * Gets all potential routes from a controller with their priorities
-		 *
-		 * This method extracts route definitions from a controller class by combining
-		 * the controller's route prefix with individual method route annotations.
-		 * Each route is assigned a priority based on its specificity to ensure
-		 * proper matching order during request processing.
-		 *
-		 * @param string $controller The fully qualified controller class name
-		 * @return array Array of route definitions with complete metadata
-		 * @throws AnnotationReaderException When annotation reading fails
-		 */
-		public function getRoutesFromController(string $controller): array {
-			$routes = [];
-			
-			// Get the route prefix for this controller (e.g., from class-level RoutePrefix annotation)
-			$routePrefix = $this->getRoutePrefix($controller);
-			
-			// Extract all route annotations from public methods in this controller
-			$routeAnnotations = $this->getMethodRouteAnnotations($controller);
-			
-			// Process each method's route annotation to create complete route definitions
-			foreach ($routeAnnotations as $routeData) {
-				// Store annotation data
-				$routeAnnotation = $routeData['annotation'];
-				
-				// Get the method-specific route path from the annotation
-				$routePath = $routeAnnotation->getRoute();
-				
-				// Combine controller prefix with method route to create complete path
-				$completeRoutePath = $this->buildCompleteRoutePath($routePrefix, $routePath);
-				
-				// Calculate priority based on route specificity
-				$priority = $this->segmentAnalyzer->calculateRoutePriority($completeRoutePath);
-				
-				// Build complete route definition with all necessary metadata
-				$routes[] = [
-					'http_methods' => $routeAnnotation->getMethods(),
-					'controller'   => $controller,
-					'method'       => $routeData['method'],
-					'route'        => $routeAnnotation,
-					'route_path'   => $completeRoutePath,
-					'priority'     => $priority
-				];
-			}
-			
-			return $routes;
 		}
 		
 		/**
@@ -178,70 +106,64 @@
 		 * @return string Route prefix (without leading slash)
 		 * @throws AnnotationReaderException
 		 */
-		public function getRoutePrefix(string $controller): string {
-			// Get class-level Route annotations
+		private function getRoutePrefix(string $controller): string {
 			$classAnnotations = $this->kernel->getAnnotationsReader()->getClassAnnotations($controller, RoutePrefix::class);
 			
-			// Use the first Route annotation found as the prefix
 			if ($classAnnotations->isEmpty()) {
 				return '';
 			}
 			
-			// Use the first RoutePrefix annotation found as the prefix
 			return ltrim($classAnnotations[0]->getRoutePrefix(), '/');
 		}
 		
-
 		/**
-		 * Clear the reflection cache
-		 * @return void
+		 * Extracts route definitions from a controller class by combining the
+		 * controller's route prefix with individual method route annotations.
+		 * Each route is assigned a priority based on its specificity to ensure
+		 * proper matching order during request processing.
+		 * @param string $controller The fully qualified controller class name
+		 * @return array Array of route definitions with complete metadata
+		 * @throws AnnotationReaderException When annotation reading fails
 		 */
-		public function clearReflectionCache(): void {
-			$this->reflectionCache = [];
+		private function getRoutesFromController(string $controller): array {
+			$routes = [];
+			$routePrefix = $this->getRoutePrefix($controller);
+			
+			foreach ($this->getMethodRouteAnnotations($controller) as $routeData) {
+				$routeAnnotation = $routeData['annotation'];
+				$completeRoutePath = $this->buildCompleteRoutePath($routePrefix, $routeAnnotation->getRoute());
+				
+				$routes[] = [
+					'http_methods' => $routeAnnotation->getMethods(),
+					'controller'   => $controller,
+					'method'       => $routeData['method'],
+					'route'        => $routeAnnotation,
+					'route_path'   => $completeRoutePath,
+					'priority'     => $this->segmentAnalyzer->calculateRoutePriority($completeRoutePath)
+				];
+			}
+			
+			return $routes;
 		}
 		
 		/**
-		 * This method uses reflection to scan controller classes and extract route
-		 * annotations from public methods. The results are cached in memory to avoid
-		 * repeated expensive reflection operations during route building.
-		 * @param object|string $controller Controller instance or class name to scan
-		 * @return array Associative array mapping method names to their Route annotations
-		 * @throws AnnotationReaderException When annotation reading fails
+		 * Uses reflection to scan a controller class and extract Route annotations
+		 * from its public non-magic methods.
+		 * @param string $controller Controller class name to scan
+		 * @return array Array of ['method' => string, 'annotation' => Route] entries
+		 * @throws AnnotationReaderException When annotation reading or reflection fails
 		 */
-		private function getMethodRouteAnnotations(object|string $controller): array {
-			// Normalize controller to class name for consistent caching
-			$className = is_string($controller) ? $controller : get_class($controller);
-			
-			// Check if we've already processed this controller class
-			if (isset($this->reflectionCache[$className])) {
-				return $this->reflectionCache[$className];
-			}
-			
+		private function getMethodRouteAnnotations(string $controller): array {
 			try {
-				// Create reflection class to analyze the controller
-				$reflectionClass = new \ReflectionClass($className);
-				
-				// Get all public methods - these are potential route handlers
-				$methods = $reflectionClass->getMethods(\ReflectionMethod::IS_PUBLIC);
-				
-				// Scan each public method for Route annotations
+				$reflectionClass = new \ReflectionClass($controller);
 				$result = [];
-
-				foreach ($methods as $method) {
-					// Skip magic methods and constructor
+				
+				foreach ($reflectionClass->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
 					if (str_starts_with($method->getName(), '__')) {
 						continue;
 					}
 					
-					// Use the annotation reader to extract Route annotations from this method
-					$annotations = $this->kernel->getAnnotationsReader()->getMethodAnnotations(
-						$className,
-						$method->getName(),
-						Route::class
-					);
-					
-					// Process each Route annotation found on this method
-					foreach ($annotations as $annotation) {
+					foreach ($this->kernel->getAnnotationsReader()->getMethodAnnotations($controller, $method->getName(), Route::class) as $annotation) {
 						$result[] = [
 							'method'     => $method->getName(),
 							'annotation' => $annotation
@@ -249,12 +171,11 @@
 					}
 				}
 				
-				// Cache the results and return
-				return $this->reflectionCache[$className] = $result;
+				return $result;
 				
 			} catch (ReflectionException $e) {
 				throw new AnnotationReaderException(
-					"Failed to reflect controller class {$className}: " . $e->getMessage(),
+					"Failed to reflect controller class {$controller}: " . $e->getMessage(),
 					0,
 					$e
 				);
@@ -268,19 +189,13 @@
 		 * @return string Complete route path
 		 */
 		private function buildCompleteRoutePath(string $prefix, string $routePath): string {
-			// Handle the root route case
 			if ($routePath === '/') {
 				return $prefix ? "/{$prefix}" : '/';
 			}
 			
-			// Combine prefix and route path, handling slashes properly
 			$prefix = trim($prefix, '/');
 			$routePath = ltrim($routePath, '/');
 			
-			if ($prefix) {
-				return "/{$prefix}/{$routePath}";
-			}
-			
-			return "/{$routePath}";
+			return $prefix ? "/{$prefix}/{$routePath}" : "/{$routePath}";
 		}
 	}

@@ -100,65 +100,6 @@
 		}
 		
 		/**
-		 * Get comprehensive statistics about the enhanced route index
-		 * @return array Detailed statistics about route distribution and index efficiency
-		 */
-		public function getIndexStatistics(): array {
-			$index = $this->getRouteIndex();
-			
-			// Calculate total routes registered in the system
-			$totalRoutes = 0;
-			
-			// Count groups organized by segment count (routes with 1 segment, 2 segments, etc.)
-			$segmentCountGroups = count($index['segment_count'] ?? []);
-			
-			// Count groups organized by HTTP method (GET, POST, PUT, etc.)
-			$httpMethodGroups = count($index['http_methods'] ?? []);
-			
-			// Count positions in the multi-level index structure
-			// Multi-level index organizes routes by parameter positions for faster lookup
-			$multiLevelPositions = count($index['multi_level'] ?? []);
-			
-			// Count total routes from segment count index
-			foreach ($index['segment_count'] ?? [] as $routes) {
-				$totalRoutes += count($routes);
-			}
-			
-			// Calculate multi-level index efficiency
-			$totalStaticSegmentMappings = 0;
-			
-			foreach ($index['multi_level'] ?? [] as $positionGroup) {
-				foreach ($positionGroup as $staticGroup) {
-					$totalStaticSegmentMappings += count($staticGroup);
-				}
-			}
-			
-			// Calculate the maximum depth of the prefix tree structure
-			$trieDepth = $this->calculateTrieDepth($index['prefix_tree'] ?? []);
-			
-			// Count total nodes in the prefix tree
-			$trieNodes = $this->countTrieNodes($index['prefix_tree'] ?? []);
-			
-			return [
-				// Basic route counts by category
-				'total_routes'            => $totalRoutes,                 // Total number of routes
-				
-				// Enhanced index metrics
-				'segment_count_groups'    => $segmentCountGroups,         // Groups by path segment count
-				'http_method_groups'      => $httpMethodGroups,           // Groups by HTTP method
-				'multi_level_positions'   => $multiLevelPositions,        // Positions in multi-level index
-				'static_segment_mappings' => $totalStaticSegmentMappings, // Static mappings in multi-level index
-				
-				// Trie metrics - prefix tree performance indicators
-				'trie_depth'              => $trieDepth,                  // Maximum depth of the prefix tree
-				'trie_nodes'              => $trieNodes,                  // Total nodes in the prefix tree
-				
-				// Performance indicators
-				'pre_filter_potential'    => $this->calculatePreFilterPotential($index), // Routing efficiency score
-			];
-		}
-		
-		/**
 		 * Clear the cached route index
 		 * @return void
 		 */
