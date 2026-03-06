@@ -31,23 +31,19 @@
 	use Quellabs\Canvas\Inspector\Inspector;
 	use Quellabs\Canvas\Legacy\LegacyBridge;
 	use Quellabs\Canvas\Legacy\LegacyHandler;
-	use Quellabs\DependencyInjection\Autowiring\Autowirer;
 	use Quellabs\DependencyInjection\Container;
 	use Quellabs\DependencyInjection\Provider\SimpleBinding;
 	use Quellabs\Discover\Discover;
-	use Quellabs\SignalHub\HasSignals;
 	use Quellabs\SignalHub\Signal;
 	use Quellabs\SignalHub\SignalHub;
 	use Quellabs\SignalHub\SignalHubLocator;
 	use Quellabs\Support\ComposerUtils;
-	use Random\RandomException;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
 	
 	class Kernel {
 		
-		use HasSignals;
-		
+		private SignalHub $signalHub; // Event system
 		private Signal $canvasQuerySignal; // Signal for performance measuring
 		private Discover $discover; // Service discovery
 		private AnnotationReader $annotationsReader; // Annotation reading
@@ -65,8 +61,9 @@
 		 */
 		public function __construct(array $configuration = []) {
 			// Connect SignalHub to this class
-			$this->setSignalHub(SignalHubLocator::getInstance());
-			$this->canvasQuerySignal = $this->createSignal(['array'], 'debug.canvas.query');
+			$this->signalHub = SignalHubLocator::getInstance();
+			$this->canvasQuerySignal = new Signal('debug.canvas.query');
+			$this->signalHub->registerSignal($this->canvasQuerySignal);
 			
 			// Register Discovery service
 			$this->discover = new Discover();
@@ -89,7 +86,7 @@
 			$this->dependencyInjector->register(new SimpleBinding(Kernel::class, $this));
 			$this->dependencyInjector->register(new SimpleBinding(Configuration::class, $this->configuration));
 			$this->dependencyInjector->register(new SimpleBinding(Discover::class, $this->discover));
-			$this->dependencyInjector->register(new SimpleBinding(SignalHub::class, SignalHubLocator::getInstance()));
+			$this->dependencyInjector->register(new SimpleBinding(SignalHub::class, $this->signalHub));
 			$this->dependencyInjector->register(new SimpleBinding(AnnotationReader::class, $this->annotationsReader));
 			$this->dependencyInjector->register(new CacheInterfaceProvider($this->dependencyInjector, $this->annotationsReader));
 			
@@ -130,6 +127,14 @@
 		 */
 		public function getDependencyInjector(): Container {
 			return $this->dependencyInjector;
+		}
+		
+		/**
+		 * Returns the signal hub
+		 * @return SignalHub
+		 */
+		public function getSignalHub(): SignalHub {
+			return $this->signalHub;
 		}
 		
 		/**
