@@ -2,7 +2,9 @@
 	
 	namespace Quellabs\Canvas\Routing\Components;
 	
+	use Quellabs\Canvas\Discover\DependencyAwareDiscover;
 	use Quellabs\Canvas\Routing\Contracts\SignalProviderInterface;
+	use Quellabs\DependencyInjection\Container;
 	use Quellabs\Discover\Discover;
 	use Quellabs\Discover\Scanner\ComposerScanner;
 	use Quellabs\SignalHub\Signal;
@@ -27,8 +29,8 @@
 		 * Discover all signal providers from packages that declare themselves
 		 * under the "signal-hub" family in their composer.json extra section.
 		 */
-		public function __construct() {
-			$discover = new Discover();
+		public function __construct(Container $di) {
+			$discover = new DependencyAwareDiscover($di);
 			$discover->addScanner(new ComposerScanner("signal-hub"));
 			$discover->discover();
 			

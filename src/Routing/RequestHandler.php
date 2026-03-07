@@ -106,7 +106,7 @@
 		 * @return Response The response from the matched route handler
 		 * @param-out array $urlData The resolved URL data (never null after execution)
 		 * @throws RouteNotFoundException When no matching route is found
-		 * @throws AnnotationReaderException When annotation parsing fails
+		 * @throws AnnotationReaderException|\ReflectionException When annotation parsing fails
 		 */
 		private function modernResolve(Request $request, ?array &$urlData): Response {
 			// Create resolver to handle annotation-based route discovery
@@ -145,14 +145,15 @@
 		 */
 		private function executeCanvasRoute(Request $request, array $urlData): Response {
 			// Get the controller instance from the dependency injection container
-			$controller = $this->kernel->getDependencyInjector()->get($urlData["controller"]);
+			$dependencyInjector = $this->kernel->getDependencyInjector();
+			$controller = $dependencyInjector->get($urlData["controller"]);
 			
 			// Register controller signals with the hub
 			$hub = $this->kernel->getSignalHub();
 			$signals = $hub->discoverSignals($controller);
 			
 			// Auto-connect signals to slots — resolved from container so discovery runs once
-			$this->kernel->getDependencyInjector()->get(SignalConnector::class)->connect($signals);
+			$this->kernel->getSignalConnector()->connect($signals);
 			
 			// Create method context containing all execution metadata
 			$context = new MethodContext(

@@ -23,8 +23,10 @@
 	
 	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\Canvas\Configuration\Configuration;
+	use Quellabs\Canvas\Discover\DependencyAwareDiscover;
 	use Quellabs\Canvas\Error\DefaultErrorHandler;
 	use Quellabs\Canvas\Error\ErrorHandlerInterface;
+	use Quellabs\Canvas\Routing\Components\SignalConnector;
 	use Quellabs\Canvas\Routing\RequestHandler;
 	use Quellabs\Canvas\Inspector\EventCollector;
 	use Quellabs\Canvas\Cache\CacheInterfaceProvider;
@@ -45,7 +47,6 @@
 		
 		private SignalHub $signalHub; // Event system
 		private Signal $canvasQuerySignal; // Signal for performance measuring
-		private Discover $discover; // Service discovery
 		private AnnotationReader $annotationsReader; // Annotation reading
 		private Configuration $configuration;
 		private Configuration $inspector_configuration;
@@ -53,6 +54,7 @@
 		private bool $legacyEnabled;
 		private ?LegacyHandler $legacyFallbackHandler;
 		private Container $dependencyInjector;
+		private ?SignalConnector $signalConnector = null;
 		private array $errorHandlers;
 		
 		/**
@@ -69,9 +71,6 @@
 			} else {
 				$this->canvasQuerySignal = $this->signalHub->getSignal('debug.canvas.query');
 			}
-			
-			// Register Discovery service
-			$this->discover = new Discover();
 			
 			// Store the configuration array
 			$this->configuration = new Configuration(array_merge($this->getConfigFile("app.php"), $configuration));
@@ -90,7 +89,7 @@
 			$this->dependencyInjector = new Container();
 			$this->dependencyInjector->register(new SimpleBinding(Kernel::class, $this));
 			$this->dependencyInjector->register(new SimpleBinding(Configuration::class, $this->configuration));
-			$this->dependencyInjector->register(new SimpleBinding(Discover::class, $this->discover));
+			$this->dependencyInjector->register(new SimpleBinding(Discover::class, new DependencyAwareDiscover($this->dependencyInjector)));
 			$this->dependencyInjector->register(new SimpleBinding(SignalHub::class, $this->signalHub));
 			$this->dependencyInjector->register(new SimpleBinding(AnnotationReader::class, $this->annotationsReader));
 			$this->dependencyInjector->register(new CacheInterfaceProvider($this->dependencyInjector, $this->annotationsReader));
@@ -140,6 +139,14 @@
 		 */
 		public function getSignalHub(): SignalHub {
 			return $this->signalHub;
+		}
+		
+		/**
+		 * Returns the signal connector, instantiating it on first use
+		 * @return SignalConnector
+		 */
+		public function getSignalConnector(): SignalConnector {
+			return $this->signalConnector ??= new SignalConnector($this->getDependencyInjector());
 		}
 		
 		/**
