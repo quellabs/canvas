@@ -62,8 +62,13 @@
 		public function __construct(array $configuration = []) {
 			// Connect SignalHub to this class
 			$this->signalHub = SignalHubLocator::getInstance();
-			$this->canvasQuerySignal = new Signal('debug.canvas.query');
-			$this->signalHub->registerSignal($this->canvasQuerySignal);
+			
+			if (!$this->signalHub->hasSignal('debug.canvas.query')) {
+				$this->canvasQuerySignal = new Signal('debug.canvas.query');
+				$this->signalHub->registerSignal($this->canvasQuerySignal);
+			} else {
+				$this->canvasQuerySignal = $this->signalHub->getSignal('debug.canvas.query');
+			}
 			
 			// Register Discovery service
 			$this->discover = new Discover();
@@ -179,9 +184,22 @@
 				$response = $this->createErrorResponse($e, $request);
 			}
 			
+			// Publish request telemetry — belongs here, not inside the renderer
+			$this->canvasQuerySignal->emit([
+				'request'           => $request,
+				'legacy_path'       => $isLegacyPath,
+				'http_methods'      => $urlData['http_methods'] ?? null,
+				'controller'        => $urlData['controller'] ?? null,
+				'method'            => $urlData['method'] ?? null,
+				'pattern'           => !$isLegacyPath && $urlData !== null ? $urlData['route']?->getRoute() : '',
+				'parameters'        => $urlData['variables'] ?? null,
+				'execution_time_ms' => (microtime(true) - $start) * 1000,
+				'memory_used_bytes' => memory_get_usage(true) - $memoryStart
+			]);
+			
 			// Inject debugging information into the response for development
 			if ($debugBarEnabled) {
-				$this->injectDebugBar($debugCollector, $request, $response, $urlData, $isLegacyPath, $start, $memoryStart);
+				$this->injectDebugBar($debugCollector, $request, $response);
 			}
 			
 			return $response;
@@ -192,42 +210,9 @@
 		 * @param EventCollector|null $debugCollector Debug collector instance
 		 * @param Request $request The HTTP request
 		 * @param Response $response The HTTP response to inject into
-		 * @param array|null $urlData URL resolution data
-		 * @param bool $isLegacyPath Whether this was handled by legacy system
-		 * @param float $start Request start time
-		 * @param int $memoryStart Initial memory usage
 		 */
-		private function injectDebugBar(
-			?EventCollector $debugCollector,
-			Request         $request,
-			Response        $response,
-			?array          $urlData,
-			bool            $isLegacyPath,
-			float           $start,
-			int             $memoryStart
-		): void {
-			// Route
-			if ($isLegacyPath || $urlData === null) {
-				$pattern = '';
-			} else {
-				$pattern = $urlData['route']?->getRoute();
-			}
-			
-			// Send signal for performance monitoring
+		private function injectDebugBar(?EventCollector $debugCollector, Request $request, Response $response): void {
 			try {
-				$this->canvasQuerySignal->emit([
-					'request'           => $request,
-					'legacy_path'       => $isLegacyPath,
-					'http_methods'      => $urlData['http_methods'] ?? null,
-					'controller'        => $urlData['controller'] ?? null,
-					'method'            => $urlData['method'] ?? null,
-					'pattern'           => $pattern,
-					'parameters'        => $urlData['variables'] ?? null,
-					'execution_time_ms' => (microtime(true) - $start) * 1000,
-					'memory_used_bytes' => memory_get_usage(true) - $memoryStart
-				]);
-				
-				// Inject the debug bar
 				$debugBar = new Inspector($debugCollector, $this->getInspectorConfiguration());
 				$debugBar->inject($request, $response);
 			} catch (\Throwable $e) {
