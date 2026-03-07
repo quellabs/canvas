@@ -87,9 +87,15 @@
 			
 			// Instantiate Dependency Injector and register default providers
 			$this->dependencyInjector = new Container();
+			
+			// Create discover instance
+			$discover = new DependencyAwareDiscover($this->dependencyInjector);
+			
+			// Bind DI classes
 			$this->dependencyInjector->register(new SimpleBinding(Kernel::class, $this));
 			$this->dependencyInjector->register(new SimpleBinding(Configuration::class, $this->configuration));
-			$this->dependencyInjector->register(new SimpleBinding(Discover::class, new DependencyAwareDiscover($this->dependencyInjector)));
+			$this->dependencyInjector->register(new SimpleBinding(Discover::class, $discover));
+			$this->dependencyInjector->register(new SimpleBinding(DependencyAwareDiscover::class, $discover));
 			$this->dependencyInjector->register(new SimpleBinding(SignalHub::class, $this->signalHub));
 			$this->dependencyInjector->register(new SimpleBinding(AnnotationReader::class, $this->annotationsReader));
 			$this->dependencyInjector->register(new CacheInterfaceProvider($this->dependencyInjector, $this->annotationsReader));
