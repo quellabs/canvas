@@ -2,7 +2,7 @@
 	
 	namespace Quellabs\Canvas\Routing\Components;
 	
-	use Quellabs\Canvas\SignalHub\SignalProviderInterface;
+	use Quellabs\Canvas\Routing\Contracts\SignalProviderInterface;
 	use Quellabs\Discover\Discover;
 	use Quellabs\Discover\Scanner\ComposerScanner;
 	use Quellabs\SignalHub\Signal;
