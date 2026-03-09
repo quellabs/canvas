@@ -3,24 +3,16 @@
 	namespace Quellabs\Canvas\Routing\Contracts;
 	
 	use Quellabs\Contracts\Discovery\ProviderInterface;
-	use Quellabs\SignalHub\Signal;
 	
 	/**
-	 * Implemented by classes that wire signals to slots.
+	 * Marker interface for signal providers discovered via Composer.
 	 *
-	 * Signal providers are discovered via Composer's extra.signal-hub.providers key.
-	 * When a controller is loaded, each discovered signal is passed to every registered
-	 * provider. The provider inspects the signal name and connects any relevant slots.
+	 * Classes implementing this interface are discovered via the "signal-hub"
+	 * family in composer.json extra. Signal wiring is declared via @ListenTo
+	 * annotations.
 	 *
-	 * Providers should silently ignore signals they don't handle — the hub passes every
-	 * signal to every provider, so unconditional connections would be a bug.
+	 * @see \Quellabs\Canvas\Annotations\ListenTo
 	 */
 	interface SignalProviderInterface extends ProviderInterface {
-		
-		/**
-		 * Connect slots to the given signal if applicable.
-		 * Implementations should match on $signal->getName() and ignore unknown signals.
-		 * @param Signal $signal The signal to potentially connect slots to
-		 */
-		public function connect(Signal $signal): void;
+	
 	}
