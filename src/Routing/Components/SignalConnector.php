@@ -6,10 +6,14 @@
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Canvas\Annotations\ListenTo;
 	use Quellabs\Canvas\Discover\DependencyAwareDiscover;
+	use Quellabs\Canvas\Kernel;
 	use Quellabs\Canvas\Routing\Contracts\SignalProviderInterface;
 	use Quellabs\DependencyInjection\Container;
 	use Quellabs\Discover\Scanner\ComposerScanner;
+	use Quellabs\Discover\Scanner\DirectoryScanner;
 	use Quellabs\SignalHub\Signal;
+	use Quellabs\Support\ComposerUtils;
+	use Quellabs\Support\Tools;
 	use ReflectionClass;
 	use ReflectionException;
 	
@@ -31,6 +35,11 @@
 		private AnnotationReader $annotationReader;
 		
 		/**
+		 * @var Container Dependency Injector
+		 */
+		private Container $di;
+		
+		/**
 		 * @var array Signal provider instances discovered from composer packages
 		 */
 		private array $connectors;
@@ -44,16 +53,21 @@
 		
 		/**
 		 * Discovers signal providers and pre-builds the listener map from @ListenTo annotations.
-		 * @param AnnotationReader $annotationReader
-		 * @param Container $di
+		 * @param Kernel $kernel
 		 */
-		public function __construct(AnnotationReader $annotationReader, Container $di) {
+		public function __construct(Kernel $kernel) {
 			// Store annotation reader
-			$this->annotationReader = $annotationReader;
+			$this->annotationReader = $kernel->getAnnotationsReader();
+			$this->di = $kernel->getDependencyInjector();
+			
+			// Default path for providers
+			$defaultPath = ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "SignalProviders";
+			$signalProviderPath = $kernel->getConfiguration()->get("signal_providers_path", $defaultPath);
 			
 			// Discover all packages that register themselves under the "signal-hub" family
-			$discover = new DependencyAwareDiscover($di);
+			$discover = new DependencyAwareDiscover($this->di);
 			$discover->addScanner(new ComposerScanner("signal-hub"));
+			$discover->addScanner(new DirectoryScanner([$signalProviderPath]));
 			$discover->discover();
 			
 			// Keep only providers that implement the expected contract
