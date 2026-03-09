@@ -64,9 +64,14 @@
 			$signalProviderPath = $kernel->getConfiguration()->get("signal_providers_path", $defaultPath);
 			
 			// Discover all packages that register themselves under the "signal-hub" family
+			// If a SignalProviders directory exists, also scan that one.
 			$discover = new DependencyAwareDiscover($this->di);
 			$discover->addScanner(new ComposerScanner("signal-hub"));
-			$discover->addScanner(new DirectoryScanner([$signalProviderPath]));
+			
+			if (is_dir($signalProviderPath)) {
+				$discover->addScanner(new DirectoryScanner([$signalProviderPath]));
+			}
+			
 			$discover->discover();
 			
 			// Keep only providers that implement the expected contract
