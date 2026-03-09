@@ -148,14 +148,6 @@
 		}
 		
 		/**
-		 * Returns the signal connector, instantiating it on first use
-		 * @return SignalConnector
-		 */
-		public function getSignalConnector(): SignalConnector {
-			return $this->signalConnector ??= new SignalConnector($this);
-		}
-		
-		/**
 		 * Returns true if legacy fallback is enabled
 		 * @return bool
 		 */
