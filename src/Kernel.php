@@ -152,7 +152,7 @@
 		 * @return SignalConnector
 		 */
 		public function getSignalConnector(): SignalConnector {
-			return $this->signalConnector ??= new SignalConnector($this->getDependencyInjector());
+			return $this->signalConnector ??= new SignalConnector($this->getAnnotationsReader(), $this->getDependencyInjector());
 		}
 		
 		/**
