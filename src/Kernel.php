@@ -54,7 +54,6 @@
 		private bool $legacyEnabled;
 		private ?LegacyHandler $legacyFallbackHandler;
 		private Container $dependencyInjector;
-		private ?SignalConnector $signalConnector = null;
 		private array $errorHandlers;
 		
 		/**
