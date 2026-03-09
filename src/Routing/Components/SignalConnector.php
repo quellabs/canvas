@@ -13,7 +13,6 @@
 	use Quellabs\Discover\Scanner\DirectoryScanner;
 	use Quellabs\SignalHub\Signal;
 	use Quellabs\Support\ComposerUtils;
-	use Quellabs\Support\Tools;
 	use ReflectionClass;
 	use ReflectionException;
 	
