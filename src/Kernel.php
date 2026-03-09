@@ -26,7 +26,6 @@
 	use Quellabs\Canvas\Discover\DependencyAwareDiscover;
 	use Quellabs\Canvas\Error\DefaultErrorHandler;
 	use Quellabs\Canvas\Error\ErrorHandlerInterface;
-	use Quellabs\Canvas\Routing\Components\SignalConnector;
 	use Quellabs\Canvas\Routing\RequestHandler;
 	use Quellabs\Canvas\Inspector\EventCollector;
 	use Quellabs\Canvas\Cache\CacheInterfaceProvider;
