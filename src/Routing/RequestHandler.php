@@ -35,7 +35,7 @@
 		 * @param array|null $urlData
 		 * @param bool $isLegacyPath
 		 * @return Response HTTP response to be sent back to the client
-		 * @throws AnnotationReaderException|RouteNotFoundException
+		 * @throws AnnotationReaderException|RouteNotFoundException|\ReflectionException
 		 */
 		public function handle(Request $request, ?array &$urlData, bool &$isLegacyPath): Response {
 			// Initialize variables to track route resolution and performance metrics
