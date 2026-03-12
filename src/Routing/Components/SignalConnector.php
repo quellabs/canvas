@@ -9,6 +9,7 @@
 	use Quellabs\Canvas\Kernel;
 	use Quellabs\Canvas\Routing\Contracts\SignalProviderInterface;
 	use Quellabs\DependencyInjection\Container;
+	use Quellabs\Discover\Discover;
 	use Quellabs\Discover\Scanner\ComposerScanner;
 	use Quellabs\Discover\Scanner\DirectoryScanner;
 	use Quellabs\SignalHub\Signal;
@@ -37,11 +38,6 @@
 		 * @var Container Dependency Injector
 		 */
 		private Container $di;
-		
-		/**
-		 * @var array Signal provider instances discovered from composer packages
-		 */
-		private array $connectors;
 		
 		/**
 		 * @var array<string, array<array{callable: callable, priority: int}>>
@@ -74,14 +70,8 @@
 			
 			$discover->discover();
 			
-			// Keep only providers that implement the expected contract
-			$this->connectors = array_filter(
-				iterator_to_array($discover->getProviders()),
-				fn($provider) => $provider instanceof SignalProviderInterface
-			);
-			
 			// Scan annotations once and cache the result — connect() is a hot path
-			$this->listenerMap = $this->buildListenerMap();
+			$this->listenerMap = $this->buildListenerMap($discover);
 		}
 		
 		/**
@@ -92,8 +82,11 @@
 		 */
 		public function connect(array $signals): void {
 			foreach ($signals as $signal) {
-				foreach ($this->listenerMap[$signal->getName()] ?? [] as $listener) {
-					$signal->connect($listener['callable'], $listener['priority']);
+				$listeners = $this->listenerMap[$signal->getName()] ?? [];
+				
+				foreach ($listeners as $listener) {
+					$instance = $this->di->get($listener['className']);
+					$signal->connect([$instance, $listener['method']], $listener['priority']);
 				}
 			}
 		}
@@ -103,30 +96,31 @@
 		 * signal-name-keyed map of callables and their priorities.
 		 * @return array<string, array<array{callable: callable, priority: int}>>
 		 */
-		private function buildListenerMap(): array {
+		private function buildListenerMap(Discover $discover): array {
 			$map = [];
 			
-			foreach ($this->connectors as $connector) {
-				// Reflect the provider class. If the provider class
-				// is not reflectable; skip it entirely
-				try {
-					$reflection = new ReflectionClass($connector);
-				} catch (ReflectionException $e) {
+			foreach ($discover->getDefinitions() as $definition) {
+				$className = $definition->className;
+				
+				// Skip classes that don't exist to avoid fatal errors on reflection
+				if (!class_exists($className)) {
 					continue;
 				}
 				
-				// Fetch all methods
-				foreach ($reflection->getMethods() as $method) {
-					// Ignore private/protected methods.
-					if (!$method->isPublic()) {
-						continue;
-					}
-					
-					// Read all ListenTo annotations from the method
-					// If malformed or unresolvable annotation on this method; skip it
+				// Filter by interface using the class name string — no instantiation needed
+				if (!is_a($className, SignalProviderInterface::class, true)) {
+					continue;
+				}
+				
+				// Reflect the class to enumerate its public methods
+				$reflection = new ReflectionClass($className);
+				
+				foreach ($reflection->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
+					// Read @ListenTo annotations from the method without instantiating the class.
+					// If the annotation is malformed or unresolvable, skip this method silently.
 					try {
 						$annotations = $this->annotationReader->getMethodAnnotations(
-							$connector,
+							$className,
 							$method->getName(),
 							ListenTo::class
 						);
@@ -134,11 +128,13 @@
 						continue;
 					}
 					
-					// Store information in a map
+					// Store the class name and method rather than a callable — instantiation
+					// is deferred to connect() where we know a matching signal exists
 					foreach ($annotations as $annotation) {
 						$map[$annotation->getName()][] = [
-							'callable' => [$connector, $method->getName()],
-							'priority' => $annotation->getPriority(),
+							'className' => $className,
+							'method'    => $method->getName(),
+							'priority'  => $annotation->getPriority(),
 						];
 					}
 				}
