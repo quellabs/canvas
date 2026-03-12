@@ -15,7 +15,6 @@
 	use Quellabs\SignalHub\Signal;
 	use Quellabs\Support\ComposerUtils;
 	use ReflectionClass;
-	use ReflectionException;
 	
 	/**
 	 * Wires signals to their slots using @ListenTo annotations on signal providers.
@@ -23,9 +22,6 @@
 	 * Signal providers are discovered via Composer's extra.signal-hub.providers key.
 	 * Each provider method annotated with @ListenTo("signal.name") is automatically
 	 * connected to the matching signal — no manual connect() implementation needed.
-	 *
-	 * Both discovery and annotation scanning run once at construction time,
-	 * since this class is container-managed (singleton lifecycle).
 	 */
 	class SignalConnector {
 		
@@ -40,11 +36,9 @@
 		private Container $di;
 		
 		/**
-		 * @var array<string, array<array{callable: callable, priority: int}>>
-		 *      Maps signal names to the list of listeners that should be connected to them.
-		 *      Built once at construction time from @ListenTo annotations.
+		 * @var string $signalProviderPath
 		 */
-		private array $listenerMap;
+		private string $signalProviderPath;
 		
 		/**
 		 * Discovers signal providers and pre-builds the listener map from @ListenTo annotations.
@@ -54,24 +48,10 @@
 			// Store annotation reader
 			$this->annotationReader = $kernel->getAnnotationsReader();
 			$this->di = $kernel->getDependencyInjector();
-			
-			// Default path for providers
-			$defaultPath = ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "SignalProviders";
-			$signalProviderPath = $kernel->getConfiguration()->get("signal_providers_path", $defaultPath);
-			
-			// Discover all packages that register themselves under the "signal-hub" family
-			// If a SignalProviders directory exists, also scan that one.
-			$discover = new DependencyAwareDiscover($this->di);
-			$discover->addScanner(new ComposerScanner("signal-hub"));
-			
-			if (is_dir($signalProviderPath)) {
-				$discover->addScanner(new DirectoryScanner([$signalProviderPath]));
-			}
-			
-			$discover->discover();
-			
-			// Scan annotations once and cache the result — connect() is a hot path
-			$this->listenerMap = $this->buildListenerMap($discover);
+			$this->signalProviderPath = $kernel->getConfiguration()->get(
+				"signal_providers_path",
+				ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "SignalProviders"
+			);
 		}
 		
 		/**
@@ -81,14 +61,39 @@
 		 * @return void
 		 */
 		public function connect(array $signals): void {
+			// Discover providers and build a signal-name-keyed map of listeners
+			$slots = $this->discoverSlots();
+			$listenerMap = $this->buildListenerMap($slots);
+			
 			foreach ($signals as $signal) {
-				$listeners = $this->listenerMap[$signal->getName()] ?? [];
+				// Look up listeners for this signal by name; skip if none are registered
+				$listeners = $listenerMap[$signal->getName()] ?? [];
 				
 				foreach ($listeners as $listener) {
+					// Resolve the provider instance from the container and wire it to the signal
 					$instance = $this->di->get($listener['className']);
 					$signal->connect([$instance, $listener['method']], $listener['priority']);
 				}
 			}
+		}
+		
+		/**
+		 * Discovers all signal providers registered under the "signal-hub" Composer family,
+		 * plus any providers found in the configured local SignalProviders directory.
+		 * @return Discover
+		 */
+		private function discoverSlots(): Discover {
+			// Discover all packages that register themselves under the "signal-hub" family
+			$discover = new DependencyAwareDiscover($this->di);
+			$discover->addScanner(new ComposerScanner("signal-hub"));
+			
+			// If a local SignalProviders directory exists, scan that too
+			if (is_dir($this->signalProviderPath)) {
+				$discover->addScanner(new DirectoryScanner([$this->signalProviderPath]));
+			}
+			
+			$discover->discover();
+			return $discover;
 		}
 		
 		/**
