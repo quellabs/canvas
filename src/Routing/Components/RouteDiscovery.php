@@ -131,7 +131,7 @@
 			
 			foreach ($this->getMethodRouteAnnotations($controller) as $routeData) {
 				$routeAnnotation = $routeData['annotation'];
-				$normalizedRoute = $this->normalizeRoute($routeAnnotation->getRoute(), $routeAnnotation->getDefault());
+				$normalizedRoute = $this->normalizeRoute($routeAnnotation->getRoute(), $routeAnnotation->getFallback());
 				$completeRoutePath = $this->buildCompleteRoutePath($routePrefix, $normalizedRoute);
 				
 				$routes[] = [
