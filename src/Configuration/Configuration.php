@@ -107,11 +107,12 @@
 		/**
 		 * Merge additional configuration data into existing config
 		 * Existing keys will be overwritten by new values
-		 * @param array $config Configuration array to merge
-		 * @return void
+		 * @param ConfigurationInterface $config Configuration object to merge
+		 * @return ConfigurationInterface
 		 */
-		public function merge(array $config): void {
-			$this->config = array_merge($this->config, $config);
+		public function merge(ConfigurationInterface $config): ConfigurationInterface {
+			$this->config = array_merge($this->config, $config->all());
+			return $this;
 		}
 		
 		/**

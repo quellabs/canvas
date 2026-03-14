@@ -131,7 +131,8 @@
 			
 			foreach ($this->getMethodRouteAnnotations($controller) as $routeData) {
 				$routeAnnotation = $routeData['annotation'];
-				$completeRoutePath = $this->buildCompleteRoutePath($routePrefix, $routeAnnotation->getRoute());
+				$normalizedRoute = $this->normalizeRoute($routeAnnotation->getRoute(), $routeAnnotation->getDefault());
+				$completeRoutePath = $this->buildCompleteRoutePath($routePrefix, $normalizedRoute);
 				
 				$routes[] = [
 					'http_methods' => $routeAnnotation->getMethods(),
@@ -183,19 +184,52 @@
 		}
 		
 		/**
+		 * Normalizes a route string, resolving config file references if present.
+		 * @param string $route The route string to normalize.
+		 * @param string|null $default The default value to return if the config key is not found.
+		 * @return string The normalized route string.
+		 * @throws \RuntimeException If the config key is not found and no default is provided.
+		 */
+		private function normalizeRoute(string $route, ?string $default = null): string {
+			// Plain route string, nothing to resolve
+			if (!str_contains($route, "::")) {
+				return $route;
+			}
+			
+			// Split into filename and key components
+			$parts = explode("::", $route, 2);
+			$file  = $parts[0];
+			$key   = $parts[1];
+			
+			// Look up the key in the config file, falling back to $default if not found
+			$result = $this->kernel->loadConfigFile("{$file}.php")->get($key, $default);
+			
+			// If still null, no default was provided and the key doesn't exist
+			if ($result === null) {
+				throw new \RuntimeException("Couldn't load route '{$key}' from config file '{$file}'.");
+			}
+			
+			return $result;
+		}
+		
+		/**
 		 * Build a complete route path by combining prefix and method route
 		 * @param string $prefix Controller route prefix
 		 * @param string $routePath Method route path
 		 * @return string Complete route path
 		 */
 		private function buildCompleteRoutePath(string $prefix, string $routePath): string {
+			// A bare '/' route becomes just the prefix, or '/' if there's no prefix
 			if ($routePath === '/') {
 				return $prefix ? "/{$prefix}" : '/';
 			}
 			
-			$prefix = trim($prefix, '/');
+			// Strip surrounding slashes from prefix and leading slash from route
+			// to avoid double slashes when combining
+			$prefix    = trim($prefix, '/');
 			$routePath = ltrim($routePath, '/');
 			
+			// Combine prefix and route, or return just the route if no prefix
 			return $prefix ? "/{$prefix}/{$routePath}" : "/{$routePath}";
 		}
 	}

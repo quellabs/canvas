@@ -76,4 +76,12 @@
 		public function getName(): ?string {
 			return $this->parameters["name"] ?? null;
 		}
+		
+		/**
+		 * Fetches the fallback route
+		 * @return string|null
+		 */
+		public function getFallback(): ?string {
+			return $this->parameters["fallback"] ?? null;
+		}
 	}

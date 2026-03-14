@@ -11,7 +11,7 @@
 	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
 	use Quellabs\Canvas\Routing\Components\RouteCacheManager;
 	use Quellabs\Canvas\Routing\Components\RouteDiscovery;
-	use Quellabs\Canvas\Routing\Components\RouteIndexBuilder;
+	use Quellabs\Canvas\Routing\Components\RouteCandidateFilter;
 	use Quellabs\Canvas\Routing\Components\RouteMatcher;
 	use Quellabs\Canvas\Routing\Components\RoutePatternCompiler;
 	use Quellabs\Canvas\Routing\Components\RouteSegmentAnalyzer;
@@ -44,7 +44,7 @@
 	 *
 	 * Component coordination:
 	 * - RouteDiscovery: Finds and extracts routes from controller annotations
-	 * - RouteIndexBuilder: Creates comprehensive indexes for pre-filtering
+	 * - RouteCandidateFilter: Builds and queries route indexes to pre-filter candidates before matching
 	 * - RouteMatcher: Performs final pattern matching on filtered candidates
 	 * - RouteCacheManager: Manages persistent caching with change detection
 	 *
@@ -65,7 +65,7 @@
 		
 		// Component dependencies
 		private RouteMatcher $routeMatcher;
-		private RouteIndexBuilder $indexBuilder;
+		private RouteCandidateFilter $candidateFilter;
 		private RouteDiscovery $routeDiscovery;
 		private RouteCacheManager $cacheManager;
 		
@@ -117,9 +117,12 @@
 		 * @throws AnnotationReaderException
 		 */
 		public function resolveAll(Request $request): array {
+			// Strip query string and decode the path component for consistent matching
 			$requestUrl = $this->parseRequestUrl($request->getPathInfo());
 			
-			$candidates = $this->indexBuilder->getFilteredCandidates(
+			// Pre-filter the full route index to a smaller candidate set based on
+			// method and static path segments, avoiding full matching on every route
+			$candidates = $this->candidateFilter->getFilteredCandidates(
 				$requestUrl,
 				$request->getMethod(),
 				$this->getRouteIndex()
@@ -128,13 +131,18 @@
 			$results = [];
 			
 			foreach ($candidates as $route) {
+				// Full match: validates dynamic segments, constraints, and extracts parameters
+				// Pass the raw request URI alongside the parsed URL so the matcher has
+				// access to the query string if a route requires it
 				$match = $this->routeMatcher->matchRoute($route, $requestUrl, $request->getRequestUri(), $request->getMethod());
 				
+				// Null means the candidate didn't survive full validation; skip it
 				if ($match !== null) {
 					$results[] = $match;
 				}
 			}
 			
+			// Return all matches rather than the first — caller decides priority/ambiguity
 			return $results;
 		}
 		
@@ -144,7 +152,6 @@
 		 */
 		public function clearAllCaches(): bool {
 			$this->routeIndex = [];
-			$this->indexBuilder->clearIndex();
 			return $this->cacheManager->clearCache();
 		}
 		
@@ -182,7 +189,7 @@
 			});
 			
 			// Build and cache the index
-			return $this->routeIndex = $this->indexBuilder->buildRouteIndex($allRoutes);
+			return $this->routeIndex = $this->candidateFilter->buildRouteIndex($allRoutes);
 		}
 		
 		/**
@@ -221,7 +228,7 @@
 			
 			// Create index builder for optimizing route lookup performance
 			// Requires segment analyzer for proper route categorization
-			$this->indexBuilder = new RouteIndexBuilder($segmentAnalyzer);
+			$this->candidateFilter = new RouteCandidateFilter($segmentAnalyzer);
 			
 			// Initialize route discovery system to find and register routes
 			// Requires kernel for application context, analyzer for parsing,
