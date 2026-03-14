@@ -3,7 +3,7 @@
 	namespace Quellabs\Canvas\Routing\Components;
 	
 	/**
-	 * RouteIndexBuilder
+	 * RouteCandidateFilter
 	 *
 	 * Builds and manages comprehensive route indexes for ultra-fast route resolution
 	 * through aggressive pre-filtering that eliminates incompatible routes before
@@ -34,38 +34,19 @@
 	 * n = total routes and k = 3-5 remaining candidates, achieving 95%+ reduction
 	 * in computational work for typical applications.
 	 */
-	class RouteIndexBuilder {
-		
-		private RouteSegmentAnalyzer $segmentAnalyzer;
-		private array $routeIndex = [];
+	class RouteCandidateFilter {
 		
 		/**
-		 * RouteIndexBuilder constructor
+		 * @var RouteSegmentAnalyzer
+		 */
+		private RouteSegmentAnalyzer $segmentAnalyzer;
+		
+		/**
+		 * RouteCandidateFilter constructor
 		 * @param RouteSegmentAnalyzer $segmentAnalyzer
 		 */
 		public function __construct(RouteSegmentAnalyzer $segmentAnalyzer) {
 			$this->segmentAnalyzer = $segmentAnalyzer;
-		}
-		
-		/**
-		 * This method returns a cached route index if available, or builds a new one
-		 * from the provided routes. The index is structured for optimal lookup performance
-		 * during request resolution, with routes categorized by type and first segment.
-		 * @param array $routes Optional array of routes to build index from
-		 * @return array The complete route index
-		 */
-		public function getRouteIndex(array $routes = []): array {
-			// Return cached index if already built and no new routes provided
-			if (!empty($this->routeIndex) && empty($routes)) {
-				return $this->routeIndex;
-			}
-			
-			// Build fresh index if routes provided or no cached index exists
-			if (!empty($routes)) {
-				$this->routeIndex = $this->buildRouteIndex($routes);
-			}
-			
-			return $this->routeIndex;
 		}
 		
 		/**
@@ -97,14 +78,6 @@
 			$this->sortIndexCategories($index);
 			
 			return $index;
-		}
-		
-		/**
-		 * Clear the cached route index
-		 * @return void
-		 */
-		public function clearIndex(): void {
-			$this->routeIndex = [];
 		}
 		
 		/**
