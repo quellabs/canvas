@@ -19,8 +19,8 @@
 		}
 		
 		/**
-		 * Gets the absolute paths to all controller directories
-		 * @return array Absolute paths to controller directories
+		 * Gets controller directories and class names from packages
+		 * @return array Absolute paths to controller directories and/or fully qualified class names
 		 */
 		public function fetch(): array {
 			// Get contents of config/app.php
@@ -32,26 +32,23 @@
 			// Allow the controller directory to be overridden via configuration
 			$routerPath = $configuration->get('controller_directory', $defaultRouterPath);
 			
-			// Only include the configured path if it actually exists on disk
-			$result = [];
+			// Scan the local controller directory for classes
+			$result = is_dir($routerPath)
+				? ComposerUtils::findClassesInDirectory($routerPath)
+				: [];
 			
-			if (is_dir($routerPath)) {
-				$result[] = $routerPath;
-			}
-			
-			// Discover additional controller directories registered by installed packages
+			// Discover controller class names registered by installed packages
 			$discover = new Discover();
 			$discover->addScanner(new MetadataCollector("canvas"));
 			$discover->discover();
 			
-			// Merge local controller path with any paths advertised by packages,
-			// filtering out any that don't exist on disk
-			$packagePaths = array_filter(
+			// Collect class names advertised by packages
+			$packageClasses = array_filter(
 				$discover->getFamilyValues('canvas', 'controller'),
-				fn($path) => is_dir($path)
+				fn($value) => is_string($value) && class_exists($value)
 			);
 			
-			// Return result
-			return array_merge($result, $packagePaths);
+			// Return a flat list of fully qualified controller class names
+			return array_merge($result, array_values($packageClasses));
 		}
 	}
