@@ -77,26 +77,25 @@
 		 * @throws AnnotationReaderException
 		 */
 		public function buildRoutesFromControllers(): array {
-			$controllerDirectories = $this->controllersDiscovery->fetch();
+			// Fetch all controller class names from local directory and registered packages
+			$controllers = $this->controllersDiscovery->fetch();
 			
-			if (empty($controllerDirectories)) {
+			if (empty($controllers)) {
 				return [];
 			}
 			
 			$result = [];
 			
-			foreach ($controllerDirectories as $controllerDirectory) {
-				foreach (ComposerUtils::findClassesInDirectory($controllerDirectory) as $controller) {
-					foreach ($this->getRoutesFromController($controller) as &$route) {
-						$route['compiled_pattern'] = $this->patternCompiler->compileRoute($route['route_path']);
-						$result[] = $route;
-					}
+			foreach ($controllers as $controller) {
+				foreach ($this->getRoutesFromController($controller) as &$route) {
+					// Pre-compile the route pattern for optimal runtime matching
+					$route['compiled_pattern'] = $this->patternCompiler->compileRoute($route['route_path']);
+					$result[] = $route;
 				}
 			}
 			
 			// Sort all routes by priority (highest priority first)
 			usort($result, fn($a, $b) => $b['priority'] <=> $a['priority']);
-			
 			return $result;
 		}
 		
