@@ -181,6 +181,27 @@
 				);
 			}
 		}
+
+		/**
+		 * Build a complete route path by combining prefix and method route
+		 * @param string $prefix Controller route prefix
+		 * @param string $routePath Method route path
+		 * @return string Complete route path
+		 */
+		private function buildCompleteRoutePath(string $prefix, string $routePath): string {
+			// A bare '/' route becomes just the prefix, or '/' if there's no prefix
+			if ($routePath === '/') {
+				return $prefix ? "/{$prefix}" : '/';
+			}
+			
+			// Strip surrounding slashes from prefix and leading slash from route
+			// to avoid double slashes when combining
+			$prefix    = trim($prefix, '/');
+			$routePath = ltrim($routePath, '/');
+			
+			// Combine prefix and route, or return just the route if no prefix
+			return $prefix ? "/{$prefix}/{$routePath}" : "/{$routePath}";
+		}
 		
 		/**
 		 * Normalizes a route string, resolving config file references if present.
@@ -209,26 +230,5 @@
 			}
 			
 			return $result;
-		}
-		
-		/**
-		 * Build a complete route path by combining prefix and method route
-		 * @param string $prefix Controller route prefix
-		 * @param string $routePath Method route path
-		 * @return string Complete route path
-		 */
-		private function buildCompleteRoutePath(string $prefix, string $routePath): string {
-			// A bare '/' route becomes just the prefix, or '/' if there's no prefix
-			if ($routePath === '/') {
-				return $prefix ? "/{$prefix}" : '/';
-			}
-			
-			// Strip surrounding slashes from prefix and leading slash from route
-			// to avoid double slashes when combining
-			$prefix    = trim($prefix, '/');
-			$routePath = ltrim($routePath, '/');
-			
-			// Combine prefix and route, or return just the route if no prefix
-			return $prefix ? "/{$prefix}/{$routePath}" : "/{$routePath}";
 		}
 	}
