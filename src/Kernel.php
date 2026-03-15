@@ -216,6 +216,11 @@
 		 * @return Configuration
 		 */
 		public function loadConfigFile(string $filename): ConfigurationInterface {
+			// Add php extension if it's missing
+			if (!str_ends_with($filename, ".php")) {
+				$filename .= ".php";
+			}
+			
 			// Fetch from cache if we can
 			if (isset($this->contents_of_app_php[$filename])) {
 				return $this->contents_of_app_php[$filename];
