@@ -16,11 +16,6 @@
 	class AnnotationLister extends AnnotationBase {
 		
 		/**
-		 * @var Kernel Application kernel
-		 */
-		private Kernel $kernel;
-		
-		/**
 		 * @var ControllersDiscovery Controller discovery component
 		 */
 		private ControllersDiscovery $controllersDiscovery;
@@ -35,7 +30,7 @@
 		 */
 		public function __construct() {
 			$this->kernel = new Kernel();
-			parent::__construct($this->kernel->getAnnotationsReader());
+			parent::__construct($this->kernel);
 			$this->controllersDiscovery = new ControllersDiscovery($this->kernel);
 			$this->aspectResolver = new AspectResolver($this->annotationsReader);
 		}
@@ -83,7 +78,7 @@
 					// A single method can have multiple Route annotations (multiple routes to same handler)
 					foreach ($routes as $routeAnnotation) {
 						// Extract the route path pattern (e.g., "/users/{id}", "/api/products")
-						$routePath = $routeAnnotation->getRoute();
+						$routePath = $this->normalizeRoute($routeAnnotation->getRoute(), $routeAnnotation->getFallback());
 						
 						// Combine route with prefix
 						$completeRoutePath = "/" . $routePrefix . ltrim($routePath, "/");
@@ -130,27 +125,7 @@
 			
 			return $result;
 		}
-		
-		/**
-		 * Retrieve a route by its name from the route collection.
-		 * Uses the pre-built route name cache for O(1) lookup performance.
-		 * @param string $name The name of the route to retrieve
-		 * @return array|null The route array if found, null if not found
-		 */
-		public function getRouteByName(string $name): ?array {
-			try {
-				foreach ($this->getRoutes() as $route) {
-					if ($route['name'] === $name) {
-						return $route;
-					}
-				}
-				
-				return null;
-			} catch (AnnotationReaderException | \ReflectionException $e) {
-				return null;
-			}
-		}
-		
+
 		/**
 		 * Retrieves all aspect interceptors (middleware/filters) applied to a specific method
 		 * @param string $class The fully qualified class name to inspect
