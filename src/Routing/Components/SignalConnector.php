@@ -70,8 +70,10 @@
 				$listeners = $listenerMap[$signal->getName()] ?? [];
 				
 				foreach ($listeners as $listener) {
-					// Resolve the provider instance from the container and wire it to the signal
+					// Resolve the provider instance from the container
 					$instance = $this->di->get($listener['className']);
+					
+					// Wire the signal to the method
 					$signal->connect([$instance, $listener['method']], $listener['priority']);
 				}
 			}
