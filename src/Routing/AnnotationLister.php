@@ -63,49 +63,46 @@
 			$result = [];
 			
 			// Iterate through each discovered controller class
-			foreach($this->controllersDiscovery->fetch() as $directory) {
-				// Scan the controller directory to find all controller classes
-				foreach (ComposerUtils::findClassesInDirectory($directory) as $controller) {
-					// Create a reflection object to inspect the controller class structure
-					$classReflection = new \ReflectionClass($controller);
+			foreach($this->controllersDiscovery->fetch() as $controller) {
+				// Create a reflection object to inspect the controller class structure
+				$classReflection = new \ReflectionClass($controller);
+				
+				// Fetch the route prefix, if any
+				$routePrefix = $this->getRoutePrefix($controller);
+				
+				// Examine each method in the current controller
+				foreach ($classReflection->getMethods() as $method) {
+					// Look for Route annotations on this method.
+					// Only methods with Route annotations are considered route handlers.
+					$routes = $this->annotationsReader->getMethodAnnotations(
+						$method->getDeclaringClass()->getName(),
+						$method->getName(),
+						Route::class
+					);
 					
-					// Fetch the route prefix, if any
-					$routePrefix = $this->getRoutePrefix($controller);
-					
-					// Examine each method in the current controller
-					foreach ($classReflection->getMethods() as $method) {
-						// Look for Route annotations on this method.
-						// Only methods with Route annotations are considered route handlers.
-						$routes = $this->annotationsReader->getMethodAnnotations(
-							$method->getDeclaringClass()->getName(),
-							$method->getName(),
-							Route::class
-						);
+					// A single method can have multiple Route annotations (multiple routes to same handler)
+					foreach ($routes as $routeAnnotation) {
+						// Extract the route path pattern (e.g., "/users/{id}", "/api/products")
+						$routePath = $routeAnnotation->getRoute();
 						
-						// A single method can have multiple Route annotations (multiple routes to same handler)
-						foreach ($routes as $routeAnnotation) {
-							// Extract the route path pattern (e.g., "/users/{id}", "/api/products")
-							$routePath = $routeAnnotation->getRoute();
-							
-							// Combine route with prefix
-							$completeRoutePath = "/" . $routePrefix . ltrim($routePath, "/");
-							
-							// Create the record
-							$record = [
-								'name'         => $routeAnnotation->getName(),    // The name of the route (can be null)
-								'http_methods' => $routeAnnotation->getMethods(), // A list of http methods
-								'controller'   => $controller,                    // Controller class name
-								'method'       => $method->getName(),             // Method name that handles this route
-								'route'        => $completeRoutePath,             // Route string
-								'aspects'      => $this->getAspectsOfMethod(      // Any interceptors/middleware for this method
-									$method->getDeclaringClass()->getName(),
-									$method->getName()
-								),
-							];
-							
-							// Build complete route configuration including metadata
-							$result[] = $record;
-						}
+						// Combine route with prefix
+						$completeRoutePath = "/" . $routePrefix . ltrim($routePath, "/");
+						
+						// Create the record
+						$record = [
+							'name'         => $routeAnnotation->getName(),    // The name of the route (can be null)
+							'http_methods' => $routeAnnotation->getMethods(), // A list of http methods
+							'controller'   => $controller,                    // Controller class name
+							'method'       => $method->getName(),             // Method name that handles this route
+							'route'        => $completeRoutePath,             // Route string
+							'aspects'      => $this->getAspectsOfMethod(      // Any interceptors/middleware for this method
+								$method->getDeclaringClass()->getName(),
+								$method->getName()
+							),
+						];
+						
+						// Build complete route configuration including metadata
+						$result[] = $record;
 					}
 				}
 			}
