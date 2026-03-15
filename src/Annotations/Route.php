@@ -45,7 +45,9 @@
 		 * @return string The route path as defined in the "value" parameter
 		 */
 		public function getRoute(): string {
-			return $this->parameters["value"];
+			$route = $this->parameters["value"];
+			$path = parse_url($route, PHP_URL_PATH);
+			return $path ?? $route;
 		}
 		
 		/**
