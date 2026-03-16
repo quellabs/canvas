@@ -44,9 +44,6 @@
 		 * @return int Exit code (0 for success, non-zero for failure)
 		 */
 		public function execute(ConfigurationManager $config): int {
-			// Initialize the project discovery service to locate the project root
-			$discover = new Discover();
-			
 			// Create a task scheduler instance with file-based storage
 			// The storage directory is set to {project_root}/storage/task-scheduler
 			$scheduler = new TaskScheduler(

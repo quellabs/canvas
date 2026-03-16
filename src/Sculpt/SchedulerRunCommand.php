@@ -2,7 +2,6 @@
 	
 	namespace Quellabs\Canvas\Sculpt;
 	
-	use Quellabs\Discover\Discover;
 	use Quellabs\Sculpt\ConfigurationManager;
 	use Quellabs\Canvas\TaskScheduler\TaskScheduler;
 	use Quellabs\Canvas\TaskScheduler\Storage\FileTaskStorage;

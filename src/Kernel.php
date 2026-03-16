@@ -22,6 +22,7 @@
 	namespace Quellabs\Canvas;
 	
 	use Quellabs\AnnotationReader\AnnotationReader;
+	use Quellabs\Canvas\Config\ConfigLoader;
 	use Quellabs\Canvas\Configuration\Configuration;
 	use Quellabs\Canvas\Discover\DependencyAwareDiscover;
 	use Quellabs\Canvas\Error\DefaultErrorHandler;
@@ -45,6 +46,7 @@
 	
 	class Kernel {
 		
+		private ConfigLoader $configLoader;
 		private SignalHub $signalHub; // Event system
 		private Signal $canvasQuerySignal; // Signal for performance measuring
 		private AnnotationReader $annotationsReader; // Annotation reading
@@ -61,6 +63,9 @@
 		 * @param array $configuration
 		 */
 		public function __construct(array $configuration = []) {
+			// Instantiate configuration loader
+			$this->configLoader = new ConfigLoader();
+			
 			// Connect SignalHub to this class
 			$this->signalHub = SignalHubLocator::getInstance();
 			
@@ -93,6 +98,7 @@
 			
 			// Bind DI classes
 			$this->dependencyInjector->register(new SimpleBinding(Kernel::class, $this));
+			$this->dependencyInjector->register(new SimpleBinding(ConfigLoader::class, $this->configLoader));
 			$this->dependencyInjector->register(new SimpleBinding(Configuration::class, $this->configuration));
 			$this->dependencyInjector->register(new SimpleBinding(Discover::class, $discover));
 			$this->dependencyInjector->register(new SimpleBinding(DependencyAwareDiscover::class, $discover));
@@ -216,37 +222,7 @@
 		 * @return Configuration
 		 */
 		public function loadConfigFile(string $filename): ConfigurationInterface {
-			// Add php extension if it's missing
-			if (!str_ends_with($filename, ".php")) {
-				$filename .= ".php";
-			}
-			
-			// Fetch from cache if we can
-			if (isset($this->contents_of_app_php[$filename])) {
-				return $this->contents_of_app_php[$filename];
-			}
-			
-			// Fetch the project root
-			$projectRoot = ComposerUtils::getProjectRoot();
-			$configPath = $projectRoot . "/config/{$filename}";
-			
-			// If the base config file doesn't exist, start with empty array
-			if (file_exists($configPath) && is_readable($configPath)) {
-				$config = require $configPath;
-			} else {
-				$config = [];
-			}
-
-			// Check for .local.php override. If it's there merge with the standard file
-			$localPath = $projectRoot . "/config/" . pathinfo($filename, PATHINFO_FILENAME) . ".local.php";
-			
-			if (file_exists($localPath) && is_readable($localPath)) {
-				$local = require $localPath;
-				$config = array_replace_recursive($config, $local);
-			}
-			
-			// Cache and return
-			return $this->contents_of_app_php[$filename] = new Configuration($config);
+			return $this->configLoader->loadConfigFile($filename);
 		}
 
 		/**
