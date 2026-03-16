@@ -22,7 +22,7 @@
 	namespace Quellabs\Canvas;
 	
 	use Quellabs\AnnotationReader\AnnotationReader;
-	use Quellabs\Canvas\Config\ConfigLoader;
+	use Quellabs\Canvas\Configuration\ConfigLoader;
 	use Quellabs\Canvas\Configuration\Configuration;
 	use Quellabs\Canvas\Discover\DependencyAwareDiscover;
 	use Quellabs\Canvas\Error\DefaultErrorHandler;
