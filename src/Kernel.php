@@ -33,6 +33,7 @@
 	use Quellabs\Canvas\Inspector\Inspector;
 	use Quellabs\Canvas\Legacy\LegacyBridge;
 	use Quellabs\Canvas\Legacy\LegacyHandler;
+	use Quellabs\Contracts\Configuration\ConfigProviderInterface;
 	use Quellabs\Contracts\Configuration\ConfigurationInterface;
 	use Quellabs\DependencyInjection\Container;
 	use Quellabs\DependencyInjection\Provider\SimpleBinding;
@@ -98,7 +99,7 @@
 			
 			// Bind DI classes
 			$this->dependencyInjector->register(new SimpleBinding(Kernel::class, $this));
-			$this->dependencyInjector->register(new SimpleBinding(ConfigLoader::class, $this->configLoader));
+			$this->dependencyInjector->register(new SimpleBinding(ConfigProviderInterface::class, $this->configLoader));
 			$this->dependencyInjector->register(new SimpleBinding(Configuration::class, $this->configuration));
 			$this->dependencyInjector->register(new SimpleBinding(Discover::class, $discover));
 			$this->dependencyInjector->register(new SimpleBinding(DependencyAwareDiscover::class, $discover));

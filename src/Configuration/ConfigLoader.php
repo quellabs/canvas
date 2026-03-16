@@ -1,12 +1,12 @@
 <?php
 	
-	namespace Quellabs\Canvas\Config;
+	namespace Quellabs\Canvas\Configuration;
 	
-	use Quellabs\Canvas\Configuration\Configuration;
+	use Quellabs\Contracts\Configuration\ConfigProviderInterface;
 	use Quellabs\Contracts\Configuration\ConfigurationInterface;
 	use Quellabs\Support\ComposerUtils;
 	
-	class ConfigLoader {
+	class ConfigLoader implements ConfigProviderInterface {
 		
 		/**
 		 * Cache
