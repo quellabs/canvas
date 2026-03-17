@@ -69,7 +69,7 @@
 		 * @param string $className The class name being requested (should be CacheInterface::class)
 		 * @param array $dependencies Dependencies for the class (unused since we return existing instance)
 		 * @param array $metadata Metadata as passed by Discover - may contain 'provider' key
-		 * @param MethodContext|null $methodContext Context about the method requesting the cache
+		 * @param MethodContextInterface|null $methodContext Context about the method requesting the cache
 		 * @return CacheInterface The cache interface implementation
 		 * @throws AnnotationReaderException
 		 */
@@ -126,7 +126,7 @@
 		
 		/**
 		 * Resolves cache context from method annotations.
-		 * @param MethodContext|null $methodContext The method context to analyze
+		 * @param MethodContextInterface|null $methodContext The method context to analyze
 		 * @return array Contains namespace, params, and hash for caching
 		 * @throws AnnotationReaderException
 		 */
