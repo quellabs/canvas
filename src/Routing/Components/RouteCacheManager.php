@@ -161,7 +161,7 @@
 			$controllerClasses = $this->controllersDiscovery->fetch();
 			
 			// If no controller directories present, bail.
-			if (empty($controllerDirectories)) {
+			if (empty($controllerClasses)) {
 				return 0;
 			}
 			
