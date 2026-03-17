@@ -158,7 +158,7 @@
 		 */
 		public function getLastControllerModification(): int {
 			// Fetch the controller directories
-			$controllerDirectories = $this->controllersDiscovery->fetch();
+			$controllerClasses = $this->controllersDiscovery->fetch();
 			
 			// If no controller directories present, bail.
 			if (empty($controllerDirectories)) {
@@ -168,27 +168,15 @@
 			// Track the maximum modification time across ALL directories
 			$maxTime = 0;
 			
-			foreach ($controllerDirectories as $controllerDirectory) {
-				if (!is_dir($controllerDirectory)) {
-					// A configured directory that doesn't exist is a deployment/config problem.
-					// Force cache invalidation so the issue surfaces immediately rather than
-					// serving stale routes silently.
-					error_log("RouteCacheManager: Configured controller directory does not exist: {$controllerDirectory}");
-					return time();
-				}
-				
+			foreach ($controllerClasses as $className) {
 				try {
-					$iterator = new RecursiveIteratorIterator(
-						new RecursiveDirectoryIterator($controllerDirectory, FilesystemIterator::SKIP_DOTS)
-					);
+					$file = (new \ReflectionClass($className))->getFileName();
 					
-					foreach ($iterator as $file) {
-						if ($file->getExtension() === 'php') {
-							$maxTime = max($maxTime, $file->getMTime());
-						}
+					if ($file !== false) {
+						$maxTime = max($maxTime, filemtime($file));
 					}
-				} catch (\Exception $e) {
-					error_log("RouteCacheManager: Error scanning controller directory: {$e->getMessage()}");
+				} catch (\ReflectionException $e) {
+					error_log("RouteCacheManager: Cannot reflect controller class {$className}: {$e->getMessage()}");
 					return time();
 				}
 			}
@@ -196,10 +184,6 @@
 			// If $maxTime is still 0, no PHP files exist in any configured directory.
 			// Use current time to force a cache miss — an empty controllers set likely
 			// means something is wrong, and we don't want to cache that state.
-			if ($maxTime === 0) {
-				return time();
-			}
-			
-			return $maxTime;
+			return $maxTime === 0 ? time() : $maxTime;
 		}
 	}
