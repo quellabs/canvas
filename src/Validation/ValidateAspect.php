@@ -8,7 +8,7 @@
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
 	use Symfony\Component\HttpFoundation\JsonResponse;
-	use Quellabs\Contracts\DependencyInjection\Container;
+	use Quellabs\Contracts\DependencyInjection\ContainerInterface;
 	
 	/**
 	 * Form validation aspect that intercepts method calls to validate request data
@@ -18,9 +18,9 @@
 	class ValidateAspect implements BeforeAspectInterface {
 		
 		/**
-		 * @var Container The Dependency Injector container
+		 * @var ContainerInterface The Dependency Injector container
 		 */
-		protected Container $di;
+		protected ContainerInterface $di;
 		
 		/**
 		 * @var string The fully qualified class name of the validation rules class
@@ -44,12 +44,12 @@
 		
 		/**
 		 * ValidateFormAspect constructor
-		 * @param Container $di The Dependency Injector object
+		 * @param ContainerInterface $di The Dependency Injector object
 		 * @param string $validator The validation class name that contains the rules
 		 * @param bool $autoRespond In the case of JSON, send an auto response
 		 * @param string|null $formId Optional form ID for multi-form scenarios
 		 */
-		public function __construct(Container $di, string $validator, bool $autoRespond = false, ?string $formId = null) {
+		public function __construct(ContainerInterface $di, string $validator, bool $autoRespond = false, ?string $formId = null) {
 			$this->di = $di;
 			$this->validationClass = $validator;
 			$this->autoRespond = $autoRespond;
