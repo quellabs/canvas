@@ -10,7 +10,6 @@
 	use Quellabs\Canvas\Routing\Components\SignalConnector;
 	use Quellabs\Canvas\Routing\Context\MethodContext;
 	use Quellabs\DependencyInjection\Provider\SimpleBinding;
-	use Quellabs\Support\ComposerUtils;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
 	use Symfony\Component\HttpFoundation\Session\Session;
