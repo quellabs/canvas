@@ -6,7 +6,7 @@
 	use Quellabs\Canvas\Routing\Context\MethodContext;
 	use Quellabs\Canvas\Sanitization\Contracts\SanitizationInterface;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
-	use Quellabs\Contracts\DependencyInjection\Container;
+	use Quellabs\Contracts\DependencyInjection\ContainerInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
 	
@@ -18,9 +18,9 @@
 	class SanitizeAspect implements BeforeAspectInterface {
 		
 		/**
-		 * @var Container The Dependency Injector container
+		 * @var ContainerInterface The Dependency Injector container
 		 */
-		protected Container $di;
+		protected ContainerInterface $di;
 		
 		/**
 		 * The fully qualified class name of the sanitization class to use.
@@ -33,7 +33,7 @@
 		 * Constructor to initialize the sanitization class.
 		 * @param string|null $sanitizer The fully qualified class name of the sanitization class
 		 */
-		public function __construct(Container $di, ?string $sanitizer = null) {
+		public function __construct(ContainerInterface $di, ?string $sanitizer = null) {
 			$this->di = $di;
 			$this->sanitizationClass = $sanitizer;
 		}

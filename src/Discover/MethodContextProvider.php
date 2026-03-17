@@ -3,7 +3,6 @@
 	namespace Quellabs\Canvas\Discover;
 	
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
-	use Quellabs\Contracts\Context\MethodContext;
 	use Quellabs\DependencyInjection\Provider\ServiceProvider;
 	
 	/**
@@ -13,15 +12,15 @@
 		
 		/**
 		 * The method context instance to be provided
-		 * @var \Quellabs\Canvas\Routing\Context\MethodContext
+		 * @var MethodContextInterface
 		 */
-		private \Quellabs\Canvas\Routing\Context\MethodContext $context;
+		private MethodContextInterface $context;
 		
 		/**
 		 * Constructor - initializes the provider with a MethodContext instance
-		 * @param \Quellabs\Canvas\Routing\Context\MethodContext $context
+		 * @param MethodContextInterface $context
 		 */
-		public function __construct(MethodContext $context) {
+		public function __construct(MethodContextInterface $context) {
 			$this->context = $context;
 		}
 		
@@ -32,9 +31,7 @@
 		 * @return bool True if this provider supports the requested class, false otherwise
 		 */
 		public function supports(string $className, array $metadata = []): bool {
-			return
-				$className === MethodContextInterface::class ||
-				$className === MethodContext::class;
+			return $className === MethodContextInterface::class;
 		}
 		
 		/**
@@ -42,10 +39,10 @@
 		 * @param string $className The class name being requested (should be \Quellabs\Canvas\Routing\MethodContext::class)
 		 * @param array $dependencies Dependencies for the class (unused since we return existing instance)
 		 * @param array $metadata Metadata as passed by Discover
-		 * @param MethodContext|null $methodContext
-		 * @return MethodContext The method context instance
+		 * @param MethodContextInterface|null $methodContext
+		 * @return MethodContextInterface The method context instance
 		 */
-		public function createInstance(string $className, array $dependencies, array $metadata, ?MethodContext $methodContext=null): object {
+		public function createInstance(string $className, array $dependencies, array $metadata, ?\Quellabs\Contracts\Context\MethodContextInterface $methodContext=null): object {
 			return $this->context;
 		}
 	}
