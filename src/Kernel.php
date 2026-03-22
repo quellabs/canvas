@@ -24,6 +24,7 @@
 	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\Canvas\Configuration\ConfigLoader;
 	use Quellabs\Canvas\Configuration\Configuration;
+	use Quellabs\Canvas\DependencyInjection\CanvasContainer;
 	use Quellabs\Canvas\Discover\DependencyAwareDiscover;
 	use Quellabs\Canvas\Error\DefaultErrorHandler;
 	use Quellabs\Canvas\Error\ErrorHandlerInterface;
@@ -53,7 +54,6 @@
 		private AnnotationReader $annotationsReader; // Annotation reading
 		private ConfigurationInterface $configuration;
 		private ConfigurationInterface $inspector_configuration;
-		private array $contents_of_app_php = [];
 		private bool $legacyEnabled;
 		private ?LegacyHandler $legacyFallbackHandler;
 		private Container $dependencyInjector;
@@ -92,7 +92,7 @@
 			});
 			
 			// Instantiate Dependency Injector and register default providers
-			$this->dependencyInjector = new Container();
+			$this->dependencyInjector = new CanvasContainer($this->annotationsReader);
 			
 			// Create discover instance
 			$discover = new DependencyAwareDiscover($this->dependencyInjector);
