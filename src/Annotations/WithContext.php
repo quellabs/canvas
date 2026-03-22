@@ -29,11 +29,10 @@
 		
 		/**
 		 * WithContext constructor
-		 * @param string $parameter The name of the parameter to apply context to
-		 * @param string $context The container context string passed to $container->for()
+		 * @param array $parameters
 		 */
-		public function __construct(string $parameter, string $context) {
-			$this->parameter = $parameter;
-			$this->context = $context;
+		public function __construct(array $parameters) {
+			$this->parameter = $parameters['parameter'] ?? '';
+			$this->context = $parameters['context'] ?? '';
 		}
 	}

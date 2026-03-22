@@ -80,7 +80,7 @@
 				);
 				
 				foreach ($annotations as $annotation) {
-					$withContextMap[$annotation->param] = $annotation->context;
+					$withContextMap[$annotation->parameter] = $annotation->context;
 				}
 			} catch (\Throwable) {
 				// Annotation parsing failed or no docblock present — proceed without
