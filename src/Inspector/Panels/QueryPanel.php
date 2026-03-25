@@ -93,32 +93,74 @@
 		 */
 		public function getJsTemplate(): string {
 			return <<<'JS'
-// Generate HTML for each query using common components
-const queries = data.queries.map(query => `
-    <div class="canvas-debug-item">
-        <div class="canvas-debug-item-header">
-            ${formatTimeBadge(query.execution_time_ms || 0)}
-        </div>
-        <div class="canvas-debug-item-content">
-            <div class="canvas-debug-mb-2">
-                <strong>Query:</strong>
-                <code class="canvas-debug-code">${escapeHtml(query.query || 'No query available')}</code>
-            </div>
-            <div>
-                <strong>Parameters:</strong>
-                ${formatParamsTable(query.bound_parameters, 'No parameters')}
-            </div>
-        </div>
-    </div>
-`).join('');
+const queries = data.queries.map((query, qi) => {
+    const sqlStatements = query.sql || [];
+    const uid = `sql-${qi}`;
 
-// Return complete panel HTML with summary header
+    const stepButtons = sqlStatements.length > 1
+        ? sqlStatements.map((_, i) => `
+            <button onclick="showSqlStep('${uid}', ${i})"
+                    id="${uid}-btn-${i}"
+                    class="canvas-sql-step-btn ${i === 0 ? 'active' : ''}">${i + 1}</button>
+          `).join('')
+        : '';
+
+    const sqlBlocks = sqlStatements.length > 0
+        ? sqlStatements.map((sql, i) => `
+            <pre id="${uid}-sql-${i}" class="canvas-debug-code" style="display:${i === 0 ? 'block' : 'none'}">${escapeHtml(sql)}</pre>
+          `).join('')
+        : '<em style="font-size:12px;color:#6b7280">No SQL captured</em>';
+
+    const params = Object.entries(query.bound_parameters || {});
+    const paramsHtml = params.length > 0
+        ? `<div class="canvas-params-table-wrap">
+               <table class="canvas-params-table">
+                   <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
+                   <tbody>
+                       ${params.map(([k, v]) => `
+                           <tr>
+                               <td>${escapeHtml(k)}</td>
+                               <td>${escapeHtml(String(v))}</td>
+                           </tr>
+                       `).join('')}
+                   </tbody>
+               </table>
+           </div>`
+        : '';
+
+    return `
+        <div>
+            <div class="canvas-query-header">
+                <div class="canvas-query-header-cell">ObjectQuel</div>
+                <div class="canvas-query-header-cell canvas-query-header-cell-right">
+                    <span>SQL</span>
+                    <div class="canvas-sql-step-buttons">${stepButtons}</div>
+                </div>
+            </div>
+            <div class="canvas-query-body" style="margin-bottom: 12px;">
+                <div class="canvas-query-body-left">
+                    <pre class="canvas-debug-code">${escapeHtml(query.query || '')}</pre>
+                </div>
+                <div class="canvas-query-body-right">${sqlBlocks}</div>
+            </div>
+            ${paramsHtml}
+        </div>
+    `;
+}).join('');
+
+window.showSqlStep = function(uid, index) {
+    document.querySelectorAll(`[id^="${uid}-sql-"]`).forEach((el, i) => {
+        el.style.display = i === index ? 'block' : 'none';
+    });
+    document.querySelectorAll(`[id^="${uid}-btn-"]`).forEach((el, i) => {
+        el.classList.toggle('active', i === index);
+    });
+};
+
 return `
     <div class="debug-panel-section">
-        <h3>Database Queries (${data.count} queries, ${data.total_time}ms total)</h3>
-        <div class="canvas-debug-item-list">
-            ${queries}
-        </div>
+        <h3>Database queries (${data.count} queries, ${data.total_time}ms total)</h3>
+        <div class="canvas-query-list">${queries}</div>
     </div>
 `;
 JS;
@@ -130,21 +172,125 @@ JS;
 		 */
 		public function getCss(): string {
 			return <<<'CSS'
-/* Override code block styling for ObjectQuel syntax highlighting */
-.canvas-debug-item .canvas-debug-code {
-    background: #f8f9fa;
-    color: #d63384;
-    border: 1px solid #e9ecef;
-    margin-top: 4px;
+.canvas-query-list {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
 }
 
-/* Ensure proper spacing for query content */
-.canvas-debug-item-content > div {
+.canvas-query-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    border-bottom: 1px solid #e2e4e9;
     margin-bottom: 8px;
 }
 
-.canvas-debug-item-content > div:last-child {
-    margin-bottom: 0;
+.canvas-query-header-cell {
+    padding: 0 0 6px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.canvas-query-header-cell-right {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.canvas-sql-step-buttons {
+    display: flex;
+    gap: 4px;
+}
+
+.canvas-sql-step-btn {
+    font-size: 11px;
+    padding: 1px 8px;
+    border-radius: 4px;
+    border: 1px solid #e2e4e9;
+    background: transparent;
+    color: #6b7280;
+    cursor: pointer;
+}
+
+.canvas-sql-step-btn.active {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+    color: #111827;
+    font-weight: 500;
+}
+
+.canvas-query-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.canvas-query-body-left {
+    padding-right: 16px;
+    border-right: 1px solid #e2e4e9;
+}
+
+.canvas-query-body-right {
+    padding-left: 16px;
+}
+
+.canvas-query-body-left .canvas-debug-code,
+.canvas-query-body-right .canvas-debug-code {
+    border: none;
+    background: transparent;
+    padding: 0;
+}
+
+.canvas-debug-code {
+    margin: 0;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.6;
+    color: #111827;
+}
+
+.canvas-params-table-wrap {
+    border: 1px solid #e2e4e9;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.canvas-params-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.canvas-params-table thead tr {
+    background: #f9fafb;
+}
+
+.canvas-params-table th {
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #6b7280;
+    text-align: left;
+    border-bottom: 1px solid #e2e4e9;
+}
+
+.canvas-params-table th:first-child,
+.canvas-params-table td:first-child {
+    border-right: 1px solid #e2e4e9;
+}
+
+.canvas-params-table td {
+    padding: 4px 10px;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    color: #111827;
+}
+
+.canvas-params-table tr + tr td {
+    border-top: 1px solid #e2e4e9;
 }
 CSS;
 		}
