@@ -1,6 +1,20 @@
 {
   "name": "quellabs/canvas",
   "description": "A modern, lightweight PHP framework with contextual containers, automatic service discovery, and ObjectQuel ORM integration",
+  "authors": [
+    {
+      "name": "Floris van den Berg",
+      "email": "info@quellabs.com"
+    }
+  ],
+  "support": {
+    "email": "support@quellabs.com",
+    "issues": "https://github.com/quellabs/canvas/issues",
+    "forum": "https://github.com/quellabs/canvas/discussions",
+    "wiki": "https://github.com/quellabs/canvas/wiki",
+    "docs": "https://canvasphp.com/docs",
+    "source": "https://github.com/quellabs/canvas"
+  },
   "keywords": [
     "framework",
     "contextual-containers",
@@ -11,20 +25,17 @@
   "license": "MIT",
   "config": {
     "platform": {
-      "php": "8.3"
+      "php": "8.4"
     },
     "allow-plugins": {
       "quellabs/discover": false
     }
   },
   "require": {
-    "ext-json": "*",
-    "ext-mysqli": "*",
-    "ext-pdo": "*",
-    "ext-curl": "*",
-    "ext-gd": "*",
-    "ext-fileinfo": "*",
-    "monolog/monolog": "*",
+    "php": ">=8.4",
+    "monolog/monolog": "^3.10",
+    "symfony/http-foundation": "^8.0",
+    "dragonmantank/cron-expression": "^3.6",
     "quellabs/contracts": "^1",
     "quellabs/support": "^1",
     "quellabs/discover": "^1",
@@ -32,9 +43,7 @@
     "quellabs/sculpt": "^1",
     "quellabs/signal-hub": "^1",
     "quellabs/canvas-smarty": "^1",
-    "quellabs/annotation-reader": "^1",
-    "symfony/http-foundation": "*",
-    "dragonmantank/cron-expression": "*"
+    "quellabs/annotation-reader": "^1"
   },
   "autoload": {
     "psr-4": {
