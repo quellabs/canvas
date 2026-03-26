@@ -152,6 +152,10 @@ Full docs, guides, and API reference: **[canvasphp.com/docs](https://canvasphp.c
 
 Bug reports and feature requests via GitHub issues. PRs welcome — fork, branch, follow PSR-12, add tests.
 
+## Support
+
+If Canvas saves you time, consider [sponsoring development](https://github.com/sponsors/quellabs).
+
 ## License
 
 MIT
