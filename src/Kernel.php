@@ -79,8 +79,8 @@
 			
 			// Store the configuration array
 			$defaultConfiguration = new Configuration($configuration);
-			$this->configuration = $this->loadConfigFile ("app.php")->merge($defaultConfiguration);
-			$this->inspector_configuration = $this->loadConfigFile ("inspector.php");
+			$this->configuration = $this->configLoader->loadConfigFile("app.php")->merge($defaultConfiguration);
+			$this->inspector_configuration = $this->configLoader->loadConfigFile("inspector.php");
 			
 			// Register Annotations Reader
 			$this->annotationsReader = $this->createAnnotationReader();
