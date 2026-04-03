@@ -25,14 +25,14 @@
   "license": "MIT",
   "config": {
     "platform": {
-      "php": "8.4"
+      "php": "8.3"
     },
     "allow-plugins": {
       "quellabs/discover": false
     }
   },
   "require": {
-    "php": ">=8.4",
+    "php": ">=8.3",
     "monolog/monolog": "^3.10",
     "symfony/http-foundation": "^8.0",
     "dragonmantank/cron-expression": "^3.6",
