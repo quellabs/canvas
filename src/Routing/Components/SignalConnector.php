@@ -49,8 +49,8 @@
 			$this->annotationReader = $kernel->getAnnotationsReader();
 			$this->di = $kernel->getDependencyInjector();
 			$this->signalProviderPath = $kernel->getConfiguration()->get(
-				"signal_providers_path",
-				ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "SignalProviders"
+				"signal_listeners_path",
+				ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "Listeners"
 			);
 		}
 		
