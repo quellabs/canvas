@@ -553,7 +553,11 @@ const WakaPACPanel = {
      */
     updateCaptureButton() {
         const btn = this.panelEl.querySelector('.wakapac-btn-capture');
-        if (!btn) { return; }
+        
+        if (!btn) {
+            return;
+        }
+        
         btn.textContent = this.isCapturing ? '⏹ Stop' : '⏺ Record';
         btn.classList.toggle('wakapac-btn-active', this.isCapturing);
     },
@@ -563,7 +567,10 @@ const WakaPACPanel = {
      */
     updateCounter() {
         const counter = this.panelEl.querySelector('.wakapac-counter');
-        if (counter) { counter.textContent = this.totalSeen; }
+        
+        if (counter) {
+            counter.textContent = this.totalSeen;
+        }
     },
 
     // ── Formatters ────────────────────────────────────────────────────────────
@@ -575,6 +582,10 @@ const WakaPACPanel = {
      * @returns {string}
      */
     formatMessageId(id) {
+        if (id === undefined || id === null) {
+            return 'MSG_UNKNOWN (undefined)';
+        }
+        
         const name = this.messageNames[id] ?? 'MSG_UNKNOWN';
         const hex  = '0x' + id.toString(16).toUpperCase().padStart(4, '0');
         return name + ' (' + hex + ')';
