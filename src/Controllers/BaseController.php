@@ -19,7 +19,7 @@
 		 * Dependency injection container for service resolution
 		 * @var Container
 		 */
-		private Container $container;
+		protected Container $container;
 		
 		/**
 		 * BaseController constructor.
@@ -30,29 +30,13 @@
 		}
 		
 		/**
-		 * Resolve a service from the dependency injection container.
-		 * @template T of object
-		 * @param class-string<T> $className The fully qualified class name of the service to resolve
-		 * @return T|null The resolved service instance of type T, or null if resolution fails
-		 */
-		protected function service(string $className): ?object {
-			try {
-				return $this->container->get($className);
-			} catch (\Throwable) {
-				// Silently handle all exceptions and return null
-				// This allows graceful degradation when optional services are unavailable
-				return null;
-			}
-		}
-		
-		/**
 		 * Convenience method to retrieve the ObjectQuel EntityManager service.
 		 * The EntityManager handles database connections, query building,
 		 * and entity persistence operations.
 		 * @return EntityManager|null The entity manager instance, or null if not available
 		 */
 		protected function em(): ?EntityManager {
-			return $this->service(EntityManager::class);
+			return $this->container->get(EntityManager::class);
 		}
 		
 		/**
@@ -62,7 +46,7 @@
 		 * @return TemplateEngineInterface|null The template engine instance, or null if not available
 		 */
 		protected function view(): ?TemplateEngineInterface {
-			return $this->service(TemplateEngineInterface::class);
+			return $this->container->get(TemplateEngineInterface::class);
 		}
 		
 		/**
