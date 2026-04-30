@@ -77,10 +77,8 @@
 		 * Close Memcached connection
 		 */
 		public function __destruct() {
-			if (isset($this->memcached)) {
-				// Persistent connections are managed by PHP, but we can quit gracefully
-				$this->memcached->quit();
-			}
+			// Persistent connections are managed by PHP, but we can quit gracefully
+			$this->memcached->quit();
 		}
 		
 		/**
@@ -444,7 +442,8 @@
 			
 			// Test connection
 			$version = $this->memcached->getVersion();
-			if ($version === false) {
+			
+			if (empty($version)) {
 				throw new \RuntimeException("Failed to connect to Memcached servers");
 			}
 		}
@@ -557,7 +556,7 @@
 		 */
 		private function formatBytes(int $bytes): string {
 			$units = ['B', 'KB', 'MB', 'GB', 'TB'];
-			$factor = floor((strlen($bytes) - 1) / 3);
+			$factor = (int)floor((strlen((string)$bytes) - 1) / 3);
 			
 			return sprintf("%.2f %s", $bytes / pow(1024, $factor), $units[$factor]);
 		}

@@ -417,6 +417,7 @@
 		 *
 		 * @param array $index Complete route index containing 'http_methods' and 'segment_count' arrays
 		 * @return array Statistics about filtering potential with reduction percentages
+		 * @phpstan-ignore method.unused
 		 */
 		private function calculatePreFilterPotential(array $index): array {
 			// Get total routes from segment count index (most reliable source)
@@ -485,6 +486,7 @@
 		 * Calculate maximum depth of the trie structure
 		 * @param array $trieNode Trie node to analyze
 		 * @return int Maximum depth from this node
+		 * @phpstan-ignore method.unused
 		 */
 		private function calculateTrieDepth(array $trieNode): int {
 			// Base case: if the current node is empty, return depth of 0
@@ -516,6 +518,7 @@
 		 * Count total number of nodes in the trie structure
 		 * @param array $trieNode Trie node to count
 		 * @return int Total number of nodes
+		 * @phpstan-ignore method.unused
 		 */
 		private function countTrieNodes(array $trieNode): int {
 			// Base case: if the current node is empty, return count of 0

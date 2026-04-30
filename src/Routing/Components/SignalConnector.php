@@ -101,7 +101,7 @@
 		/**
 		 * Scans all discovered providers for @ListenTo annotations and builds a
 		 * signal-name-keyed map of callables and their priorities.
-		 * @return array<string, array<array{callable: callable, priority: int}>>
+		 * @return array<string, array<array{className: class-string<SignalProviderInterface>, method: non-empty-string, priority: mixed}>>
 		 */
 		private function buildListenerMap(Discover $discover): array {
 			$map = [];

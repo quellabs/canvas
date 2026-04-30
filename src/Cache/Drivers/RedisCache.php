@@ -68,12 +68,10 @@
 		 * Close Redis connection
 		 */
 		public function __destruct() {
-			if (isset($this->redis)) {
-				try {
-					$this->redis->close();
-				} catch (RedisException $e) {
-					// Ignore cleanup errors
-				}
+			try {
+				$this->redis->close();
+			} catch (RedisException $e) {
+				// Ignore cleanup errors
 			}
 		}
 		

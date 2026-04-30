@@ -87,7 +87,7 @@
 			
 			// Register error handlers
 			$errorHandlerDirectory = $this->configuration->get("error_handler_directory", ComposerUtils::getProjectRoot() . "/src/Errors");
-			$this->errorHandlers = ComposerUtils::findClassesInDirectory($errorHandlerDirectory, function($e) {
+			$this->errorHandlers = ComposerUtils::findClassesInDirectory($errorHandlerDirectory, function ($e) {
 				return class_exists($e) && is_subclass_of($e, ErrorHandlerInterface::class);
 			});
 			
@@ -124,17 +124,17 @@
 		
 		/**
 		 * Returns the Configuration object
-		 * @return Configuration
+		 * @return ConfigurationInterface
 		 */
-		public function getConfiguration(): Configuration {
+		public function getConfiguration(): ConfigurationInterface {
 			return $this->configuration;
 		}
 		
 		/**
 		 * Returns the Configuration object for the inspector
-		 * @return Configuration
+		 * @return ConfigurationInterface
 		 */
-		public function getInspectorConfiguration(): Configuration {
+		public function getInspectorConfiguration(): ConfigurationInterface {
 			return $this->inspector_configuration;
 		}
 		
@@ -220,12 +220,12 @@
 		/**
 		 * Load config file with .local.php override support
 		 * @param string $filename Filename to load
-		 * @return Configuration
+		 * @return ConfigurationInterface
 		 */
 		public function loadConfigFile(string $filename): ConfigurationInterface {
 			return $this->configLoader->loadConfigFile($filename);
 		}
-
+		
 		/**
 		 * Inject debug bar into response if debug collector is available
 		 * @param EventCollector|null $debugCollector Debug collector instance
@@ -248,7 +248,7 @@
 		 */
 		public function createErrorResponse(\Throwable $exception, Request $request): Response {
 			// Find an error class that support the exception
-			foreach($this->errorHandlers as $handlerClass) {
+			foreach ($this->errorHandlers as $handlerClass) {
 				if ($handlerClass::supports($exception)) {
 					$handler = $this->dependencyInjector->make($handlerClass);
 					return $handler->handle($exception, $request);
@@ -326,7 +326,7 @@
 			// Create and return the configured AnnotationReader instance
 			return new AnnotationReader($config);
 		}
-
+		
 		/**
 		 * Initialize the legacy support system
 		 * @return void

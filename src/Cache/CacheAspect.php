@@ -477,13 +477,6 @@
 			
 			// Validate object properties don't contain resources
 			if (is_object($value)) {
-				// Check for common non-serializable object types
-				if ($value instanceof \Closure) {
-					throw new \InvalidArgumentException(
-						"Cannot cache methods with Closure arguments in {$context}"
-					);
-				}
-				
 				// Resources wrapped in objects
 				// Check object properties via reflection
 				try {

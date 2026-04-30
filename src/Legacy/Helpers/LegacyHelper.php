@@ -299,7 +299,7 @@
 			/**
 			 * Monitored prepare method
 			 */
-			public function prepare(string $query, array $options = []): PDOStatement|false {
+			public function prepare(string $query, array $options = []): CanvasPDOStatement|false {
 				$statement = $this->pdo->prepare($query, $options);
 				
 				if ($statement === false) {

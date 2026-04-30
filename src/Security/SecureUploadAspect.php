@@ -112,7 +112,7 @@
 		
 		/**
 		 * Processes file uploads before the controller method executes
-		 * @param MethodContext $context The method execution context
+		 * @param MethodContextInterface $context The method execution context
 		 * @return Response|null Returns error response if validation fails, null to continue
 		 */
 		public function before(MethodContextInterface $context): ?Response {

@@ -79,7 +79,7 @@
 		 * This method is called before the intercepted method executes.
 		 * It validates CSRF tokens for state-changing requests and adds tokens
 		 * to the request for use in controllers and templates.
-		 * @param MethodContext $context The method execution context
+		 * @param MethodContextInterface $context The method execution context
 		 * @return Response|null Returns error response if validation fails, null to continue execution
 		 * @throws RandomException
 		 */

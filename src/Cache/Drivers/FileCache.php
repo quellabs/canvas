@@ -564,6 +564,6 @@
 			$units = ['B', 'KB', 'MB', 'GB', 'TB'];
 			$factor = floor((strlen((string)$bytes) - 1) / 3);
 			
-			return sprintf("%.2f %s", $bytes / pow(1024, $factor), $units[$factor]);
+			return sprintf("%.2f %s", $bytes / pow(1024, $factor), $units[(int)$factor]);
 		}
 	}
