@@ -54,7 +54,7 @@
 			$signal = $signalHub->getSignal('debug.database.query');
 			
 			if ($signal === null) {
-				$signal = new \Quellabs\SignalHub\Signal(['array'], 'debug.database.query');
+				$signal = new \Quellabs\SignalHub\Signal('debug.database.query');
 				$signalHub->registerSignal($signal);
 			}
 			

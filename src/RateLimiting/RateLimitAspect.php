@@ -185,7 +185,7 @@
 			$ttl = ($windowStart + $this->window) - $currentTime;
 			
 			// Store the updated count with TTL equal to remaining window duration
-			$this->cache->set($cacheKey, $count, $ttl);
+			$this->cache->set($cacheKey, $count, (int)$ttl);
 			
 			return [
 				'count'       => $count,                                    // Current request count in this window
