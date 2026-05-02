@@ -45,7 +45,7 @@
 			// Collect class names advertised by packages
 			$packageClasses = array_filter(
 				$discover->getFamilyValues('canvas', 'controller'),
-				fn($value) => is_string($value) && class_exists($value)
+				fn($value) => class_exists($value)
 			);
 			
 			// Return a flat list of fully qualified controller class names
