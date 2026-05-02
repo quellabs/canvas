@@ -157,7 +157,7 @@
 		private function processFileInputs(array $fileInputs, array &$files, string $prefix = ''): void {
 			foreach ($fileInputs as $name => $file) {
 				// Build the full input name (handling nested structures like files[docs][pdf])
-				$fullName = $prefix ? $prefix . '[' . $name . ']' : $name;
+				$fullName = $prefix ? $prefix . '[' . $name . ']' : (string)$name;
 				
 				if (is_array($file)) {
 					// Recursively process nested file arrays
