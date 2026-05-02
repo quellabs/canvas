@@ -88,13 +88,14 @@
 		
 		/**
 		 * Get cached routes if available and valid, rebuilding if stale or missing.
-		 * @param callable $routeBuilder Callback to build routes if cache miss
-		 * @return array Cached or freshly built routes array
+		 * @template T
+		 * @param callable(): T $builder Callback to build routes if cache miss
+		 * @return T Cached or freshly built routes array
 		 */
-		public function getCachedRoutes(callable $routeBuilder): array {
+		public function getCachedRoutes(callable $builder): mixed {
 			// Skip caching entirely in debug mode for development flexibility
 			if ($this->debugMode) {
-				return $routeBuilder();
+				return $builder();
 			}
 			
 			$currentMtime = $this->getLastControllerModification();
@@ -110,7 +111,7 @@
 			}
 			
 			// Cache miss or stale: rebuild and store atomically
-			$routes = $routeBuilder();
+			$routes = $builder();
 			
 			$this->cache->set(
 				self::ROUTES_CACHE_KEY,

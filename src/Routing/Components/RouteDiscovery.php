@@ -41,7 +41,11 @@
 	 * - Wildcard segments (lower priority)
 	 * - Route length (longer routes slightly favored)
 	 * - Fully static routes (highest priority bonus)
-	 */
+	 *
+	 * @phpstan-import-type CompiledSegment from RouteCandidateFilter
+	 * @phpstan-import-type Route from RouteCandidateFilter as CompiledRoute
+	 * @phpstan-type IntermediateRoute array{http_methods: list<string>, controller: string, method: string, route: \Quellabs\Canvas\Annotations\Route, route_path: string, priority: int}
+     */
 	class RouteDiscovery {
 		
 		private Kernel $kernel;
@@ -73,7 +77,7 @@
 		 * pre-compiles the route patterns for optimal runtime performance. The compiled
 		 * routes are sorted by priority to ensure correct matching order during request
 		 * processing.
-		 * @return array Array of compiled route definitions sorted by priority (highest first)
+		 * @return list<CompiledRoute> Array of compiled route definitions sorted by priority (highest first)
 		 * @throws AnnotationReaderException
 		 */
 		public function buildRoutesFromControllers(): array {
@@ -121,7 +125,7 @@
 		 * Each route is assigned a priority based on its specificity to ensure
 		 * proper matching order during request processing.
 		 * @param string $controller The fully qualified controller class name
-		 * @return array Array of route definitions with complete metadata
+		 * @return list<IntermediateRoute> Array of route definitions with complete metadata
 		 * @throws AnnotationReaderException When annotation reading fails
 		 */
 		private function getRoutesFromController(string $controller): array {
@@ -150,7 +154,7 @@
 		 * Uses reflection to scan a controller class and extract Route annotations
 		 * from its public non-magic methods.
 		 * @param string $controller Controller class name to scan
-		 * @return array Array of ['method' => string, 'annotation' => Route] entries
+		 * @return list<array{method: string, annotation: Route}> Array of ['method' => string, 'annotation' => Route] entries
 		 * @throws AnnotationReaderException When annotation reading or reflection fails
 		 */
 		private function getMethodRouteAnnotations(string $controller): array {

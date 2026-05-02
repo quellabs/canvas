@@ -51,6 +51,9 @@
 	 * optimal decisions about indexing strategies, matching algorithms, and priority
 	 * ordering to ensure the most specific routes are matched first while maintaining
 	 * high performance across different route pattern complexities.
+	 *
+	 * @phpstan-import-type CompiledSegment from RouteCandidateFilter
+	 * @phpstan-import-type Route from RouteCandidateFilter
 	 */
 	class RouteSegmentAnalyzer {
 		
@@ -161,7 +164,7 @@
 		
 		/**
 		 * Classify route type for indexing
-		 * @param array $route
+		 * @param Route $route
 		 * @return string
 		 */
 		public function classifyRoute(array $route): string {
@@ -268,7 +271,7 @@
 		/**
 		 * Parses a route path string into clean segments for matching
 		 * @param string $routePath Raw route path like '/users/{id}/posts'
-		 * @return array Clean route segments like ['users', '{id}', 'posts']
+		 * @return list<string> Clean route segments like ['users', '{id}', 'posts']
 		 */
 		private function parseRoutePath(string $routePath): array {
 			$segments = explode('/', ltrim($routePath, '/'));

@@ -56,6 +56,9 @@
 	 *
 	 * The resolver maintains full backward compatibility while providing significant
 	 * performance improvements, especially for applications with large numbers of routes.
+     *
+	 * @phpstan-import-type Route from \Quellabs\Canvas\Routing\Components\RouteCandidateFilter
+	 * @phpstan-import-type RouteIndex from \Quellabs\Canvas\Routing\Components\RouteCandidateFilter
 	 */
 	class AnnotationResolver extends AnnotationBase {
 		private bool $debugMode;
@@ -69,8 +72,8 @@
 		private RouteCacheManager $cacheManager;
 		
 		// Performance optimization cache
-		/** @var array<string, mixed> */
-		private array $routeIndex = [];
+		/** @var array{multi_level: array<int, array<string, list<array{controller: string, method: string, route_path: string, http_methods: list<string>, compiled_pattern: list<array{type: string, original?: string, is_multi_wildcard?: bool}>, priority: int}>>>, segment_count: array<int, list<array{controller: string, method: string, route_path: string, http_methods: list<string>, compiled_pattern: list<array{type: string, original?: string, is_multi_wildcard?: bool}>, priority: int}>>, http_methods: array<string, list<array{controller: string, method: string, route_path: string, http_methods: list<string>, compiled_pattern: list<array{type: string, original?: string, is_multi_wildcard?: bool}>, priority: int}>>, prefix_tree: array<string, mixed>}|null */
+		private ?array $routeIndex = null;
 		
 		/**
 		 * AnnotationResolver Constructor
@@ -152,7 +155,7 @@
 		 * @return bool True if all caches were cleared successfully
 		 */
 		public function clearAllCaches(): bool {
-			$this->routeIndex = [];
+			$this->routeIndex = null;
 			return $this->cacheManager->clearCache();
 		}
 		
@@ -180,11 +183,12 @@
 		 */
 		private function getRouteIndex(): array {
 			// Return cached index if available
-			if (!empty($this->routeIndex)) {
+			if ($this->routeIndex !== null) {
 				return $this->routeIndex;
 			}
 			
 			// Get all routes (from cache or fresh build)
+			/** @var list<array{controller: string, method: string, route_path: string, http_methods: list<string>, compiled_pattern: list<array{type: string, original?: string, is_multi_wildcard?: bool}>, priority: int, route: \Quellabs\Canvas\Annotations\Route}> $allRoutes */
 			$allRoutes = $this->cacheManager->getCachedRoutes(function() {
 				return $this->routeDiscovery->buildRoutesFromControllers();
 			});

@@ -51,6 +51,10 @@
 	 * The compiler transforms human-readable route patterns into machine-optimized
 	 * matching structures, enabling fast URL resolution while supporting complex
 	 * routing scenarios including nested wildcards and type validation.
+     *
+	 * @phpstan-import-type CompiledSegment from RouteCandidateFilter
+	 * @phpstan-type VarInfo array{name: string, clean_name: string, regex: string, is_wildcard: bool, is_multi_wildcard: bool, original_content: string}
+	 * @phpstan-type PartialSegmentResult array{pattern: string, variables: list<string>, literal_prefix: string, literal_suffix: string, variable_info: list<VarInfo>}
 	 */
 	class RoutePatternCompiler {
 		
@@ -107,7 +111,7 @@
 		 * patterns, and variable information pre-determined to avoid runtime
 		 * processing overhead.
 		 * @param string $routePath The original route path pattern (e.g., "/user/{id}/posts")
-		 * @return array Array of compiled segment objects with pre-processed matching information
+		 * @return list<CompiledSegment> Array of compiled segment objects with pre-processed matching information
 		 */
 		public function compileRoute(string $routePath): array {
 			// Parse the route path into individual segments
@@ -152,7 +156,7 @@
 		 * into a regex pattern for matching URLs, extracting variable names and their
 		 * corresponding regex patterns.
 		 * @param string $segment The route segment to compile (e.g., "/users/{id:\d+}")
-		 * @return array|null Returns [$pattern, $variableNames] or null on failure
+		 * @return PartialSegmentResult|null Returns compiled pattern result or null on failure
 		 */
 		public function compilePartialSegmentPattern(string $segment): ?array {
 			// Initialize compilation state variables
@@ -249,7 +253,7 @@
 		/**
 		 * Parses a route path string into clean segments for compilation
 		 * @param string $routePath Raw route path like '/users/{id}/posts'
-		 * @return array Clean route segments like ['users', '{id}', 'posts']
+		 * @return list<string> Clean route segments like ['users', '{id}', 'posts']
 		 */
 		public function parseRoutePath(string $routePath): array {
 			// Remove leading slash and split the path into segments by '/'
@@ -257,10 +261,10 @@
 			$segments = explode('/', ltrim($routePath, '/'));
 			
 			// Filter out empty segments that might occur from double slashes or trailing slashes
-			// This ensures we only keep meaningful path segments
-			return array_filter($segments, function ($segment) {
+			// array_values() re-indexes the array to maintain list<string> guarantee
+			return array_values(array_filter($segments, function ($segment) {
 				return $segment !== '';
-			});
+			}));
 		}
 		
 		
@@ -268,7 +272,7 @@
 		 * Initialize a compiled segment structure with default values
 		 * @param string $type The segment type
 		 * @param string $segment The original segment text
-		 * @return array Initialized compiled segment array
+		 * @return CompiledSegment Initialized compiled segment array
 		 */
 		private function initializeCompiledSegment(string $type, string $segment): array {
 			return [
@@ -288,7 +292,7 @@
 		 * Compile variable segments like {id}, {slug}, {id:int}, {path:**}
 		 * Returns only the modifications needed for variable segments
 		 * @param string $segment The original segment text
-		 * @return array Array of modifications to apply to the compiled segment
+		 * @return array<string, mixed> Array of modifications to apply to the compiled segment
 		 */
 		private function compileVariableSegment(string $segment): array {
 			$modifications = [
@@ -318,7 +322,7 @@
 		 * Compile single wildcard segments (*)
 		 * Returns only the modifications needed for single wildcard segments
 		 * @param string $segment The original segment text
-		 * @return array Array of modifications to apply to the compiled segment
+		 * @return array<string, mixed> Array of modifications to apply to the compiled segment
 		 */
 		private function compileSingleWildcardSegment(string $segment): array {
 			return [
@@ -330,7 +334,7 @@
 		 * Compile multi-wildcard segments (**) or named multi-wildcards ({**})
 		 * Returns only the modifications needed for multi-wildcard segments
 		 * @param string $segment The original segment text
-		 * @return array Array of modifications to apply to the compiled segment
+		 * @return array<string, mixed> Array of modifications to apply to the compiled segment
 		 */
 		private function compileMultiWildcardSegment(string $segment): array {
 			$modifications = [
@@ -353,7 +357,7 @@
 		 * e.g., "user-{id}-profile" or "file.{name}.{ext}"
 		 * Returns only the modifications needed for partial variable segments
 		 * @param string $segment The original segment text
-		 * @return array Array of modifications to apply to the compiled segment
+		 * @return array<string, mixed> Array of modifications to apply to the compiled segment
 		 */
 		private function compilePartialVariableSegment(string $segment): array {
 			$modifications = [];
@@ -365,8 +369,8 @@
 			if ($result) {
 				$modifications['compiled_regex'] = $result['pattern'];
 				$modifications['variable_names'] = $result['variables'];
-				$modifications['literal_prefix'] = $result['literal_prefix'] ?? null;
-				$modifications['literal_suffix'] = $result['literal_suffix'] ?? null;
+				$modifications['literal_prefix'] = $result['literal_prefix'];
+				$modifications['literal_suffix'] = $result['literal_suffix'];
 
 				// Pre-compile pattern metadata for performance
 				$patternMetadata = $this->compilePatternMetadata($segment);
@@ -392,7 +396,7 @@
 		 * Parses route segments like "prefix{variable}suffix" and extracts
 		 * structural information needed for efficient matching and validation.
 		 * @param string $segment Route segment to analyze (e.g., "user{id}.json")
-		 * @return array|null Metadata array or null if the segment has no variables
+		 * @return array<string, mixed>|null Metadata array or null if the segment has no variables
 		 */
 		private function compilePatternMetadata(string $segment): ?array {
 			// Match pattern: literal_prefix + {variable} + literal_suffix
@@ -435,7 +439,7 @@
 		
 		/**
 		 * Builds the regex pattern for a variable based on its type.
-		 * @param array $varInfo Variable information containing name, regex, and type flags
+		 * @param VarInfo $varInfo Variable information containing name, regex, and type flags
 		 * @return string The regex pattern for this variable
 		 */
 		private function buildVariablePattern(array $varInfo): string {
@@ -533,7 +537,7 @@
 		/**
 		 * Parses variable definition to extract name and type
 		 * @param string $content The variable content (without braces)
-		 * @return array Returns ['name' => string, 'regex' => string, ...]
+		 * @return VarInfo Returns ['name' => string, 'regex' => string, ...]
 		 */
 		private function parseVariableDefinition(string $content): array {
 			// Handle special wildcard cases first (* and **)
@@ -570,7 +574,7 @@
 		 * - '**' matches any characters including forward slashes (multiple segments)
 		 *
 		 * @param string $content The wildcard content (* or **)
-		 * @return array The wildcard configuration
+		 * @return VarInfo The wildcard configuration
 		 */
 		private function buildSpecialWildcardDefinition(string $content): array {
 			// Define wildcard patterns and their corresponding regex patterns
@@ -599,7 +603,7 @@
 		 * - 'name:**' creates a named parameter that matches multiple segments
 		 *
 		 * @param string $content The suffixed wildcard content (e.g., "name:*" or "path:**")
-		 * @return array The wildcard configuration
+		 * @return VarInfo The wildcard configuration
 		 */
 		private function buildSuffixedWildcardDefinition(string $content): array {
 			// Define suffix patterns with their properties
@@ -638,7 +642,7 @@
 		/**
 		 * This method processes parameters with type constraints in the format 'name:type'.
 		 * @param string $content The route segment content containing the typed parameter
-		 * @return array
+		 * @return VarInfo
 		 */
 		private function buildTypedVariableDefinition(string $content): array {
 			// Split content into name and type parts

@@ -38,10 +38,15 @@
 	 * Performance optimizations include early exit conditions, pre-validation of
 	 * segment counts, and specialized handling for static routes that bypass
 	 * expensive variable extraction.
+	 *
+	 * @phpstan-import-type CompiledSegment from RouteCandidateFilter
+	 * @phpstan-type Route array{controller: string, method: string, route_path: string, http_methods: list<string>, compiled_pattern: list<CompiledSegment>, priority: int, route: \Quellabs\Canvas\Annotations\Route}
+	 * @phpstan-type MatchedRoute array{pattern: list<CompiledSegment>, http_methods: list<string>, controller: string, method: string, route: \Quellabs\Canvas\Annotations\Route, variables: array<string, mixed>}
 	 */
 	class RouteMatcher {
 		
-		private array $strategies = [];
+		/** @var array<string, SegmentMatchingStrategyInterface> */
+		private array $strategies;
 		private bool $matchTrailingSlashes;
 		
 		/**
@@ -65,11 +70,11 @@
 		
 		/**
 		 * Match a URL against a single route with optimized pre-checks
-		 * @param array $routeData Complete route configuration
-		 * @param array $requestUrl URL segments
+		 * @param Route $routeData Complete route configuration
+		 * @param list<string> $requestUrl URL segments
 		 * @param string $originalUrl Full original URL
 		 * @param string $requestMethod HTTP method
-		 * @return array|null Matched route data or null
+		 * @return MatchedRoute|null Matched route data or null
 		 */
 		public function matchRoute(array $routeData, array $requestUrl, string $originalUrl, string $requestMethod): ?array {
 			// Early exit: HTTP method check
@@ -102,7 +107,7 @@
 		
 		/**
 		 * Check if route is fully static (optimized)
-		 * @param array $compiledPattern
+		 * @param list<CompiledSegment> $compiledPattern
 		 * @return bool
 		 */
 		private function isStaticRoute(array $compiledPattern): bool {
@@ -122,12 +127,12 @@
 		
 		/**
 		 * Match static route (exact string comparison only)
-		 * @param array $compiledPattern
-		 * @param array $requestUrl
-		 * @param array $routeData
+		 * @param list<CompiledSegment> $compiledPattern
+		 * @param list<string> $requestUrl
+		 * @param Route $routeData
 		 * @param int $segmentCount
 		 * @param int $patternCount
-		 * @return array|null
+		 * @return MatchedRoute|null
 		 */
 		private function matchStaticRoute(array $compiledPattern, array $requestUrl, array $routeData, int $segmentCount, int $patternCount): ?array {
 			// Static routes require exact segment count match
@@ -155,12 +160,12 @@
 		
 		/**
 		 * Match dynamic route (contains variables/wildcards)
-		 * @param array $compiledPattern
-		 * @param array $requestUrl
-		 * @param array $routeData
+		 * @param list<CompiledSegment> $compiledPattern
+		 * @param list<string> $requestUrl
+		 * @param Route $routeData
 		 * @param int $segmentCount
 		 * @param int $patternCount
-		 * @return array|null
+		 * @return MatchedRoute|null
 		 */
 		private function matchDynamicRoute(array $compiledPattern, array $requestUrl, array $routeData, int $segmentCount, int $patternCount): ?array {
 			// Validate segment counts based on route capabilities
@@ -178,6 +183,7 @@
 			}
 			
 			// Attempt pattern matching
+			/** @var array<string, mixed> $variables */
 			$variables = [];
 			if (!$this->matchPattern($requestUrl, $compiledPattern, $variables)) {
 				return null;
@@ -196,7 +202,7 @@
 		/**
 		 * Check if route contains any wildcard segments
 		 * Uses centralized SegmentTypes for consistency
-		 * @param array $compiledPattern
+		 * @param list<CompiledSegment> $compiledPattern
 		 * @return bool
 		 */
 		private function hasWildcards(array $compiledPattern): bool {
@@ -210,7 +216,7 @@
 		
 		/**
 		 * Calculate minimum required URL segments for a route
-		 * @param array $compiledPattern
+		 * @param list<CompiledSegment> $compiledPattern
 		 * @return int
 		 */
 		private function calculateMinimumSegments(array $compiledPattern): int {
@@ -231,9 +237,9 @@
 		
 		/**
 		 * Execute pattern matching using strategy pattern
-		 * @param array $requestUrl
-		 * @param array $compiledPattern
-		 * @param array &$variables
+		 * @param list<string> $requestUrl
+		 * @param list<CompiledSegment> $compiledPattern
+		 * @param array<string, mixed> $variables
 		 * @return bool
 		 */
 		private function matchPattern(array $requestUrl, array $compiledPattern, array &$variables): bool {
@@ -247,7 +253,9 @@
 				
 				switch ($result) {
 					case MatchResult::COMPLETE_MATCH:
-						$variables = $context->getVariables();
+						/** @var array<string, mixed> $contextVars */
+						$contextVars = $context->getVariables();
+						$variables = $contextVars;
 						return true;
 					
 					case MatchResult::NO_MATCH:
@@ -259,7 +267,9 @@
 				}
 			}
 			
-			$variables = $context->getVariables();
+			/** @var array<string, mixed> $contextVars */
+			$contextVars = $context->getVariables();
+			$variables = $contextVars;
 			return $context->validateFinalMatch();
 		}
 		

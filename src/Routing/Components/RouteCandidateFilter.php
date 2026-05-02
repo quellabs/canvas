@@ -33,6 +33,10 @@
 	 * Performance impact: Reduces route checking from O(n) to O(1) + O(k) where
 	 * n = total routes and k = 3-5 remaining candidates, achieving 95%+ reduction
 	 * in computational work for typical applications.
+	 *
+	 * @phpstan-type CompiledSegment array{type: string, original?: string, is_multi_wildcard?: bool}
+	 * @phpstan-type Route array{controller: string, method: string, route_path: string, http_methods: list<string>, compiled_pattern: list<CompiledSegment>, priority: int, route: \Quellabs\Canvas\Annotations\Route}
+	 * @phpstan-type RouteIndex array{multi_level: array<int, array<string, list<Route>>>, segment_count: array<int, list<Route>>, http_methods: array<string, list<Route>>, prefix_tree: array<string, mixed>}
 	 */
 	class RouteCandidateFilter {
 		
@@ -58,8 +62,8 @@
 		 * 3. HTTP method indexing for method-based filtering
 		 * 4. Prefix tree for ultra-fast static route lookups
 		 *
-		 * @param array $routes Array of compiled route definitions
-		 * @return array Comprehensive index structure with multiple lookup strategies
+		 * @param list<Route> $routes Array of compiled route definitions
+		 * @return RouteIndex Comprehensive index structure with multiple lookup strategies
 		 */
 		public function buildRouteIndex(array $routes): array {
 			// Initialize comprehensive index structure
@@ -90,10 +94,10 @@
 		 * 3. Multi-level static segment filtering
 		 * 4. Trie-based static route lookup
 		 *
-		 * @param array $requestUrl Parsed URL segments
+		 * @param list<string> $requestUrl Parsed URL segments
 		 * @param string $requestMethod HTTP method
-		 * @param array $routeIndex Complete route index with all filtering structures
-		 * @return array Filtered array of route candidates for matching
+		 * @param RouteIndex $routeIndex Complete route index with all filtering structures
+		 * @return list<Route> Filtered array of route candidates for matching
 		 */
 		public function getFilteredCandidates(array $requestUrl, string $requestMethod, array $routeIndex): array {
 			// Count the number of segments in the incoming request URL
@@ -159,9 +163,9 @@
 		/**
 		 * Get candidates based on segment count with proper wildcard handling
 		 * @param int $segmentCount Number of URL segments
-		 * @param array $routeIndex Complete route index
-		 * @param array $methodCandidates Routes already filtered by HTTP method
-		 * @return array Candidates that can handle the segment count
+		 * @param RouteIndex $routeIndex Complete route index
+		 * @param list<Route> $methodCandidates Routes already filtered by HTTP method
+		 * @return list<Route> Candidates that can handle the segment count
 		 */
 		private function getSegmentCountCandidates(int $segmentCount, array $routeIndex, array $methodCandidates): array {
 			// Phase 1: Get exact segment count matches
@@ -213,8 +217,8 @@
 		
 		/**
 		 * Index a single route using all available indexing strategies
-		 * @param array $route Route configuration to index
-		 * @param array &$index Reference to the index structure being built
+		 * @param Route $route Route configuration to index
+		 * @param RouteIndex &$index Reference to the index structure being built
 		 */
 		private function indexRoute(array $route, array &$index): void {
 			// Extract key route properties for indexing
@@ -277,9 +281,9 @@
 		 * - position 0, segment "api" -> all routes starting with /api/
 		 * - position 1, segment "users" -> all routes with users
 		 *
-		 * @param array $route Route configuration
-		 * @param array $compiledPattern Compiled route pattern segments
-		 * @param array &$index Reference to index structure
+		 * @param Route $route Route configuration
+		 * @param list<CompiledSegment> $compiledPattern Compiled route pattern segments
+		 * @param RouteIndex &$index Reference to index structure
 		 */
 		private function addToMultiLevelIndex(array $route, array $compiledPattern, array &$index): void {
 			$counter = count($compiledPattern);
@@ -310,9 +314,9 @@
 		 * Builds a prefix tree where each node represents a path segment.
 		 * This enables O(k) lookups where k is the number of segments.
 		 *
-		 * @param array $route Route configuration
+		 * @param Route $route Route configuration
 		 * @param string $routePath Complete route path
-		 * @param array &$index Reference to index structure
+		 * @param RouteIndex &$index Reference to index structure
 		 */
 		private function addToTrieIndex(array $route, string $routePath, array &$index): void {
 			// Parse route path into segments
@@ -337,7 +341,7 @@
 		
 		/**
 		 * Sort all index categories by priority for optimal matching order
-		 * @param array &$index Reference to index structure to sort
+		 * @param RouteIndex &$index Reference to index structure to sort
 		 */
 		private function sortIndexCategories(array &$index): void {
 			// Define sorting function for descending priority order (highest priority first)
@@ -380,7 +384,7 @@
 		
 		/**
 		 * Recursively sort routes in trie structure
-		 * @param array &$trieNode Reference to trie node to sort
+		 * @param array<string, mixed> &$trieNode Reference to trie node to sort
 		 */
 		private function sortTrieRoutes(array &$trieNode): void {
 			// Define sorting function for descending priority order (highest priority first)
@@ -415,8 +419,8 @@
 		 * of routes that need to be checked during route matching by pre-filtering
 		 * based on HTTP method and segment count.
 		 *
-		 * @param array $index Complete route index containing 'http_methods' and 'segment_count' arrays
-		 * @return array Statistics about filtering potential with reduction percentages
+		 * @param RouteIndex $index Complete route index containing 'http_methods' and 'segment_count' arrays
+		 * @return array{http_method_reduction: float|int, segment_count_reduction: float|int, combined_potential: string} Statistics about filtering potential with reduction percentages
 		 * @phpstan-ignore method.unused
 		 */
 		private function calculatePreFilterPotential(array $index): array {
@@ -424,7 +428,7 @@
 			// We use segment_count as the authoritative source since every route
 			// must have a segment count, making it the most complete dataset
 			$totalRoutes = array_reduce(
-				$index['segment_count'] ?? [],
+				$index['segment_count'],
 				fn($carry, $routes) => $carry + count($routes),
 				0
 			);
@@ -441,7 +445,7 @@
 			// Calculate average routes per HTTP method
 			// This tells us how much filtering by HTTP method helps on average
 			$avgRoutesPerMethod = 0;
-			$methodCount = count($index['http_methods'] ?? []);
+			$methodCount = count($index['http_methods']);
 			
 			if ($methodCount > 0) {
 				// Sum total routes across all HTTP methods
@@ -454,7 +458,7 @@
 			// Calculate average routes per segment count
 			// This tells us how much filtering by segment count helps on average
 			$avgRoutesPerSegmentCount = 0;
-			$segmentCountGroups = count($index['segment_count'] ?? []);
+			$segmentCountGroups = count($index['segment_count']);
 			
 			if ($segmentCountGroups > 0) {
 				// Sum total routes across all segment count groups
@@ -484,7 +488,7 @@
 		
 		/**
 		 * Calculate maximum depth of the trie structure
-		 * @param array $trieNode Trie node to analyze
+		 * @param array<string, mixed> $trieNode Trie node to analyze
 		 * @return int Maximum depth from this node
 		 * @phpstan-ignore method.unused
 		 */
@@ -516,7 +520,7 @@
 		
 		/**
 		 * Count total number of nodes in the trie structure
-		 * @param array $trieNode Trie node to count
+		 * @param array<string, mixed> $trieNode Trie node to count
 		 * @return int Total number of nodes
 		 * @phpstan-ignore method.unused
 		 */
@@ -547,7 +551,7 @@
 		/**
 		 * Parse route path into segments
 		 * @param string $routePath Route path to parse
-		 * @return array Array of path segments
+		 * @return list<string> Array of path segments
 		 */
 		private function parseRoutePath(string $routePath): array {
 			// Remove leading slash and split the path into segments using '/' as delimiter
@@ -565,9 +569,9 @@
 		
 		/**
 		 * Find intersection of two route arrays
-		 * @param array $routes1 First route array
-		 * @param array $routes2 Second route array
-		 * @return array Intersection of routes
+		 * @param list<Route> $routes1 First route array
+		 * @param list<Route> $routes2 Second route array
+		 * @return list<Route> Intersection of routes
 		 */
 		private function intersectRoutes(array $routes1, array $routes2): array {
 			$result = [];
@@ -603,15 +607,15 @@
 		
 		/**
 		 * Filter candidates by static segments at each position
-		 * @param array $candidates Current route candidates
-		 * @param array $requestUrl URL segments
-		 * @param array $routeIndex Complete route index
-		 * @return array Filtered candidates
+		 * @param list<Route> $candidates Current route candidates
+		 * @param list<string> $requestUrl URL segments
+		 * @param RouteIndex $routeIndex Complete route index
+		 * @return list<Route> Filtered candidates
 		 */
 		private function filterByStaticSegments(array $candidates, array $requestUrl, array $routeIndex): array {
 			// Extract the multi-level index structure that maps position -> static_segment -> routes
 			// This index allows O(1) lookup of routes that have specific static segments at specific positions
-			$multiLevelIndex = $routeIndex['multi_level'] ?? [];
+			$multiLevelIndex = $routeIndex['multi_level'];
 
 			// Iterate through each position in the request URL to progressively filter candidates
 			$counter = count($requestUrl);
@@ -645,9 +649,9 @@
 		
 		/**
 		 * Search trie index for exact static route match
-		 * @param array $requestUrl URL segments
-		 * @param array $trieIndex Trie structure
-		 * @return array Routes found in trie
+		 * @param list<string> $requestUrl URL segments
+		 * @param array<string, mixed> $trieIndex Trie structure
+		 * @return list<Route> Routes found in trie
 		 */
 		private function searchTrieIndex(array $requestUrl, array $trieIndex): array {
 			// Start at the root of the trie data structure
@@ -685,7 +689,7 @@
 		
 		/**
 		 * Check if route can handle variable segment counts (has wildcards)
-		 * @param array $route Route configuration
+		 * @param Route $route Route configuration
 		 * @return bool True if route has multi-wildcards
 		 */
 		private function routeCanHandleVariableSegments(array $route): bool {
