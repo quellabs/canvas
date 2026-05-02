@@ -41,7 +41,7 @@
 		 * - Query parameters, POST data, and uploaded files
 		 * - Cookies and session data (filtered for security)
 		 *
-		 * @return array Complete request data array
+		 * @return array<string, mixed> Complete request data array
 		 */
 		public function processRequestData(): array {
 			return [
@@ -70,7 +70,7 @@
 		 *
 		 * It uses both an explicit blacklist and pattern matching for comprehensive filtering.
 		 *
-		 * @return array Filtered headers safe for debugging/logging
+		 * @return array<string, string> Filtered headers safe for debugging/logging
 		 */
 		private function getFilteredHeaders(): array {
 			$headers = $this->request->headers->all();
@@ -95,7 +95,7 @@
 		 * - Truncating long string values to prevent memory issues
 		 * - Handling different data types appropriately
 		 *
-		 * @return array Filtered session data safe for debugging
+		 * @return array<string, mixed> Filtered session data safe for debugging
 		 */
 		private function getFilteredSession(): array {
 			// Early return if no session exists
@@ -139,7 +139,7 @@
 		
 		/**
 		 * Extract information about uploaded files
-		 * @return array Array of file information indexed by input name
+		 * @return array<string, array<string, mixed>> Array of file information indexed by input name
 		 */
 		private function getFileData(): array {
 			$files = [];
@@ -150,8 +150,8 @@
 		
 		/**
 		 * Recursively process file inputs to handle nested file arrays
-		 * @param array $fileInputs The file inputs to process (can be nested arrays)
-		 * @param array &$files Reference to the array being built with file data
+		 * @param array<string|int, mixed> $fileInputs The file inputs to process (can be nested arrays)
+		 * @param array<string, array<string, mixed>> &$files Reference to the array being built with file data
 		 * @param string $prefix Current prefix for nested file names
 		 */
 		private function processFileInputs(array $fileInputs, array &$files, string $prefix = ''): void {
@@ -179,7 +179,7 @@
 		 * - File extension and temporary path
 		 *
 		 * @param UploadedFile $file The uploaded file to analyze
-		 * @return array Comprehensive file information
+		 * @return array<string, mixed> Comprehensive file information
 		 */
 		private function extractFileInfo(UploadedFile $file): array {
 			return [

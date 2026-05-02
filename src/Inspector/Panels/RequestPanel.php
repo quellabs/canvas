@@ -21,7 +21,7 @@
 	 */
 	class RequestPanel implements InspectorPanelInterface {
 		
-		/** @var array Route data extracted from canvas events */
+		/** @var array<string, mixed> Route data extracted from canvas events */
 		private array $routeData = [];
 		
 		/**
@@ -70,7 +70,7 @@
 		 * Combines request data extracted via RequestExtractor with
 		 * route data collected from events.
 		 * @param Request $request The Symfony HTTP request object
-		 * @return array Associative array containing 'request' and 'route' data
+		 * @return array<string, mixed> Associative array containing 'request' and 'route' data
 		 */
 		public function getData(Request $request): array {
 			$requestExtractor = new RequestExtractor($request);
@@ -83,7 +83,7 @@
 		
 		/**
 		 * Get statistical information for the panel
-		 * @return array Statistics to display in the debug bar (e.g., execution time)
+		 * @return array<string, string> Statistics to display in the debug bar (e.g., execution time)
 		 */
 		public function getStats(): array {
 			return [

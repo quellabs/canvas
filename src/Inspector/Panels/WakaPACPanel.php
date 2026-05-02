@@ -68,7 +68,7 @@
 		 * No server-side data to provide.
 		 * Returns panel configuration consumed by the JS template as initial state.
 		 * @param Request $request
-		 * @return array
+		 * @return array<string, mixed>
 		 */
 		public function getData(Request $request): array {
 			return [
@@ -79,7 +79,7 @@
 		/**
 		 * Message counts are tracked client-side only.
 		 * The JS template updates the counter directly via DOM manipulation.
-		 * @return array
+		 * @return array<string, string>
 		 */
 		public function getStats(): array {
 			return [];

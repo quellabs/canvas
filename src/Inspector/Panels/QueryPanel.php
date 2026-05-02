@@ -15,7 +15,7 @@
 	 */
 	class QueryPanel implements InspectorPanelInterface {
 		
-		/** @var array<int, array> Collection of processed query events */
+		/** @var array<int, array<string, mixed>> Collection of processed query events */
 		private array $queries = [];
 		
 		/** @var float Total execution time for all queries in milliseconds */

@@ -62,7 +62,7 @@
 		
 		/**
 		 * Collect statistics from all registered panels
-		 * @return array Merged statistics from all panels
+		 * @return array<string, mixed> Merged statistics from all panels
 		 */
 		public function getStats(): array {
 			$stats = [];
@@ -114,7 +114,7 @@
 		
 		/**
 		 * Initialize panels from a list of class names
-		 * @param array $panels Array of fully qualified panel class names
+		 * @param array<int, class-string> $panels Array of fully qualified panel class names
 		 * @return void
 		 */
 		private function initializePanels(array $panels): void {
@@ -145,10 +145,10 @@
 		
 		/**
 		 * Generate the complete HTML output for the debug bar
-		 * @param array $jsTemplates JavaScript template functions for each panel
-		 * @param array $css CSS styles from all panels
-		 * @param array $panelData Data for all panels including metadata
-		 * @param array $stats Statistics to display in the header
+		 * @param array<string, array{function: string, code: string}> $jsTemplates JavaScript template functions for each panel
+		 * @param array<int, string> $css CSS styles from all panels
+		 * @param array<string, array<string, mixed>> $panelData Data for all panels including metadata
+		 * @param array<string, mixed> $stats Statistics to display in the header
 		 * @return string Complete HTML markup for the debug bar
 		 * @throws \JsonException
 		 */
