@@ -38,7 +38,8 @@
 		/**
 		 * Discovers and builds a complete list of all routes in the application
 		 * by scanning controller classes and their annotated methods
-		 * @return array Array of route configurations with controller, method, route, and aspects info
+		 * @param ConfigurationManager|null $config
+		 * @return array<int, array{name: string|null, http_methods: string[], controller: string, method: string, route: string, aspects: string[]}> Array of route configurations with controller, method, route, and aspects info
 		 * @throws \ReflectionException
 		 * @throws AnnotationReaderException
 		 */
@@ -50,11 +51,12 @@
 		/**
 		 * Discovers all routes by scanning controllers and their annotated methods.
 		 * Populates the route name cache as a side effect.
-		 * @return array Sorted array of route configurations
+		 * @return array<int, array{name: string|null, http_methods: string[], controller: string, method: string, route: string, aspects: string[]}> Sorted array of route configurations
 		 * @throws \ReflectionException
 		 * @throws AnnotationReaderException
 		 */
 		private function discoverRoutes(): array {
+			/** @var array<int, array{name: string|null, http_methods: string[], controller: string, method: string, route: string, aspects: string[]}> $result */
 			$result = [];
 			
 			// Iterate through each discovered controller class
@@ -84,6 +86,7 @@
 						$completeRoutePath = "/" . $routePrefix . ltrim($routePath, "/");
 						
 						// Create the record
+						/** @var array{name: string|null, http_methods: string[], controller: string, method: string, route: string, aspects: string[]} $record */
 						$record = [
 							'name'         => $routeAnnotation->getName(),    // The name of the route (can be null)
 							'http_methods' => $routeAnnotation->getMethods(), // A list of http methods
@@ -104,7 +107,7 @@
 			
 			// Sort routes by route first, controller name second, then by method name.
 			// This makes the route list more predictable and easier to debug.
-			usort($result, function ($a, $b) {
+			usort($result, function (array $a, array $b): int {
 				// Primary sort: by route
 				$routeComparison = $a['route'] <=> $b['route'];
 				
@@ -130,7 +133,7 @@
 		 * Retrieves all aspect interceptors (middleware/filters) applied to a specific method
 		 * @param string $class The fully qualified class name to inspect
 		 * @param string $method The method name to check for aspects
-		 * @return array Array of interceptor class names ordered by precedence (class-level first, then method-level)
+		 * @return array<int, string> Array of interceptor class names ordered by precedence (class-level first, then method-level)
 		 */
 		public function getAspectsOfMethod(string $class, string $method): array {
 			// Fetch all annotation classes in order and extract the interceptor class names
@@ -142,9 +145,9 @@
 		
 		/**
 		 * Filter routes based on configuration options
-		 * @param array $routes Collection of routes to filter
+		 * @param array<int, array{name: string|null, http_methods: string[], controller: string, method: string, route: string, aspects: string[]}> $routes Collection of routes to filter
 		 * @param ConfigurationManager $config Configuration manager containing filter options
-		 * @return array Filtered routes array
+		 * @return array<int, array{name: string|null, http_methods: string[], controller: string, method: string, route: string, aspects: string[]}> Filtered routes array
 		 */
 		protected function filterRoutes(array $routes, ConfigurationManager $config): array {
 			// Get the controller filter option from configuration
@@ -153,9 +156,9 @@
 			// Apply controller filter if specified
 			if ($controllerFilter) {
 				// Filter routes by controller name
-				$routes = array_filter($routes, function ($route) use ($controllerFilter) {
+				$routes = array_values(array_filter($routes, function ($route) use ($controllerFilter) {
 					return str_contains(strtolower($route['controller']), strtolower($controllerFilter));
-				});
+				}));
 			}
 			
 			// Return the filtered routes (or original routes if no filter applied)

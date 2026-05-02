@@ -69,6 +69,7 @@
 		private RouteCacheManager $cacheManager;
 		
 		// Performance optimization cache
+		/** @var array<string, mixed> */
 		private array $routeIndex = [];
 		
 		/**
@@ -85,7 +86,7 @@
 		/**
 		 * Resolves an HTTP request to find the first matching route
 		 * @param Request $request The incoming HTTP request to resolve
-		 * @return array Returns the first matched route info
+		 * @return array<string, mixed> Returns the first matched route info
 		 * @throws RouteNotFoundException When no matching route is found
 		 * @throws AnnotationReaderException On error reading annotations
 		 */
@@ -110,7 +111,7 @@
 		 * 4. Prefix trie lookup for static routes
 		 *
 		 * @param Request $request The HTTP request object
-		 * @return array Array of matched route objects, empty if no matches found
+		 * @return array<int, array<string, mixed>> Array of matched route objects, empty if no matches found
 		 * @throws AnnotationReaderException
 		 */
 		public function resolveAll(Request $request): array {
@@ -158,7 +159,7 @@
 		/**
 		 * Parse request URL into segments
 		 * @param string $requestUri Raw request URI
-		 * @return array Parsed URL segments
+		 * @return array<int, string> Parsed URL segments
 		 */
 		private function parseRequestUrl(string $requestUri): array {
 			$result = [];
@@ -174,7 +175,7 @@
 		
 		/**
 		 * Get or build route index for fast lookups
-		 * @return array Complete route index ready for lookups
+		 * @return array<string, mixed> Complete route index ready for lookups
 		 * @throws AnnotationReaderException
 		 */
 		private function getRouteIndex(): array {
