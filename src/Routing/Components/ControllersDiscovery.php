@@ -20,7 +20,7 @@
 		
 		/**
 		 * Gets controller directories and class names from packages
-		 * @return array Absolute paths to controller directories and/or fully qualified class names
+		 * @return array<string> Absolute paths to controller directories and/or fully qualified class names
 		 */
 		public function fetch(): array {
 			// Get contents of config/app.php
