@@ -48,20 +48,39 @@
 	
 	class Kernel {
 		
+		/** @var ConfigLoader Loads configuration files from disk */
 		private ConfigLoader $configLoader;
-		private SignalHub $signalHub; // Event system
-		private Signal $canvasQuerySignal; // Signal for performance measuring
-		private AnnotationReader $annotationsReader; // Annotation reading
+		
+		/** @var SignalHub Event system */
+		private SignalHub $signalHub;
+		
+		/** @var Signal Signal for performance measuring */
+		private Signal $canvasQuerySignal;
+		
+		/** @var AnnotationReader Annotation reading */
+		private AnnotationReader $annotationsReader;
+		
+		/** @var ConfigurationInterface Application configuration */
 		private ConfigurationInterface $configuration;
+		
+		/** @var ConfigurationInterface Inspector/debug bar configuration */
 		private ConfigurationInterface $inspector_configuration;
+		
+		/** @var bool Whether legacy fallback mode is enabled */
 		private bool $legacyEnabled;
+		
+		/** @var LegacyHandler|null Legacy fallback request handler, null when legacy is disabled */
 		private ?LegacyHandler $legacyFallbackHandler;
+		
+		/** @var Container Dependency injection container */
 		private Container $dependencyInjector;
+		
+		/** @var array<int, class-string<ErrorHandlerInterface>> */
 		private array $errorHandlers;
 		
 		/**
 		 * Kernel constructor
-		 * @param array $configuration
+		 * @param array<string, mixed> $configuration
 		 */
 		public function __construct(array $configuration = []) {
 			// Instantiate configuration loader
@@ -285,7 +304,7 @@
 		
 		/**
 		 * Provide debug information when var_dump() or similar functions are called.
-		 * @return array Associative array containing debug-relevant kernel properties
+		 * @return array<string, mixed> Associative array containing debug-relevant kernel properties
 		 */
 		public function __debugInfo(): array {
 			return [
