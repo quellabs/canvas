@@ -15,7 +15,7 @@
 		/**
 		 * Array to store collected debug events
 		 * Each event contains: signal name, data, and timestamp
-		 * @var array
+		 * @var array<array{signal: string, data: array<mixed>, timestamp: float}>
 		 */
 		private array $events = [];
 		
@@ -56,7 +56,7 @@
 		
 		/**
 		 * Returns all collected debug events
-		 * @return array Array of events, each containing signal name, data, and timestamp
+		 * @return array<array{signal: string, data: array<mixed>, timestamp: float}>
 		 */
 		public function getEvents(): array {
 			return $this->events;
@@ -65,8 +65,8 @@
 		/**
 		 * Filters and returns events that match any of the provided signal patterns
 		 * Supports both exact matches and wildcard patterns (using * as wildcard)
-		 * @param array $signalPatterns Array of signal names or patterns to match against
-		 * @return array Array of matching events, each containing signal name, data, and timestamp
+		 * @param array<string> $signalPatterns Array of signal names or patterns to match against
+		 * @return array<array{signal: string, data: array<mixed>, timestamp: float}>
 		 */
 		public function getEventsBySignals(array $signalPatterns): array {
 			return array_values(array_filter($this->events,
@@ -80,7 +80,7 @@
 		 * Convenience method to filter events by a single signal name or pattern
 		 * This is a wrapper around getEventsBySignals() for simpler single-pattern usage
 		 * @param string $signal The signal name or pattern to match against
-		 * @return array Array of matching events, each containing signal name, data, and timestamp
+		 * @return array<array{signal: string, data: array<mixed>, timestamp: float}>
 		 */
 		public function getEventsBySignal(string $signal): array {
 			return $this->getEventsBySignals([$signal]);
@@ -134,13 +134,13 @@
 			// \* becomes .* (matches zero or more characters)
 			// \? becomes .  (matches exactly one character)
 			$regexPattern = '/^' . str_replace(['*', '?'], ['.*', '.'], preg_quote($pattern, '/')) . '$/';
-			return preg_match($regexPattern, $signal);
+			return (bool) preg_match($regexPattern, $signal);
 		}
 		
 		/**
 		 * Checks if at least one element in the array satisfies the provided callback function.
 		 * Similar to JavaScript's Array.prototype.some() method.
-		 * @param array $array The array to test
+		 * @param array<mixed> $array The array to test
 		 * @param callable $callback The callback function to test each element.
 		 * @return bool Returns true if at least one element passes the test, false if none do
 		 */
