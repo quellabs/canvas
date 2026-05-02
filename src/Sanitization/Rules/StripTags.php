@@ -12,13 +12,13 @@
 	class StripTags implements SanitizationRuleInterface {
 		
 		/**
-		 * @var array Array of HTML tag names that should be preserved
+		 * @var array<string> Array of HTML tag names that should be preserved
 		 */
 		private array $allowedTags;
 		
 		/**
 		 * Constructor for StripTags sanitization rule.
-		 * @param array $allowedTags Array of HTML tag names that should be preserved
+		 * @param array<string> $allowedTags Array of HTML tag names that should be preserved
 		 */
 		public function __construct(array $allowedTags = []) {
 			$this->allowedTags = $allowedTags;
@@ -48,7 +48,7 @@
 		/**
 		 * Build allowed tags string in format required by strip_tags()
 		 * Converts ['p', 'br'] to '<p><br>'
-		 * @param array $tags
+		 * @param array<string> $tags
 		 * @return string
 		 */
 		private function transformAllowedTags(array $tags): string {

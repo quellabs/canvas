@@ -8,8 +8,8 @@
 	interface SanitizationInterface {
 		
 		/**
-		 * Returns an array of validation rules.
-		 * @return array An array of validation rules
+		 * Returns an array of sanitization rules.
+		 * @return array<string, mixed>
 		 */
 		public function getRules(): array;
 	}

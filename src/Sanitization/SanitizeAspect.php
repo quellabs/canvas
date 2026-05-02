@@ -5,6 +5,7 @@
 	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
 	use Quellabs\Canvas\Routing\Context\MethodContext;
 	use Quellabs\Canvas\Sanitization\Contracts\SanitizationInterface;
+	use Quellabs\Canvas\Sanitization\Contracts\SanitizationRuleInterface;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Quellabs\Contracts\DependencyInjection\ContainerInterface;
 	use Symfony\Component\HttpFoundation\Request;
@@ -93,7 +94,7 @@
 		/**
 		 * Sanitizes the request data (both POST and GET) using the provided rules.
 		 * @param Request $request The HTTP request to sanitize
-		 * @param array $rules The sanitization rules
+		 * @param array<string, array<SanitizationRuleInterface>> $rules The sanitization rules
 		 */
 		private function sanitizeRequestData(Request $request, array $rules): void {
 			// Capture original data
@@ -115,9 +116,9 @@
 		/**
 		 * Recursively applies sanitization rules to an array of data.
 		 * Handles nested arrays and applies specific sanitization rules based on field names.
-		 * @param array $data The data array to sanitize
-		 * @param array $rules The sanitization rules mapping field names to sanitizer arrays
-		 * @return array The sanitized data array
+		 * @param array<string, mixed> $data The data array to sanitize
+		 * @param array<string, array<SanitizationRuleInterface>> $rules The sanitization rules mapping field names to sanitizer arrays
+		 * @return array<string, mixed> The sanitized data array
 		 */
 		private function applySanitization(array $data, array $rules): array {
 			foreach ($data as $key => $value) {
@@ -142,7 +143,7 @@
 		 * Applies a chain of sanitizers to a single value.
 		 * Each sanitizer in the array is applied sequentially to the value.
 		 * @param mixed $value The value to sanitize
-		 * @param array $sanitizers Array of sanitizer objects that implement a sanitize() method
+		 * @param array<SanitizationRuleInterface> $sanitizers Array of sanitizer objects that implement a sanitize() method
 		 * @return mixed The sanitized value after all sanitizers have been applied
 		 */
 		private function sanitizeValue(mixed $value, array $sanitizers): mixed {
