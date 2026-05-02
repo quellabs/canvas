@@ -63,7 +63,7 @@
 		 *
 		 * @param string $className The fully qualified class name containing the method
 		 * @param string $methodName The name of the method to reflect
-		 * @return array Parameter metadata array, each entry optionally containing 'for_context'
+		 * @return array<int, array<string, mixed>> Parameter metadata array, each entry optionally containing 'for_context'
 		 */
 		protected function getMethodParameters(string $className, string $methodName): array {
 			// Delegate to parent for base parameter metadata (types, defaults, names)
@@ -103,8 +103,8 @@
 		 * Extends base parameter resolution to support @WithContext annotation.
 		 * Sets the current parameter's context before delegating to the base class,
 		 * so that resolveType() can pick it up and use the correct container clone.
-		 * @param array $param Parameter metadata, optionally containing 'context' from @WithContext
-		 * @param array $parameters User-provided parameter values
+		 * @param array<string, mixed> $param Parameter metadata, optionally containing 'context' from @WithContext
+		 * @param array<string, mixed> $parameters User-provided parameter values
 		 * @param MethodContext|null $methodContext Context object for dependency injection
 		 * @param string $className Class name for error reporting
 		 * @param string $methodName Method name for error reporting
@@ -133,8 +133,10 @@
 		
 		/**
 		 * Overrides base type resolution to use a contextual container clone when
-		 * @param string $type The fully qualified class or interface name to resolve
-		 * @param array $parameters Additional parameters for resolution
+		 * a @WithContext annotation has been declared for the current parameter.
+		 * @phpstan-param class-string $type
+		 * @param class-string $type The fully qualified class or interface name to resolve
+		 * @param array<string, mixed> $parameters Additional parameters for resolution
 		 * @param MethodContext|null $methodContext
 		 * @return object|null The resolved instance or null
 		 */
