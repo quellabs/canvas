@@ -28,7 +28,7 @@
 		/**
 		 * FileCache Constructor
 		 * @param string $namespace Cache context for namespacing (e.g., 'pages', 'data')
-		 * @param array $config Configuration
+		 * @param array<string, mixed> $config Configuration
 		 */
 		public function __construct(string $namespace = 'default', array $config = []) {
 			// Store namespace
@@ -205,7 +205,7 @@
 		
 		/**
 		 * Get cache statistics for monitoring
-		 * @return array Statistics array
+		 * @return array<string, mixed> Statistics array
 		 */
 		public function getStats(): array {
 			$contextPath = $this->getContextPath();
@@ -298,7 +298,7 @@
 		/**
 		 * Read and unserialize a cache file with proper locking
 		 * @param string $filePath File path
-		 * @return array|null Cache data or null if invalid/not found
+		 * @return array<string, mixed>|null Cache data or null if invalid/not found
 		 */
 		private function readCacheFileWithLock(string $filePath): ?array {
 			// Fast path: check if file exists before opening
@@ -477,7 +477,7 @@
 		
 		/**
 		 * Check if cached data has expired
-		 * @param array $data Cache data
+		 * @param array<string, mixed> $data Cache data
 		 * @return bool True if expired
 		 */
 		private function isExpired(array $data): bool {

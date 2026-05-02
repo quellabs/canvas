@@ -32,7 +32,7 @@
 		/**
 		 * MemcachedCache Constructor
 		 * @param string $namespace Cache context for namespacing (e.g., 'pages', 'data')
-		 * @param array $config Memcached connection configuration
+		 * @param array<string, mixed> $config Memcached connection configuration
 		 * @param int $maxRetries Maximum operation retry attempts
 		 */
 		public function __construct(
@@ -299,7 +299,7 @@
 		
 		/**
 		 * Get cache statistics for monitoring
-		 * @return array Cache statistics and server info
+		 * @return array<string, mixed> Cache statistics and server info
 		 */
 		public function getStats(): array {
 			try {
@@ -397,7 +397,7 @@
 		
 		/**
 		 * Initialize Memcached connection with configuration
-		 * @param array $config Memcached configuration
+		 * @param array<string, mixed> $config Memcached configuration
 		 * @throws \RuntimeException If connection fails
 		 */
 		private function initializeMemcachedConnection(array $config): void {

@@ -32,7 +32,7 @@
 		/**
 		 * RedisCache Constructor
 		 * @param string $namespace Cache context for namespacing (e.g., 'pages', 'data')
-		 * @param array $config Redis connection configuration
+		 * @param array<string, mixed> $config Redis connection configuration
 		 * @param int $maxRetries Maximum connection retry attempts
 		 * @throws \RuntimeException If redis extension is not available
 		 */
@@ -259,7 +259,7 @@
 		
 		/**
 		 * Get namespace-specific statistics for monitoring
-		 * @return array Namespace stats and general Redis info
+		 * @return array<string, mixed> Namespace stats and general Redis info
 		 */
 		public function getStats(): array {
 			try {
@@ -339,7 +339,7 @@
 		
 		/**
 		 * Initialize Redis connection with configuration
-		 * @param array $config Redis configuration
+		 * @param array<string, mixed> $config Redis configuration
 		 * @throws \RuntimeException If connection fails
 		 */
 		private function initializeRedisConnection(array $config): void {
@@ -435,7 +435,7 @@
 		
 		/**
 		 * Calculate the cache hit ratio from Redis stats
-		 * @param array $info Redis info array
+		 * @param array<string, mixed> $info Redis info array
 		 * @return float Hit ratio as percentage
 		 */
 		private function calculateHitRatio(array $info): float {
