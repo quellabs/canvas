@@ -237,7 +237,9 @@
 			
 			// Use method arguments for cache differentiation
 			// Same method with different arguments gets different cache entries
-			$argumentsKey = $this->generateArgumentsKey($context->getArguments());
+			$argumentsKey = $this->generateArgumentsKey(array_values($context->getArguments()));
+			
+			// Build cache key
 			$cacheKey = $methodKey . '.' . $argumentsKey;
 			
 			// Normalize and return the generated key
