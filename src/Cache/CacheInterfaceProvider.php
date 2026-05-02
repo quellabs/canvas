@@ -23,7 +23,7 @@
 		/**
 		 * The default cache namespace
 		 */
-		private const DEFAULT_NAMESPACE = "default";
+		private const string DEFAULT_NAMESPACE = "default";
 		
 		/**
 		 * Singleton instances of cache implementations
@@ -37,7 +37,7 @@
 		/** @var ContainerInterface Used for dependency injection */
 		private ContainerInterface $dependencyInjector;
 		
-		/** @var array Cache configuration loaded from config file */
+		/** @var array<string, mixed> Cache configuration loaded from config file */
 		private array $cacheConfig;
 		
 		/**
@@ -57,7 +57,7 @@
 		/**
 		 * Determines if this provider can handle the requested class.
 		 * @param string $className The fully qualified class name being requested
-		 * @param array $metadata Additional metadata (unused in this implementation)
+		 * @param array<string, mixed> $metadata Additional metadata (unused in this implementation)
 		 * @return bool True if this provider supports the requested class, false otherwise
 		 */
 		public function supports(string $className, array $metadata = []): bool {
@@ -67,8 +67,8 @@
 		/**
 		 * Creates and returns the cache interface instance.
 		 * @param string $className The class name being requested (should be CacheInterface::class)
-		 * @param array $dependencies Dependencies for the class (unused since we return existing instance)
-		 * @param array $metadata Metadata as passed by Discover - may contain 'provider' key
+		 * @param array<string, mixed> $dependencies Dependencies for the class (unused since we return existing instance)
+		 * @param array<string, mixed> $metadata Metadata as passed by Discover - may contain 'provider' key
 		 * @param MethodContextInterface|null $methodContext Context about the method requesting the cache
 		 * @return CacheInterface The cache interface implementation
 		 * @throws AnnotationReaderException
@@ -127,7 +127,8 @@
 		/**
 		 * Resolves cache context from method annotations.
 		 * @param MethodContextInterface|null $methodContext The method context to analyze
-		 * @return array Contains namespace, params, and hash for caching
+		 * @param array<string, mixed> $dependencies Dependencies passed to createInstance
+		 * @return array{namespace: string, params: array<string, mixed>, driver: string|null, hash: string} Contains namespace, params, and hash for caching
 		 * @throws AnnotationReaderException
 		 */
 		private function resolveContext(?MethodContextInterface $methodContext, array $dependencies): array {
@@ -165,7 +166,7 @@
 		
 		/**
 		 * Loads cache configuration from the config file.
-		 * @return array The cache configuration array
+		 * @return array<string, mixed> The cache configuration array
 		 * @throws \RuntimeException If the configuration file exists but cannot be loaded
 		 */
 		private function loadCacheConfig(): array {
@@ -192,7 +193,7 @@
 		/**
 		 * Resolves and returns the cache provider class name based on configuration.
 		 * @param string|null $provider Specific provider name to use, or null for default
-		 * @return string The fully qualified class name of the cache provider
+		 * @return class-string The fully qualified class name of the cache provider
 		 * @throws \InvalidArgumentException When specified provider is not configured
 		 */
 		private function getProviderClass(?string $provider): string {
@@ -224,7 +225,7 @@
 		/**
 		 * Gets connection configuration for a specific cache provider.
 		 * @param string|null $providerName The provider name (e.g., 'redis', 'memcached')
-		 * @return array Connection configuration array (empty if not found)
+		 * @return array<string, mixed> Connection configuration array (empty if not found)
 		 */
 		private function getConnectionConfig(?string $providerName): array {
 			// If no provider name, try to get config for the default provider
