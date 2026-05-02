@@ -107,7 +107,7 @@
 		 * Extracts only $_POST and $_GET data from the request.
 		 * Does NOT handle JSON request bodies.
 		 * @param Request $request The HTTP request
-		 * @return array The merged POST and GET data (POST takes precedence)
+		 * @return array<string, mixed> The merged POST and GET data (POST takes precedence)
 		 */
 		protected function extractRequestData(Request $request): array {
 			// Get POST data ($_POST)
@@ -123,7 +123,7 @@
 		/**
 		 * Creates the JSON error response for validation failures
 		 * Override this method to customize the error response format
-		 * @param array $errors
+		 * @param array<string, list<string>> $errors
 		 * @return JsonResponse
 		 */
 		protected function createValidationErrorResponse(array $errors): JsonResponse {

@@ -9,7 +9,7 @@
 		
 		/**
 		 * Returns an array of validation rules.
-		 * @return array An array of validation rules
+		 * @return array<string, mixed> An array of validation rules
 		 */
 		public function getRules(): array;
 	}

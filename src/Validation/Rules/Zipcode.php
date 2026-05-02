@@ -9,7 +9,7 @@
 		
 		/**
 		 * List of zipcode formats per country (ISO2)
-		 * @var array
+		 * @var array<string, list<string>>
 		 */
 		protected array $m_zipcode_format;
 		

@@ -8,13 +8,13 @@
 		
 		/**
 		 * Values to check
-		 * @var array
+		 * @var list<mixed>
 		 */
 		private array $values;
 		
 		/**
 		 * ValueIn constructor
-		 * @param array $values
+		 * @param list<mixed> $values
 		 * @param string|null $message
 		 */
 		public function __construct(array $values, ?string $message=null) {

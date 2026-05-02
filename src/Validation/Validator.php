@@ -13,9 +13,9 @@
 		
 		/**
 		 * Validates data against the given validation rules.
-		 * @param array $data The data to validate
+		 * @param array<string, mixed> $data The data to validate
 		 * @param ValidationInterface $rules The validation rules
-		 * @return array Array of validation errors grouped by field name (using dot notation for nested fields)
+		 * @return array<string, list<string>> Array of validation errors grouped by field name (using dot notation for nested fields)
 		 */
 		public function validate(array $data, ValidationInterface $rules): array {
 			$errors = [];
@@ -25,9 +25,9 @@
 		
 		/**
 		 * Recursively validates fields, handling nested field structures
-		 * @param array $rules The validation rules (can be nested)
-		 * @param array $data The data to validate (can be nested)
-		 * @param array &$errors Reference to the errors array to populate (uses flattened keys with dot notation)
+		 * @param array<string, mixed> $rules The validation rules (can be nested)
+		 * @param array<string, mixed> $data The data to validate (can be nested)
+		 * @param array<string, list<string>> &$errors Reference to the errors array to populate (uses flattened keys with dot notation)
 		 * @param string $prefix Current field path prefix for building dot notation keys
 		 */
 		private function validateFields(array $rules, array $data, array &$errors, string $prefix = ''): void {
@@ -59,7 +59,7 @@
 		
 		/**
 		 * Determines if an array represents a nested field structure or a list of validators
-		 * @param array $validators The array to check
+		 * @param array<string, mixed> $validators The array to check
 		 * @return bool True if it's a nested field structure, false if it's validators
 		 */
 		private function isNestedFieldStructure(array $validators): bool {
@@ -94,7 +94,7 @@
 		 * @param string $fieldName The name of the field being validated
 		 * @param mixed $fieldValue The value of the field
 		 * @param mixed $validators The validator(s) for this field
-		 * @return array Array of validation errors for this field
+		 * @return list<string> Array of validation errors for this field
 		 */
 		private function validateSingleField(string $fieldName, $fieldValue, $validators): array {
 			$errors = [];
@@ -139,7 +139,7 @@
 		 * Replaces template variables in error messages with actual values
 		 * Uses {{variable_name}} syntax for variable placeholders
 		 * @param string $string The error string containing variable placeholders
-		 * @param array $variables Associative array of variable names and their values
+		 * @param array<string, mixed> $variables Associative array of variable names and their values
 		 * @return string The error string with variables replaced by actual values
 		 */
 		private function replaceVariablesInErrorString(string $string, array $variables): string {

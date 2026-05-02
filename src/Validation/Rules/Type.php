@@ -18,10 +18,10 @@
 		/** @var string The error message when validation fails */
 		protected string $defaultMessage = "";
 		
-		/** @var array List of types that can be checked using is_* functions */
+		/** @var list<string> List of types that can be checked using is_* functions */
 		protected array $is_a_types;
 		
-		/** @var array List of types that can be checked using ctype_* functions */
+		/** @var list<string> List of types that can be checked using ctype_* functions */
 		protected array $ctype_types;
 		
 		/**

@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Validation\Rules;
 	
 	use Quellabs\Canvas\Validation\Foundation\RulesBase;
+use Quellabs\Canvas\Validation\Contracts\ValidationRuleInterface;
 	
 	/**
 	 * Validation rule that checks if at least one of the provided conditions is satisfied.
@@ -12,13 +13,13 @@
 		
 		/**
 		 * Array of validation rule objects that will be tested
-		 * @var array
+		 * @var list<ValidationRuleInterface>
 		 */
 		protected array $conditions;
 		
 		/**
 		 * Constructor for AtLeastOneOf validation rule
-		 * @param array $conditions Array of validation rule objects that implement ValidationRuleInterface
+		 * @param list<ValidationRuleInterface> $conditions Array of validation rule objects that implement ValidationRuleInterface
 		 */
 		public function __construct(array $conditions = [], ?string $message=null) {
 			parent::__construct($message);

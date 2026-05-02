@@ -27,7 +27,7 @@
 		/**
 		 * Replaces variables in an error string with their corresponding values.
 		 * @param string $string The error string containing variables.
-		 * @param array $variables An associative array of variable names and their values.
+		 * @param array<string, mixed> $variables An associative array of variable names and their values.
 		 * @return string The error string with variables replaced.
 		 */
 		protected function replaceVariablesInErrorString(string $string, array $variables): string {
