@@ -19,7 +19,7 @@
 		
 		/**
 		 * Get all arguments passed to the method.
-		 * @return array Array of method arguments in order
+		 * @return array<string, mixed> Array of method arguments in order
 		 */
 		public function getArguments(): array;
 		

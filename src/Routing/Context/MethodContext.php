@@ -12,10 +12,14 @@
 	 */
 	class MethodContext implements MethodContextInterface {
 		
+		/** @var array<string, mixed> */
 		private array $pattern;
+		
 		private Request $request;
 		private object $class;
 		private string $methodName;
+		
+		/** @var array<string, mixed> */
 		private array $arguments;
 		
 		/**
@@ -23,7 +27,8 @@
 		 * @param Request $request
 		 * @param object $target The original object instance on which the method is being called
 		 * @param string $methodName Name of the method being invoked
-		 * @param array $arguments Array of arguments passed to the method
+		 * @param array<string, mixed> $arguments Array of arguments passed to the method
+		 * @param array<string, mixed> $pattern Matched pattern
 		 */
 		public function __construct(
 			Request $request,              // The request object
@@ -54,7 +59,7 @@
 		public function getClassName(): string {
 			return get_class($this->class);
 		}
-
+		
 		/**
 		 * Get the name of the method being called.
 		 * @return string The method name
@@ -65,7 +70,7 @@
 		
 		/**
 		 * Get all arguments passed to the method.
-		 * @return array Array of method arguments in order
+		 * @return array<string, mixed> Array of method arguments in order
 		 */
 		public function getArguments(): array {
 			return $this->arguments;
@@ -90,7 +95,7 @@
 		
 		/**
 		 * Returns the pattern that was matched
-		 * @return array
+		 * @return array<string, mixed>
 		 */
 		public function getPattern(): array {
 			return $this->pattern;
