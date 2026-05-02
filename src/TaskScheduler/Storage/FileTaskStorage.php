@@ -12,6 +12,7 @@
 		private int $maxLockWaitTime;
 		
 		// Track acquired locks to ensure proper ownership
+		/** @var array<string, array{pid: int, time: int}> */
 		private array $acquiredLocks = [];
 		
 		// Exponential backoff constants
@@ -265,7 +266,7 @@
 		
 		/**
 		 * Check if task is stale based on process and time
-		 * @param array $taskData
+		 * @param array<string, mixed> $taskData
 		 * @return bool
 		 */
 		private function isTaskStale(array $taskData): bool {
@@ -302,7 +303,7 @@
 		/**
 		 * Read and parse task file
 		 * @param string $taskFile
-		 * @return array|null
+		 * @return array<string, mixed>|null
 		 */
 		private function readTaskFile(string $taskFile): ?array {
 			// Read the file contents, suppressing warnings if file doesn't exist or can't be read
@@ -471,7 +472,7 @@
 		/**
 		 * Read lock file data and check if lock is stale
 		 * @param string $lockFile
-		 * @return array|null
+		 * @return array{pid: int, time: int}|null
 		 */
 		private function readLockFile(string $lockFile): ?array {
 			// Read the lock file contents, suppressing warnings if file doesn't exist
@@ -501,7 +502,7 @@
 		
 		/**
 		 * Check if a lock is stale based on timeout and process status
-		 * @param array $lockData Lock data containing 'pid' and 'time' keys
+		 * @param array{pid: int, time: int} $lockData Lock data containing 'pid' and 'time' keys
 		 * @return bool True if the lock is stale, false if still valid
 		 */
 		private function isLockStale(array $lockData): bool {

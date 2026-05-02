@@ -106,7 +106,7 @@ PHP;
 		 * Creates a subprocess with proper input/output pipes for communication and monitoring.
 		 * @param string $script Path to the script to execute
 		 * @param string $taskName Name of the task for error reporting
-		 * @return array Array containing the process resource and pipe handles
+		 * @return array{process: resource, pipes: array<int, resource>} Array containing the process resource and pipe handles
 		 * @throws TaskException If the process fails to start
 		 */
 		private function startTaskProcess(string $script, string $taskName): array {
@@ -146,7 +146,7 @@ PHP;
 		 * Monitors the running process and handles timeout enforcement.
 		 * Continuously checks the process status and reads output streams
 		 * while enforcing the timeout constraint.
-		 * @param array $processData Array containing process resource and pipes
+		 * @param array{process: resource, pipes: array<int, resource>} $processData Array containing process resource and pipes
 		 * @param string $taskName Name of the task for logging and error reporting
 		 * @throws TaskTimeoutException|TaskException If the process exceeds the timeout
 		 */
@@ -211,7 +211,7 @@ PHP;
 		/**
 		 * Handles the completion of a process execution.
 		 * @param resource $process The completed process resource
-		 * @param array $pipes Array of pipe handles
+		 * @param array<int, resource> $pipes Array of pipe handles
 		 * @param string $taskName Name of the task for logging
 		 * @param string $output Stdout output collected during execution
 		 * @param string $errorOutput Stderr output collected during execution
