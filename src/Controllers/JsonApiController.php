@@ -215,7 +215,7 @@
 		
 		/**
 		 * Validate that the request data follows JSON:API specification structure
-		 * @param array $data The parsed JSON request data
+		 * @param array<string, mixed> $data The parsed JSON request data
 		 * @return JsonResponse|null Error response if validation fails, null if valid
 		 */
 		protected function validateJsonApiStructure(array $data): ?JsonResponse {
@@ -248,7 +248,7 @@
 		/**
 		 * Validate that all provided attributes can be mapped to entity properties
 		 * @param object $entity The entity instance to validate against
-		 * @param array $attributes Associative array of attribute name => value pairs
+		 * @param array<string, mixed> $attributes Associative array of attribute name => value pairs
 		 * @return JsonResponse|null Error response if validation fails, null if valid
 		 */
 		protected function validateAttributes(object $entity, array $attributes): ?JsonResponse {
@@ -281,7 +281,7 @@
 		/**
 		 * Map JSON:API attributes to entity properties
 		 * @param object $entity The entity instance to update
-		 * @param array $attributes Associative array of attribute name => value pairs
+		 * @param array<string, mixed> $attributes Associative array of attribute name => value pairs
 		 */
 		protected function mapAttributesToEntity(object $entity, array $attributes): void {
 			foreach ($attributes as $key => $value) {
@@ -333,7 +333,7 @@
 		 * Get the fully qualified entity class name for this controller
 		 * This method must be implemented by concrete controllers to specify
 		 * which entity class they operate on (e.g., App\Entity\User::class)
-		 * @return string The fully qualified class name of the entity
+		 * @return class-string The fully qualified class name of the entity
 		 */
 		abstract protected function getEntityClass(): string;
 		

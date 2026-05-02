@@ -52,7 +52,7 @@
 		/**
 		 * Render a template and return an HTTP response.
 		 * @param string $template The template file path to render (relative to template directory)
-		 * @param array $data Associative array of data to pass to the template as variables
+		 * @param array<string, mixed> $data Associative array of data to pass to the template as variables
 		 * @param int $statusCode The HTTP status code to return (default: 200 OK)
 		 * @return Response The HTTP response with the rendered template content
 		 * @throws TemplateRenderException When template rendering fails (file not found, syntax error, etc.)
@@ -77,7 +77,7 @@
 		
 		/**
 		 * Return a JSON response.
-		 * @param array|\JsonSerializable $data The data to serialize as JSON
+		 * @param array<string, mixed>|\JsonSerializable $data The data to serialize as JSON
 		 * @param int $statusCode The HTTP status code to return (default: 200 OK)
 		 * @return JsonResponse The JSON response with appropriate headers
 		 */

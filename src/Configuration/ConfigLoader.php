@@ -10,7 +10,7 @@
 		
 		/**
 		 * Cache
-		 * @var array
+		 * @var array<string, ConfigurationInterface>
 		 */
 		private array $cache = [];
 		

@@ -13,12 +13,12 @@
 	 */
 	class Configuration implements ConfigurationInterface {
 
-		/** @var array The internal configuration storage array */
+		/** @var array<string, mixed> The internal configuration storage array */
 		private array $config;
 		
 		/**
 		 * Initialize the configuration with optional initial data
-		 * @param array $config Initial configuration array (default: empty array)
+		 * @param array<string, mixed> $config Initial configuration array (default: empty array)
 		 */
 		public function __construct(array $config = []) {
 			$this->config = $config;
@@ -27,7 +27,7 @@
 		/**
 		 * Get an iterator for the configuration data
 		 * Allows the configuration object to be used in foreach loops
-		 * @return Traversable Iterator over the configuration array
+		 * @return \ArrayIterator<string, mixed> Iterator over the configuration array
 		 */
 		public function getIterator(): Traversable {
 			return new \ArrayIterator($this->config);
@@ -35,7 +35,7 @@
 
 		/**
 		 * Get the entire configuration array
-		 * @return array Complete configuration data
+		 * @return array<string, mixed> Complete configuration data
 		 */
 		public function all(): array {
 			return $this->config;
@@ -88,7 +88,7 @@
 		
 		/**
 		 * Get all configuration keys
-		 * @return array Array of all configuration keys
+		 * @return array<int, string> Array of all configuration keys
 		 */
 		public function keys(): array {
 			return array_keys($this->config);
@@ -138,7 +138,7 @@
 		 * - Other types are wrapped in an array
 		 *
 		 * @param mixed $value Value to cast to array
-		 * @return array The array representation of the value
+		 * @return array<int|string, mixed> The array representation of the value
 		 */
 		private function castToArray(mixed $value): array {
 			// Convert comma-separated strings to arrays
