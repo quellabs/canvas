@@ -22,12 +22,12 @@
 		 * position in the URL being processed. The segment contains metadata about
 		 * how to perform the match (e.g., static text, parameter pattern, constraints).
 		 *
-		 * @param array $segment The compiled route segment containing matching rules,
-		 *                      patterns, parameter names, and other metadata needed
-		 *                      to perform the match operation
+		 * @param array<string, mixed> $segment The compiled route segment containing matching rules,
+		 *                                      patterns, parameter names, and other metadata needed
+		 *                                      to perform the match operation
 		 * @param MatchingContext $context The matching context containing the current
-		 *                               URL being processed, current position, and
-		 *                               other state information needed for matching
+		 *                                 URL being processed, current position, and
+		 *                                 other state information needed for matching
 		 * @return MatchResult The result of the matching attempt, indicating success
 		 *                     or failure, any captured parameters, and how many URL
 		 *                     segments were consumed during the match

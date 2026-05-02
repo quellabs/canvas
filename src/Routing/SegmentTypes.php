@@ -26,7 +26,7 @@
 		/**
 		 * Check if segment type represents a multi-wildcard pattern
 		 * Handles both anonymous (**) and named ({path:**}) wildcards
-		 * @param array $segment
+		 * @param array<string, mixed> $segment
 		 * @return bool
 		 */
 		public static function isMultiWildcard(array $segment): bool {
@@ -38,7 +38,7 @@
 		
 		/**
 		 * Check if segment type represents any wildcard pattern
-		 * @param array $segment
+		 * @param array<string, mixed> $segment
 		 * @return bool
 		 */
 		public static function isWildcard(array $segment): bool {
@@ -51,7 +51,7 @@
 		
 		/**
 		 * Check if segment type is static (no variables)
-		 * @param array $segment
+		 * @param array<string, mixed> $segment
 		 * @return bool
 		 */
 		public static function isStatic(array $segment): bool {
@@ -60,7 +60,7 @@
 		
 		/**
 		 * Check if segment type contains variables
-		 * @param array $segment
+		 * @param array<string, mixed> $segment
 		 * @return bool
 		 */
 		public static function hasVariables(array $segment): bool {

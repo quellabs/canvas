@@ -17,10 +17,10 @@
 		/**
 		 * Matches a variable segment against the current URL segment(s).
 		 *
-		 * @param array $segment The segment configuration containing:
-		 *                      - 'variable_name': The name of the variable to store the captured value
-		 *                      - 'pattern': Optional regex pattern to validate the segment
-		 *                      - 'is_multi_wildcard': Boolean indicating if this captures multiple segments
+		 * @param array<string, mixed> $segment The segment configuration containing:
+		 *  - 'variable_name': The name of the variable to store the captured value
+		 *  - 'pattern': Optional regex pattern to validate the segment
+		 *  - 'is_multi_wildcard': Boolean indicating if this captures multiple segments
 		 * @param MatchingContext $context The current matching context with URL segments and variables
 		 * @return MatchResult The result of the matching attempt
 		 */

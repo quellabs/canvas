@@ -18,7 +18,7 @@
 		
 		/**
 		 * Matches a segment that contains both literal text and variables.
-		 * @param array $segment
+		 * @param array<string, mixed> $segment
 		 * @param MatchingContext $context
 		 * @return MatchResult
 		 */
@@ -40,7 +40,7 @@
 		/**
 		 * Handle partial variables with multi-wildcard components
 		 * Examples: "api-{**}", "file-{path:**}"
-		 * @param array $segment The segment configuration containing literal_prefix and variable_name
+		 * @param array<string, mixed> $segment The segment configuration containing literal_prefix and variable_name
 		 * @param MatchingContext $context The current matching context with URL segments and variables
 		 * @return MatchResult The result of the matching attempt (NO_MATCH or COMPLETE_MATCH)
 		 */
@@ -103,7 +103,7 @@
 		/**
 		 * Match using pre-compiled regex pattern
 		 * Examples: "user-{id:\d+}", "file-{name}-{ext}"
-		 * @param array $segment The segment configuration containing compiled_regex and variable_names
+		 * @param array<string, mixed> $segment The segment configuration containing compiled_regex and variable_names
 		 * @param MatchingContext $context The current matching context with URL segments and variables
 		 * @return MatchResult The result of the matching attempt (NO_MATCH or CONTINUE_MATCHING)
 		 */
@@ -131,7 +131,7 @@
 		
 		/**
 		 * Match using pattern metadata or legacy algorithm
-		 * @param array $segment The route segment configuration containing pattern data
+		 * @param array<string, mixed> $segment The route segment configuration containing pattern data
 		 * @param MatchingContext $context The current matching context with URL information
 		 * @return MatchResult The result of the matching operation
 		 */
@@ -155,7 +155,7 @@
 		
 		/**
 		 * Optimized matching using pre-calculated pattern metadata
-		 * @param array $metadata
+		 * @param array{min_length: int, literal_prefix: string, literal_suffix: string, prefix_length: int, suffix_length: int, variable_name: string} $metadata
 		 * @param string $urlSegment The URL segment to match against the pattern
 		 * @param MatchingContext $context Context object for storing extracted variables
 		 * @return MatchResult Result indicating match success and next action
@@ -213,7 +213,7 @@
 		
 		/**
 		 * Legacy matching algorithm for backward compatibility
-		 * @param array $segment
+		 * @param array<string, mixed> $segment
 		 * @param string $currentUrlSegment
 		 * @param MatchingContext $context
 		 * @return MatchResult

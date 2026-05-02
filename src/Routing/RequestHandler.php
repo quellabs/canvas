@@ -31,7 +31,7 @@
 		/**
 		 * Process an HTTP request through the controller system and return the response
 		 * @param Request $request The incoming HTTP request object
-		 * @param array|null $urlData
+		 * @param array<string, mixed>|null $urlData
 		 * @param bool $isLegacyPath
 		 * @return Response HTTP response to be sent back to the client
 		 * @throws AnnotationReaderException|RouteNotFoundException|\ReflectionException
@@ -68,7 +68,7 @@
 		/**
 		 * Prepare the request for processing by ensuring session availability and registering providers
 		 * @param Request $request The incoming HTTP request
-		 * @return array Array containing the registered providers for cleanup
+		 * @return array{request: SimpleBinding, session: SimpleBinding} Array containing the registered providers for cleanup
 		 */
 		private function prepareRequest(Request $request): array {
 			// Check if session exists, create if needed
@@ -91,7 +91,7 @@
 		
 		/**
 		 * Clean up registered providers from the dependency injector
-		 * @param array $providers Array of providers to unregister
+		 * @param array{request: SimpleBinding, session: SimpleBinding} $providers Array of providers to unregister
 		 */
 		private function cleanupRequest(array $providers): void {
 			$this->kernel->getDependencyInjector()->unregister($providers['session']);
@@ -101,9 +101,9 @@
 		/**
 		 * Resolves routes using modern annotation-based routing system
 		 * @param Request $request The incoming HTTP request to resolve
-		 * @param array|null $urlData Reference parameter to store resolved route data         *
+		 * @param array<string, mixed>|null $urlData Reference parameter to store resolved route data
 		 * @return Response The response from the matched route handler
-		 * @param-out array $urlData The resolved URL data (never null after execution)
+		 * @param-out array<string, mixed> $urlData The resolved URL data (never null after execution)
 		 * @throws RouteNotFoundException When no matching route is found
 		 * @throws AnnotationReaderException|\ReflectionException When annotation parsing fails
 		 */
@@ -137,7 +137,7 @@
 		 * Execute a Canvas route
 		 * Creates MethodContext and registers it with DI for autowiring
 		 * @param Request $request
-		 * @param array $urlData
+		 * @param array<string, mixed> $urlData
 		 * @return Response
 		 * @throws AnnotationReaderException
 		 * @throws \ReflectionException
@@ -163,7 +163,7 @@
 				target: $controller,
 				methodName: $urlData["method"],
 				arguments: $urlData["variables"],
-				pattern: $urlData["pattern"]
+				pattern: $urlData["compiled_pattern"]
 			);
 			
 			// Register context with DI for autowiring into services

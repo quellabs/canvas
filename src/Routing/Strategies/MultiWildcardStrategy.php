@@ -20,7 +20,7 @@
 		 * This method determines how many URL segments should be consumed by the wildcard
 		 * based on the remaining route segments that need to be matched after this wildcard.
 		 *
-		 * @param array $segment The route segment containing wildcard information
+		 * @param array<string, mixed> $segment The route segment containing wildcard information
 		 * @param MatchingContext $context The current matching context with URL and route state
 		 * @return MatchResult The result of the matching attempt
 		 */

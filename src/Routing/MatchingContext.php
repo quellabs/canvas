@@ -10,16 +10,22 @@
 	 * matching process without exposing internal implementation details.
 	 */
 	class MatchingContext {
+		/** @var string[] */
 		private array $requestUrl;
+		
+		/** @var array<int, array<string, mixed>> */
 		private array $compiledPattern;
+		
+		/** @var array<string, string|string[]> */
 		private array $variables = [];
+		
 		private int $urlIndex = 0;
 		private int $routeIndex = 0;
 		
 		/**
 		 * MatchingContext constructor
-		 * @param array $requestUrl
-		 * @param array $compiledPattern
+		 * @param string[] $requestUrl
+		 * @param array<int, array<string, mixed>> $compiledPattern
 		 */
 		public function __construct(array $requestUrl, array $compiledPattern) {
 			$this->requestUrl = $requestUrl;
@@ -36,7 +42,7 @@
 		
 		/**
 		 * Get the current route segment being processed
-		 * @return array
+		 * @return array<string, mixed>
 		 */
 		public function getCurrentRouteSegment(): array {
 			return $this->compiledPattern[$this->routeIndex];
@@ -52,7 +58,7 @@
 		
 		/**
 		 * Get all remaining URL segments from current position
-		 * @return array
+		 * @return string[]
 		 */
 		public function getRemainingUrlSegments(): array {
 			return array_slice($this->requestUrl, $this->urlIndex);
@@ -60,7 +66,7 @@
 		
 		/**
 		 * Get all remaining route segments after current position
-		 * @return array
+		 * @return array<int, array<string, mixed>>
 		 */
 		public function getRemainingRouteSegments(): array {
 			return array_slice($this->compiledPattern, $this->routeIndex + 1);
@@ -118,7 +124,7 @@
 		
 		/**
 		 * Get all collected variables
-		 * @return array
+		 * @return array<string, string|string[]>
 		 */
 		public function getVariables(): array {
 			return $this->variables;

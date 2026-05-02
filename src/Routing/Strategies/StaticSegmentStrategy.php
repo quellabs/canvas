@@ -21,7 +21,7 @@
 		/**
 		 * Matches a static segment against the current URL segment
 		 *
-		 * @param array $segment The route segment definition containing the expected static value
+		 * @param array<string, mixed> $segment The route segment definition containing the expected static value
 		 * @param MatchingContext $context The current matching context with URL information
 		 * @return MatchResult Either NO_MATCH if segments don't match, or CONTINUE_MATCHING if they do
 		 */

@@ -20,7 +20,7 @@
 		 * variable array (for '*' wildcards) or as a named variable based on the
 		 * segment configuration.
 		 *
-		 * @param array $segment The route segment configuration containing variable_name
+		 * @param array<string, mixed> $segment The route segment configuration containing variable_name
 		 * @param MatchingContext $context The matching context with current URL state
 		 * @return MatchResult Always returns CONTINUE_MATCHING to proceed with next segment
 		 */
