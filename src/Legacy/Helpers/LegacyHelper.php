@@ -67,10 +67,20 @@
 		 * Wrapper class for mysqli_stmt that monitors execute() calls
 		 */
 		class CanvasMysqliStatement {
+			/** @var mysqli_stmt MySQL statement */
 			private mysqli_stmt $statement;
+			
+			/** @var string The query to execute */
 			private string $query;
+			
+			/** @var array<int, mixed> */
 			private array $boundParams = [];
 			
+			/**
+			 * Constructor
+			 * @param mysqli_stmt $statement
+			 * @param string $query
+			 */
 			public function __construct(mysqli_stmt $statement, string $query) {
 				$this->statement = $statement;
 				$this->query = $query;
@@ -124,17 +134,20 @@
 				return $result;
 			}
 			
-			// Delegate all other method calls to the original mysqli_stmt
-			public function __call(string $method, array $args) {
+			/**
+			 * Forward all other mysqli methods
+			 * @param array<int, mixed> $args
+			 * @return mixed
+			 */
+			public function __call(string $method, array $args): mixed {
 				return $this->statement->$method(...$args);
 			}
 			
-			// Delegate property access to the original mysqli_stmt
-			public function __get(string $name) {
+			public function __get(string $name): mixed {
 				return $this->statement->$name;
 			}
 			
-			public function __set(string $name, $value) {
+			public function __set(string $name, mixed $value): void {
 				$this->statement->$name = $value;
 			}
 		}
@@ -210,7 +223,7 @@
 			
 			/**
 			 * Monitored execute method
-			 * @param array|null $params Parameters to bind
+			 * @param array<int|string, mixed>|null $params Parameters to bind
 			 * @return bool Success status
 			 */
 			public function execute(?array $params = null): bool {
@@ -240,17 +253,19 @@
 				return $result;
 			}
 			
-			// Delegate all other method calls to the original PDOStatement
-			public function __call(string $method, array $args) {
+			/**
+			 * @param array<int, mixed> $args
+			 * @return mixed
+			 */
+			public function __call(string $method, array $args): mixed {
 				return $this->statement->$method(...$args);
 			}
 			
-			// Delegate property access to the original PDOStatement
-			public function __get(string $name) {
+			public function __get(string $name): mixed {
 				return $this->statement->$name;
 			}
 			
-			public function __set(string $name, $value) {
+			public function __set(string $name, mixed $value): void {
 				$this->statement->$name = $value;
 			}
 		}
@@ -298,6 +313,7 @@
 			
 			/**
 			 * Monitored prepare method
+			 * @param array<int|string, mixed> $options
 			 */
 			public function prepare(string $query, array $options = []): CanvasPDOStatement|false {
 				$statement = $this->pdo->prepare($query, $options);
@@ -333,16 +349,20 @@
 				return $result;
 			}
 			
-			// Forward all other PDO methods
-			public function __call(string $method, array $args) {
+			/**
+			 * Forward all other PDO methods
+			 * @param array<int, mixed> $args
+			 * @return mixed
+			 */
+			public function __call(string $method, array $args): mixed {
 				return $this->pdo->$method(...$args);
 			}
 			
-			public function __get(string $name) {
+			public function __get(string $name): mixed {
 				return $this->pdo->$name;
 			}
 			
-			public function __set(string $name, $value) {
+			public function __set(string $name, mixed $value): void {
 				$this->pdo->$name = $value;
 			}
 		}
@@ -354,7 +374,7 @@
 		 * @param string $dsn The Data Source Name
 		 * @param string|null $username The username for the connection
 		 * @param string|null $password The password for the connection
-		 * @param array|null $options Driver-specific connection options
+		 * @param array<int|string, mixed>|null $options Driver-specific connection options
 		 * @return CanvasPDO Monitored PDO instance
 		 */
 		function canvas_create_pdo(
