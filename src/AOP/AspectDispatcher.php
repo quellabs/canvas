@@ -84,7 +84,7 @@
 		 * Resolves and instantiates aspects for a given controller method.
 		 * @param object $controller The controller instance that contains the target method
 		 * @param string $method The name of the method to resolve aspects for
-		 * @return array Array of instantiated aspect objects ready for execution
+		 * @return array<int, RequestAspectInterface|BeforeAspectInterface|AroundAspectInterface|AfterAspectInterface> Array of instantiated aspect objects ready for execution
 		 * @throws AnnotationReaderException
 		 */
 		private function getResolvedAspects(object $controller, string $method): array {
@@ -97,8 +97,8 @@
 			
 			// Iterate through each resolved aspect and instantiate it
 			$aspectsResolved = [];
-
-			foreach($aspects as $entry) {
+			
+			foreach ($aspects as $entry) {
 				// Use dependency injection container to create aspect instance with its parameters
 				// The DI container handles constructor injection and aspect lifecycle
 				$aspectsResolved[] = $this->di->make($entry['class'], $entry['parameters']);
@@ -109,7 +109,7 @@
 		
 		/**
 		 * Execute request transformation aspects on the incoming HTTP request
-		 * @param array $aspects Array of aspect instances to process
+		 * @param array<int, RequestAspectInterface|BeforeAspectInterface|AroundAspectInterface|AfterAspectInterface> $aspects Array of aspect instances to process
 		 * @param MethodContextInterface $context Context object containing method metadata and parameters
 		 * @return void
 		 */
@@ -123,7 +123,7 @@
 		
 		/**
 		 * Execute before aspects prior to controller method execution
-		 * @param array $aspects Array of aspect instances to process
+		 * @param array<int, RequestAspectInterface|BeforeAspectInterface|AroundAspectInterface|AfterAspectInterface> $aspects Array of aspect instances to process
 		 * @param MethodContextInterface $context Context object containing method metadata and parameters
 		 * @return void
 		 * @throws AopException When an aspect returns a Response object to short-circuit execution
@@ -144,7 +144,7 @@
 		
 		/**
 		 * Execute after aspects following controller method execution
-		 * @param array $aspects Array of aspect instances to process
+		 * @param array<int, RequestAspectInterface|BeforeAspectInterface|AroundAspectInterface|AfterAspectInterface> $aspects Array of aspect instances to process
 		 * @param MethodContextInterface $context Context object containing method metadata and parameters
 		 * @param Response $response The response object from the controller method to be modified
 		 * @return void
@@ -162,7 +162,7 @@
 		/**
 		 * Executes the controller method wrapped by around aspects in a nested chain
 		 * Around aspects can intercept, modify, or completely replace method execution
-		 * @param array $aspects All resolved aspects for this method
+		 * @param array<int, RequestAspectInterface|BeforeAspectInterface|AroundAspectInterface|AfterAspectInterface> $aspects All resolved aspects for this method
 		 * @param MethodContextInterface $context Context information about the method call
 		 * @return mixed The result from the method or final around aspect
 		 */

@@ -18,14 +18,14 @@
 		
 		/**
 		 * Array of route parameters including route path and HTTP methods
-		 * @var array
+		 * @var array<string, mixed>
 		 */
 		private array $parameters;
 		
 		/**
 		 * Initializes the RoutePrefix annotation with the provided parameters.
 		 * The parameter array should contain at minimum a "value" key with the route path.
-		 * @param array $parameters An associative array of route configuration parameters
+		 * @param array<string, mixed> $parameters An associative array of route configuration parameters
 		 */
 		public function __construct(array $parameters) {
 			$this->parameters = $parameters;
@@ -33,7 +33,7 @@
 		
 		/**
 		 * Returns all route parameters
-		 * @return array The complete array of route parameters
+		 * @return array<string, mixed> The complete array of route parameters
 		 */
 		public function getParameters(): array {
 			return $this->parameters;

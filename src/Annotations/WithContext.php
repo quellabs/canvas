@@ -29,7 +29,7 @@
 		
 		/**
 		 * WithContext constructor
-		 * @param array $parameters
+		 * @param array<string, mixed> $parameters
 		 */
 		public function __construct(array $parameters) {
 			$this->parameter = $parameters['parameter'] ?? '';

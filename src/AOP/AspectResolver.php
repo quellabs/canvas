@@ -30,7 +30,7 @@
 		 * Within each level, higher priority executes first.
 		 * @param object|string $controller The controller instance
 		 * @param string $method The method name being called
-		 * @return array Array of aspect definitions sorted by inheritance hierarchy and priority
+		 * @return array<int, array{class: class-string, parameters: array<string, mixed>, priority: int}> Array of aspect definitions sorted by inheritance hierarchy and priority
 		 * @throws AnnotationReaderException
 		 */
 		public function resolve(object|string $controller, string $method): array {
@@ -69,7 +69,7 @@
 		/**
 		 * Convert annotation instances to aspect definitions with parameters and priority
 		 * @param AnnotationCollection $annotations Collection of InterceptWith annotations
-		 * @return array Array of aspect definitions
+		 * @return array<int, array{class: class-string, parameters: array<string, mixed>, priority: int}> Array of aspect definitions
 		 */
 		private function convertAnnotationsToAspects(AnnotationCollection $annotations): array {
 			$aspects = [];
@@ -98,7 +98,7 @@
 		/**
 		 * Get the full inheritance chain for a class (from parent to child)
 		 * @param string|object $class
-		 * @return array Array of class names from parent to child
+		 * @return array<int, class-string> Array of class names from parent to child
 		 */
 		protected function getInheritanceChain(string|object $class): array {
 			try {

@@ -15,13 +15,13 @@
 		
 		/**
 		 * Raw annotation parameters from the docblock
-		 * @var array
+		 * @var array<string, mixed>
 		 */
 		private array $parameters;
 		
 		/**
 		 * Constructs the annotation with parameters parsed from the docblock
-		 * @param array $parameters Parsed annotation parameters (value, type, priority, and aspect-specific params)
+		 * @param array<string, mixed> $parameters Parsed annotation parameters (value, type, priority, and aspect-specific params)
 		 */
 		public function __construct(array $parameters) {
 			$this->parameters = $parameters;
@@ -29,7 +29,7 @@
 		
 		/**
 		 * Returns all raw annotation parameters including internal ones
-		 * @return array Complete parameters array with all keys and values
+		 * @return array<string, mixed> Complete parameters array with all keys and values
 		 */
 		public function getParameters(): array {
 			return $this->parameters;

@@ -18,13 +18,13 @@
 	class Route implements AnnotationInterface {
 		/**
 		 * Array of route parameters including route path and HTTP methods
-		 * @var array
+		 * @var array<string, mixed>
 		 */
 		private array $parameters;
 		
 		/**
 		 * Route constructor.
-		 * @param array $parameters An associative array of route configuration parameters
+		 * @param array<string, mixed> $parameters An associative array of route configuration parameters
 		 *                          - "value": The route path (required)
 		 *                          - "methods": HTTP methods allowed for this route (optional)
 		 */
@@ -34,7 +34,7 @@
 		
 		/**
 		 * Returns all route parameters
-		 * @return array The complete array of route parameters
+		 * @return array<string, mixed> The complete array of route parameters
 		 */
 		public function getParameters(): array {
 			return $this->parameters;
@@ -61,7 +61,7 @@
 		
 		/**
 		 * Gets the HTTP methods allowed for this route
-		 * @return array List of allowed HTTP methods
+		 * @return array<int, string> List of allowed HTTP methods
 		 *               If not specified, defaults to GET
 		 *               If specified as a string, converts to a single-element array
 		 */

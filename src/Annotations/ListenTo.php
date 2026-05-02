@@ -18,12 +18,12 @@
 	class ListenTo implements AnnotationInterface {
 		
 		/**
-		 * @var array Raw annotation parameters as parsed by the annotation reader
+		 * @var array<string, mixed> Raw annotation parameters as parsed by the annotation reader
 		 */
 		protected array $parameters;
 		
 		/**
-		 * @param array $parameters Parsed annotation parameters, expecting at minimum "value"
+		 * @param array<string, mixed> $parameters Parsed annotation parameters, expecting at minimum "value"
 		 */
 		public function __construct(array $parameters) {
 			$this->parameters = $parameters;
@@ -31,7 +31,7 @@
 		
 		/**
 		 * Returns all raw annotation parameters
-		 * @return array
+		 * @return array<string, mixed>
 		 */
 		public function getParameters(): array {
 			return $this->parameters;
