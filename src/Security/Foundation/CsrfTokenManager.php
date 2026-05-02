@@ -122,7 +122,7 @@
 		/**
 		 * Retrieve stored tokens for a given intention
 		 * @param string $intention The intention to get tokens for
-		 * @return array Array of tokens for the given intention
+		 * @return array<int, string> Array of tokens for the given intention
 		 */
 		private function getStoredTokens(string $intention): array {
 			// Get all tokens from session

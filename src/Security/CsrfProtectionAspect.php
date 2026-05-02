@@ -41,7 +41,7 @@
 		/** @var string Intention/purpose for token generation (allows different tokens for different contexts) */
 		private string $intention;
 		
-		/** @var array HTTP methods that are exempt from CSRF protection (safe methods) */
+		/** @var array<string> HTTP methods that are exempt from CSRF protection (safe methods) */
 		private array $exemptMethods;
 		
 		/** @var int Maximum number of tokens to store per intention (prevents session bloat) * */
@@ -55,7 +55,7 @@
 		 * @param string $tokenName Name of the token field in forms
 		 * @param string $headerName Name of the header for AJAX requests
 		 * @param string $intention Token intention/purpose for scoping
-		 * @param array $exemptMethods HTTP methods exempt from CSRF protection
+		 * @param array<string> $exemptMethods HTTP methods exempt from CSRF protection
 		 * @param int $maxTokens Maximum number of tokens to store per intention (prevents session bloat)
 		 * @param bool $suppressResponse If true, suppresses immediate error response and adds error to request attributes instead
 		 */

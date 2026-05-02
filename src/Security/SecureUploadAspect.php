@@ -156,8 +156,8 @@
 		
 		/**
 		 * Processes all uploaded files
-		 * @param array $files Array of uploaded files
-		 * @return array<string,array> Processed file information
+		 * @param array<string, UploadedFile|array<int, UploadedFile>> $files Array of uploaded files
+		 * @return array<string, array<string, mixed>> Processed file information
 		 * @throws RuntimeException If validation fails
 		 */
 		private function processUploadedFiles(array $files): array {
@@ -196,7 +196,7 @@
 		/**
 		 * Processes a single uploaded file through validation, security checks, and storage
 		 * @param UploadedFile $file The uploaded file to process
-		 * @return array File information including paths, metadata, and upload timestamp
+		 * @return array<string, mixed> File information including paths, metadata, and upload timestamp
 		 * @throws RuntimeException If validation fails or file processing encounters errors
 		 */
 		private function processSingleFile(UploadedFile $file): array {
@@ -519,7 +519,7 @@
 		
 		/**
 		 * Counts total number of files in upload array
-		 * @param array $files File array
+		 * @param array<string, UploadedFile|array<int, UploadedFile>> $files File array
 		 * @return int Total file count
 		 */
 		private function countFiles(array $files): int {
