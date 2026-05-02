@@ -35,7 +35,8 @@
 		/**
 		 * Discovers and builds a complete list of all routes in the application
 		 * by scanning controller classes and their annotated methods
-		 * @return array Array of route configurations with controller, method, route, and aspects info
+		 * @param ConfigurationManager $config
+		 * @return array<int, array{name: string|null, http_methods: string[], controller: string, method: string, route: string, aspects: string[]}> Array of route configurations with controller, method, route, and aspects info
 		 */
 		protected function getRoutes(ConfigurationManager $config): array {
 			try {
