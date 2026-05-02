@@ -12,12 +12,14 @@
 		/**
 		 * Array to track already processed files to avoid infinite recursion
 		 * Format: [absolute_original_path => processed_file_path]
+		 * @var array<string, string>
 		 */
 		private array $processedFiles = [];
 		
 		/**
 		 * Maps original file paths to their processed counterparts
 		 * Format: [original_file => processed_file]
+		 * @var array<string, string>
 		 */
 		private array $fileMapping = [];
 		
@@ -33,6 +35,7 @@
 		
 		/**
 		 * Array of path patterns to exclude from preprocessing
+		 * @var array<string>
 		 */
 		private array $excludedPaths;
 		
@@ -41,7 +44,7 @@
 		 * Constructor that takes the cache directory and legacy base path
 		 * @param string $cacheDir Directory where processed files will be stored
 		 * @param string $legacyBasePath Base path for legacy files (default: 'legacy/')
-		 * @param array $excludedPaths
+		 * @param array<string> $excludedPaths
 		 */
 		public function __construct(string $cacheDir, string $legacyBasePath = 'legacy/', array $excludedPaths = []) {
 			$this->cacheDir = $cacheDir;
@@ -164,12 +167,13 @@
 		 *
 		 * @param string $content File content to analyze
 		 * @param string $currentDir Directory of the current file (for resolving relative paths)
-		 * @return array Array of include information with keys:
-		 *               - original_statement: The full matched include statement
-		 *               - statement_type: Type of statement (include, require, etc.)
-		 *               - quote_char: Quote character used (' or ")
-		 *               - include_path: The path from the include statement
-		 *               - resolved_path: Absolute path to the included file
+		 * @return array<int, array{original_statement: string, statement_type: string, quote_char: string, include_path: string, resolved_path: string}>
+		 *         Array of include information with keys:
+		 *             - original_statement: The full matched include statement
+		 *             - statement_type: Type of statement (include, require, etc.)
+		 *             - quote_char: Quote character used (' or ")
+		 *             - include_path: The path from the include statement
+		 *             - resolved_path: Absolute path to the included file
 		 */
 		private function discoverIncludes(string $content, string $currentDir): array {
 			$includes = [];

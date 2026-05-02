@@ -37,7 +37,7 @@
 		 * Initialize the handler with a base legacy path.
 		 * @param string $legacyPath Base directory path for legacy files
 		 * @param bool $preprocessingEnabled
-		 * @param array $excludedPaths
+		 * @param array<string> $excludedPaths
 		 */
 		public function __construct(
 			string $legacyPath = 'legacy/',
@@ -216,7 +216,7 @@
 		
 		/**
 		 * Determine HTTP status code from parsed headers and exit code.
-		 * @param array $parsedHeaders Associative array of parsed headers
+		 * @param array<string, mixed> $parsedHeaders Associative array of parsed headers
 		 * @param int $exitCode Exit code from the legacy script
 		 * @return int HTTP status code
 		 */
@@ -245,8 +245,8 @@
 		
 		/**
 		 * Parse raw header strings into an associative array.
-		 * @param array $rawHeaders Array of raw header strings
-		 * @return array Associative array of headers
+		 * @param array<string> $rawHeaders Array of raw header strings
+		 * @return array<string, mixed> Associative array of headers
 		 */
 		private function parseHeaders(array $rawHeaders): array {
 			$headers = [];
