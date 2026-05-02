@@ -34,9 +34,11 @@
 		private string $defaultLocale;
 		
 		/** Cache to prevent re-loading same translation files within request */
+		/** @var array<string, array<string, string>> Cache to prevent re-loading same translation files within request */
 		private array $loadedTranslations = [];
 		
 		/** Static cache of available locales per domain (shared across all instances) */
+		/** @var array<string, list<string>> Static cache of available locales per domain (shared across all instances) */
 		private static array $availableLocalesByDomain = [];
 		
 		/**
@@ -154,7 +156,7 @@
 		 *
 		 * @param string $domain Translation domain (e.g., "admin", "user")
 		 * @param string $locale Requested locale code (e.g., "en", "nl")
-		 * @return array [translations array, resolved locale string]
+		 * @return array{0: array<string, string>, 1: string}
 		 */
 		private function loadTranslations(string $domain, string $locale): array {
 			$cacheKey = "{$domain}.{$locale}";
@@ -223,7 +225,7 @@
 		 * ];
 		 *
 		 * @param string $filePath Absolute path to translation file
-		 * @return array Translation key-value pairs
+		 * @return array<string, string> Translation key-value pairs
 		 * @throws \RuntimeException If file doesn't return an array
 		 */
 		private function loadTranslationFile(string $filePath): array {
@@ -264,7 +266,7 @@
 		 * translation files for the specified domain.
 		 *
 		 * @param string $domain Translation domain
-		 * @return array Array of available locale codes
+		 * @return list<string> Array of available locale codes
 		 */
 		private function getAvailableLocalesForDomain(string $domain): array {
 			// Check static cache first
