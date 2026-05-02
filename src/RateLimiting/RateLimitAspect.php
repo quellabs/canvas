@@ -38,7 +38,7 @@
 		/** @var string Custom identifier */
 		private string $identifier;
 		
-		/** @var array HTTP methods exempt from rate limiting */
+		/** @var string[] HTTP methods exempt from rate limiting */
 		private array $exemptMethods;
 		
 		/** @var string Rate limit header prefix */
@@ -52,7 +52,7 @@
 		 * @param string $strategy
 		 * @param string $scope
 		 * @param string $identifier
-		 * @param array $exemptMethods
+		 * @param string[] $exemptMethods
 		 * @param string $headerPrefix
 		 */
 		public function __construct(
@@ -163,7 +163,7 @@
 		 *
 		 * @param string $key The unique identifier for this rate limit instance
 		 * @param int $currentTime Current Unix timestamp
-		 * @return array Contains count, exceeded status, reset time, and retry_after
+		 * @return array{count: int, exceeded: bool, reset_time: int, retry_after: int}
 		 */
 		private function fixedWindowStrategy(string $key, int $currentTime): array {
 			// Calculate the start of the current window by rounding down to nearest window boundary
@@ -188,10 +188,10 @@
 			$this->cache->set($cacheKey, $count, (int)$ttl);
 			
 			return [
-				'count'       => $count,                                    // Current request count in this window
-				'exceeded'    => $count > $this->limit,                 // Whether limit is exceeded
-				'reset_time'  => $windowStart + $this->window,        // When the window resets (Unix timestamp)
-				'retry_after' => ($windowStart + $this->window) - $currentTime  // Seconds until reset
+				'count'       => $count,                                               // Current request count in this window
+				'exceeded'    => $count > $this->limit,                                // Whether limit is exceeded
+				'reset_time'  => (int)($windowStart + $this->window),                  // When the window resets (Unix timestamp)
+				'retry_after' => (int)(($windowStart + $this->window) - $currentTime)  // Seconds until reset
 			];
 		}
 		
@@ -210,7 +210,7 @@
 		 *
 		 * @param string $key The unique identifier for this rate limit instance
 		 * @param int $currentTime Current Unix timestamp
-		 * @return array Contains count, exceeded status, reset time, and retry_after
+		 * @return array{count: int, exceeded: bool, reset_time: int, retry_after: int}
 		 */
 		private function slidingWindowStrategy(string $key, int $currentTime): array {
 			// Create cache key for storing the sliding window timestamps
@@ -266,7 +266,7 @@
 		 *
 		 * @param string $key The unique identifier for this rate limit instance
 		 * @param int $currentTime Current Unix timestamp
-		 * @return array Contains count, exceeded status, reset time, and retry_after
+		 * @return array{count: int, exceeded: bool, reset_time: int, retry_after: int}
 		 */
 		private function tokenBucketStrategy(string $key, int $currentTime): array {
 			// Create cache key for storing the token bucket state
@@ -307,18 +307,18 @@
 			
 			return [
 				// Calculate count as number of tokens consumed (limit - remaining tokens)
-				'count'       => $this->limit - floor($bucket['tokens']),
+				'count'       => (int)($this->limit - floor($bucket['tokens'])),
 				
 				// Whether the request exceeded the rate limit
 				'exceeded'    => $exceeded,
 				
 				// When the bucket will have at least 1 token again
 				// If not exceeded, reset time is immediate (0 seconds from now)
-				'reset_time'  => $currentTime + ($exceeded ? ceil((1 - $bucket['tokens']) / $refillRate) : 0),
+				'reset_time'  => (int)($currentTime + ($exceeded ? ceil((1 - $bucket['tokens']) / $refillRate) : 0)),
 				
 				// How long client should wait before retrying
 				// Calculate time needed to accumulate 1 token based on refill rate
-				'retry_after' => $exceeded ? ceil((1 - $bucket['tokens']) / $refillRate) : 0
+				'retry_after' => $exceeded ? (int)ceil((1 - $bucket['tokens']) / $refillRate) : 0
 			];
 		}
 		
@@ -368,7 +368,7 @@
 				// Default value (will never occur, but to keep phpstan happy)
 				default => new \Exception("Invalid scope")
 			};
-
+			
 			// Sanitize each component to prevent special character conflicts and cache key collisions
 			$scope = $this->sanitizeKeyComponent($this->scope);
 			$identifier = $this->sanitizeKeyComponent($rawIdentifier);
@@ -405,10 +405,10 @@
 		
 		/**
 		 * Get user identifier for rate limiting
-		 * @param $request
+		 * @param Request $request
 		 * @return string
 		 */
-		protected function getUserIdentifier($request): string {
+		protected function getUserIdentifier(Request $request): string {
 			// Try to get user from session, JWT, or other auth mechanism
 			if ($request->hasSession() && $request->getSession()->has('user_id')) {
 				return 'user_' . $request->getSession()->get('user_id');
@@ -421,7 +421,7 @@
 		/**
 		 * Create appropriate rate limit exceeded response
 		 * @param Request $request
-		 * @param array $result
+		 * @param array{count: int, exceeded: bool, reset_time: int, retry_after: int} $result
 		 * @return Response
 		 */
 		private function createRateLimitResponse(Request $request, array $result): Response {
