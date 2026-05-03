@@ -30,7 +30,7 @@
 	 *
 	 * @phpstan-import-type CompiledSegment from RouteCandidateFilter
 	 * @phpstan-type Route array{controller: string, method: string, route_path: string, http_methods: list<string>, compiled_pattern: list<CompiledSegment>, priority: int, route: \Quellabs\Canvas\Annotations\Route}
-	 * @phpstan-type MatchedRoute array{pattern: list<CompiledSegment>, http_methods: list<string>, controller: string, method: string, route: \Quellabs\Canvas\Annotations\Route, variables: array<string, mixed>}
+	 * @phpstan-type MatchedRoute array{compiled_pattern: list<CompiledSegment>, http_methods: list<string>, controller: string, method: string, route: \Quellabs\Canvas\Annotations\Route, variables: array<string, mixed>}
 	 */
 	class RouteMatcher {
 		
