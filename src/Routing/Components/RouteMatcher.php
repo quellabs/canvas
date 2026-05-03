@@ -306,7 +306,7 @@
 		 */
 		private function buildMatchResult(array $compiledPattern, array $routeData, array $variables): array {
 			return [
-				'pattern'      => $compiledPattern,
+				'compiled_pattern' => $compiledPattern,
 				'http_methods'     => $routeData['http_methods'],
 				'controller'       => $routeData['controller'],
 				'method'           => $routeData['method'],
