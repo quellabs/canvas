@@ -396,13 +396,18 @@
 		 * to prevent indefinite blocking. It repeatedly attempts to acquire
 		 * the lock with short sleep intervals.
 		 * @param resource $handle File handle
-		 * @param int $operation Lock operation (LOCK_SH or LOCK_EX)
+		 * @param int-mask<LOCK_SH, LOCK_EX> $operation Lock operation (LOCK_SH or LOCK_EX)
 		 * @return bool True if lock acquired within timeout
 		 */
 		private function acquireFileLock($handle, int $operation): bool {
-			$startTime = microtime(true);
+			// Validate the requested lock operation
+			if (!in_array($operation, [LOCK_SH, LOCK_EX], true)) {
+				throw new \InvalidArgumentException('Invalid lock operation');
+			}
 			
 			// Keep trying until timeout is reached
+			$startTime = microtime(true);
+
 			while (microtime(true) - $startTime < $this->lockTimeout) {
 				// Try to acquire lock non-blocking
 				if (flock($handle, $operation | LOCK_NB)) {
