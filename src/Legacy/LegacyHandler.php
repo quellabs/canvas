@@ -114,6 +114,11 @@
 			}
 			
 			$files = glob($this->cacheDir . '/*.php');
+			
+			if ($files === false) {
+				return 0;
+			}
+			
 			$removed = 0;
 			
 			foreach ($files as $file) {
@@ -155,6 +160,11 @@
 			// This might be the project root or wherever the process started
 			$previousWorkingDir = getcwd();
 			
+			// Validate that we got a directory
+			if ($previousWorkingDir === false) {
+				throw new \RuntimeException('Failed to get current working directory.');
+			}
+			
 			// Determine which file to execute (original or preprocessed)
 			if ($this->preprocessingEnabled) {
 				$fileToExecute = $this->preprocessor->processFileRecursively($file);
@@ -174,7 +184,12 @@
 				
 				// Fetch the contents
 				$content = ob_get_clean();
-
+				
+				// ob_get_clean can return false
+				if ($content === false) {
+					$content = '';
+				}
+				
 				// Restore the previous working directory
 				chdir($previousWorkingDir);
 				
@@ -183,7 +198,12 @@
 			} catch (LegacyExitException $e) {
 				// Legacy code called exit() - get content up to that point
 				$content = ob_get_clean();
-
+				
+				// ob_get_clean can return false
+				if ($content === false) {
+					$content = '';
+				}
+				
 				// Restore the previous working directory
 				chdir($previousWorkingDir);
 				
