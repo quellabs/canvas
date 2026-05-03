@@ -114,7 +114,7 @@
 		
 		/**
 		 * Initialize panels from a list of class names
-		 * @param array<int, class-string> $panels Array of fully qualified panel class names
+		 * @param array<int, class-string<InspectorPanelInterface>> $panels Array of fully qualified panel class names
 		 * @return void
 		 */
 		private function initializePanels(array $panels): void {
@@ -126,8 +126,10 @@
 					}
 					
 					// Validate that the class implements the required interface
-					if (!in_array(InspectorPanelInterface::class, class_implements($className))) {
-						throw new \InvalidArgumentException("Panel class '{$className}' must implement InspectorPanelInterface");
+					if (!is_a($className, InspectorPanelInterface::class, true)) {
+						throw new \InvalidArgumentException(
+							"Panel class '{$className}' must implement InspectorPanelInterface"
+						);
 					}
 					
 					// Create the panel

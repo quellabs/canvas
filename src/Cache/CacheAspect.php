@@ -134,11 +134,6 @@
 					'config'    => $this->allParameters
 				]);
 				
-				// Validate that we actually got a CacheInterface
-				if (!$cache instanceof CacheInterface) {
-					throw new \RuntimeException('Cache service must implement CacheInterface');
-				}
-				
 				// Resolve a dynamic cache key
 				// Combines method signature with serialized arguments
 				$cacheKey = $this->resolveCacheKey($context);

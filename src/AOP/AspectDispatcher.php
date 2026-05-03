@@ -103,11 +103,6 @@
 				// The DI container handles constructor injection and aspect lifecycle
 				$instance = $this->di->make($entry['class'], $entry['parameters']);
 				
-				// Validate that we actually got an instance
-				if ($instance === null) {
-					throw new \RuntimeException("Aspect {$entry['class']} could not be instantiated");
-				}
-				
 				// Validate that we got any of the valid AOP interfaces
 				if (
 					!$instance instanceof RequestAspectInterface &&
