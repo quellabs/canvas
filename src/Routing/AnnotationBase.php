@@ -30,18 +30,22 @@
 		
 		/**
 		 * Retrieves the route prefix annotation from a given class
-		 * @param string|object $class The class object to examine for route prefix annotations
+		 * @param class-string|object $class The class object to examine for route prefix annotations
 		 * @return string The route prefix string, or empty string if no prefix is found
 		 * @throws AnnotationReaderException
 		 */
 		protected function getRoutePrefix(string|object $class): string {
-			// This variable holds all sections
-			$result = [];
+			// Validate passed class
+			if (is_string($class) && !class_exists($class)) {
+				return "";
+			}
 			
 			// Fetch the inheritance chain
 			$inheritanceChain = $this->getInheritanceChain($class);
 			
 			// Walk through the chain and add all route prefixes
+			$result = [];
+
 			foreach ($inheritanceChain as $controllerName) {
 				// Use the annotations reader to search for RoutePrefix annotations on the class
 				// This returns an AnnotationCollection of all RoutePrefix annotations found on the class
@@ -52,13 +56,25 @@
 					continue;
 				}
 				
-				// Add prefix to the list
-				$routePrefix = $annotations[0]->getRoutePrefix();
+				// Extract first annotation
+				$annotation = $annotations[0];
 				
-				// Only add prefix if it's not empty
-				if ($routePrefix !== '') {
-					$result[] = $routePrefix;
+				// Continue if this is not a RoutePrefix
+				// getClassAnnotations actually mandates only RoutePrefix objects, but phpstan is not happy
+				if (!$annotation instanceof RoutePrefix) {
+					continue;
 				}
+				
+				// Add prefix to the list
+				$routePrefix = $annotation->getRoutePrefix();
+				
+				// Check that prefix is not empty
+				if ($routePrefix === '') {
+					continue;
+				}
+				
+				// Add prefix
+				$result[] = $routePrefix;
 			}
 
 			// If no route prefixes were found, return an empty string
@@ -72,15 +88,22 @@
 		
 		/**
 		 * Get the full inheritance chain for a class (from parent to child)
-		 * @param string|object $class
+		 * @param class-string|object $class
 		 * @return array<int, string> Array of class names from parent to child
 		 */
 		protected function getInheritanceChain(string|object $class): array {
 			try {
-				$chain = [];
+				// Validate class
+				if (is_string($class) && !class_exists($class)) {
+					return [];
+				}
+				
+				// Create reflection class
 				$current = new \ReflectionClass($class);
 				
 				// Walk up the inheritance chain
+				$chain = [];
+				
 				while ($current !== false) {
 					$chain[] = $current->getName();
 					$current = $current->getParentClass();
