@@ -2,6 +2,7 @@
 	
 	namespace Quellabs\Canvas\Routing\Components;
 	
+	use Quellabs\Canvas\Annotations\Route;
 	use Quellabs\Canvas\Routing\MatchingContext;
 	use Quellabs\Canvas\Routing\MatchResult;
 	use Quellabs\Canvas\Routing\SegmentTypes;
@@ -29,8 +30,25 @@
 	 * - Partial variables: mixed static/dynamic segments (e.g., "v{path:**}")
 	 *
 	 * @phpstan-import-type CompiledSegment from RouteCandidateFilter
-	 * @phpstan-type Route array{controller: string, method: string, route_path: string, http_methods: list<string>, compiled_pattern: list<CompiledSegment>, priority: int, route: \Quellabs\Canvas\Annotations\Route}
-	 * @phpstan-type MatchedRoute array{compiled_pattern: list<CompiledSegment>, http_methods: list<string>, controller: string, method: string, route: \Quellabs\Canvas\Annotations\Route, variables: array<string, mixed>}
+	 *
+	 * @phpstan-type Route array{
+	 *     controller: string,
+	 *     method: string,
+	 *     route_path: string,
+	 *     http_methods: list<string>,
+	 *     compiled_pattern: list<CompiledSegment>,
+	 *     priority: int,
+	 *     route: Route
+	 * }
+	 *
+	 * @phpstan-type MatchedRoute array{
+	 *     compiled_pattern: list<CompiledSegment>,
+	 *     http_methods: list<string>,
+	 *     controller: string,
+	 *     method: string,
+	 *     route: Route,
+	 *     variables: array<string, mixed>
+	 * }
 	 */
 	class RouteMatcher {
 		
