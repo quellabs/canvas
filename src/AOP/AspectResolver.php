@@ -28,7 +28,7 @@
 		 * Aspects are sorted by priority within each class in the inheritance hierarchy.
 		 * Execution order: grandparent → parent → current class → method
 		 * Within each level, higher priority executes first.
-		 * @param object|string $controller The controller instance
+		 * @param object|class-string $controller The controller instance
 		 * @param string $method The method name being called
 		 * @return array<int, array{class: class-string, parameters: array<string, mixed>, priority: int}> Array of aspect definitions sorted by inheritance hierarchy and priority
 		 * @throws AnnotationReaderException
@@ -75,8 +75,21 @@
 			$aspects = [];
 			
 			foreach ($annotations as $annotation) {
+				// Validate annotation is of type InterceptWith
+				if (!$annotation instanceof InterceptWith) {
+					continue;
+				}
+				
 				// Extract the aspect class name from the 'value' parameter
 				$aspectClass = $annotation->getInterceptClass();
+				
+				// Validate the passed class
+				if (!class_exists($aspectClass)) {
+					throw new \RuntimeException(sprintf(
+						'Invalid @InterceptWith target: class "%s" does not exist.',
+						$aspectClass
+					));
+				}
 				
 				// Get all annotation parameters except 'value' and 'priority' to pass to aspect constructor
 				// For @InterceptWith(CacheAspect::class, ttl=300, priority=10), this gives us ['ttl' => 300]
@@ -97,10 +110,15 @@
 		
 		/**
 		 * Get the full inheritance chain for a class (from parent to child)
-		 * @param string|object $class
+		 * @param class-string|object $class
 		 * @return array<int, class-string> Array of class names from parent to child
 		 */
 		protected function getInheritanceChain(string|object $class): array {
+			// Validate the class
+			if (is_string($class) && !class_exists($class)) {
+				return [];
+			}
+			
 			try {
 				$chain = [];
 				$current = new \ReflectionClass($class);
