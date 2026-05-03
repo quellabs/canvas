@@ -101,7 +101,27 @@
 			foreach ($aspects as $entry) {
 				// Use dependency injection container to create aspect instance with its parameters
 				// The DI container handles constructor injection and aspect lifecycle
-				$aspectsResolved[] = $this->di->make($entry['class'], $entry['parameters']);
+				$instance = $this->di->make($entry['class'], $entry['parameters']);
+				
+				// Validate that we actually got an instance
+				if ($instance === null) {
+					throw new \RuntimeException("Aspect {$entry['class']} could not be instantiated");
+				}
+				
+				// Validate that we got any of the valid AOP interfaces
+				if (
+					!$instance instanceof RequestAspectInterface &&
+					!$instance instanceof BeforeAspectInterface &&
+					!$instance instanceof AroundAspectInterface &&
+					!$instance instanceof AfterAspectInterface
+				) {
+					throw new \RuntimeException(
+						"Resolved aspect must implement a valid aspect interface: {$entry['class']}"
+					);
+				}
+				
+				// Add instance to the resolved list
+				$aspectsResolved[] = $instance;
 			}
 			
 			return $aspectsResolved;
