@@ -32,7 +32,7 @@
 		
 		/**
 		 * Instantiate a provider through the DI container instead of directly.
-		 * Preserves the base class config-loading behaviour so providers still
+		 * Preserves the base class config-loading behavior so providers still
 		 * receive their merged configuration after construction.
 		 * @param ProviderDefinition $definition Provider definition
 		 * @return ProviderInterface Successfully instantiated and configured provider
@@ -54,11 +54,21 @@
 			// Resolve through DI so constructor dependencies are autowired
 			$provider = $this->di->get($className);
 			
+			// Validate that the provider implements ProviderInterface
+			if (!$provider instanceof ProviderInterface) {
+				throw new ProviderInstantiationException(
+					"Container did not return a valid provider for '{$className}'",
+					ProviderInstantiationException::INSTANTIATION_FAILED,
+					$definition
+				);
+			}
+			
 			try {
 				// Preserve base class config behavior: load files, merge with defaults,
 				// and apply the result to the provider
 				$loadedConfig = $this->loadConfigFiles($definition->configFiles);
 				$finalConfig = array_replace_recursive($definition->defaults, $loadedConfig);
+				
 				$provider->setConfig($finalConfig);
 			} catch (\Throwable $e) {
 				throw new ProviderInstantiationException(
