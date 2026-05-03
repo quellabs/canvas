@@ -59,7 +59,10 @@
 			/** @var array<int, array{name: string|null, http_methods: string[], controller: string, method: string, route: string, aspects: string[]}> $result */
 			$result = [];
 			
-			// Iterate through each discovered controller class
+			/**
+			 * Iterate through each discovered controller class
+			 * @var class-string $controller
+			 */
 			foreach($this->controllersDiscovery->fetch() as $controller) {
 				// Create a reflection object to inspect the controller class structure
 				$classReflection = new \ReflectionClass($controller);
@@ -77,7 +80,10 @@
 						Route::class
 					);
 					
-					// A single method can have multiple Route annotations (multiple routes to same handler)
+					/**
+					 * A single method can have multiple Route annotations (multiple routes to same handler)
+					 * @var Route $routeAnnotation
+					 */
 					foreach ($routes as $routeAnnotation) {
 						// Extract the route path pattern (e.g., "/users/{id}", "/api/products")
 						$routePath = $this->normalizeRoute($routeAnnotation->getRoute(), $routeAnnotation->getFallback());
@@ -131,7 +137,7 @@
 
 		/**
 		 * Retrieves all aspect interceptors (middleware/filters) applied to a specific method
-		 * @param string $class The fully qualified class name to inspect
+		 * @param class-string $class The fully qualified class name to inspect
 		 * @param string $method The method name to check for aspects
 		 * @return array<int, string> Array of interceptor class names ordered by precedence (class-level first, then method-level)
 		 */
