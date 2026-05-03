@@ -125,6 +125,11 @@
 			// Read original file content
 			$content = file_get_contents($filePath);
 			
+			// Validate the file
+			if ($content === false) {
+				throw new \Exception("Failed to read file: {$filePath}");
+			}
+			
 			// Find all include/require statements in this file
 			$includes = $this->discoverIncludes($content, dirname($filePath));
 			
@@ -227,28 +232,36 @@
 		private function resolveIncludePath(string $includePath, string $currentDir): ?string {
 			// If already absolute (starts with / or Windows drive letter), return as-is
 			if (str_starts_with($includePath, '/') || preg_match('/^[A-Za-z]:/', $includePath)) {
-				return file_exists($includePath) ? realpath($includePath) : null;
+				if (!file_exists($includePath)) {
+					return null;
+				}
+				
+				$real = realpath($includePath);
+				return $real !== false ? $real : null;
 			}
 			
 			// Try relative to current directory (most common case)
 			$relativePath = $currentDir . '/' . $includePath;
 			
+			// Validate that the file exists
 			if (file_exists($relativePath)) {
-				return realpath($relativePath);
+				$real = realpath($includePath);
+				return $real !== false ? $real : null;
 			}
 			
 			// Try relative to legacy base path (for legacy file structure)
 			$legacyPath = $this->legacyBasePath . $includePath;
 			
 			if (file_exists($legacyPath)) {
-				return realpath($legacyPath);
+				$real = realpath($legacyPath);
+				return $real !== false ? $real : null;
 			}
 			
 			// Try PHP's include path (searches directories in include_path ini setting)
 			$foundPath = stream_resolve_include_path($includePath);
 			
 			if ($foundPath !== false) {
-				return $foundPath;
+				return (string)$foundPath;
 			}
 			
 			// Could not resolve the path
@@ -351,9 +364,15 @@
 			
 			// Find all PHP files in cache directory
 			$files = glob($this->cacheDir . '/*.php');
-			$removed = 0;
+
+			// Validate glob returned a handle
+			if ($files === false) {
+				return 0;
+			}
 			
 			// Remove each file and count successful removals
+			$removed = 0;
+
 			foreach ($files as $file) {
 				if (unlink($file)) {
 					++$removed;
