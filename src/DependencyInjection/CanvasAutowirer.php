@@ -80,6 +80,11 @@
 				);
 				
 				foreach ($annotations as $annotation) {
+					// This was added to make phpstan happy
+					if (!$annotation instanceof WithContext) {
+						continue;
+					}
+					
 					$withContextMap[$annotation->parameter] = $annotation->context;
 				}
 			} catch (\Throwable) {
