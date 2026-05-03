@@ -149,12 +149,12 @@
 			
 			// All segments matched
 			return [
-				'pattern'      => $compiledPattern,
-				'http_methods' => $routeData['http_methods'],
-				'controller'   => $routeData['controller'],
-				'method'       => $routeData['method'],
-				'route'        => $routeData['route'],
-				'variables'    => []
+				'compiled_pattern' => $compiledPattern,
+				'http_methods'     => $routeData['http_methods'],
+				'controller'       => $routeData['controller'],
+				'method'           => $routeData['method'],
+				'route'            => $routeData['route'],
+				'variables'        => []
 			];
 		}
 		
@@ -190,12 +190,12 @@
 			}
 			
 			return [
-				'pattern'      => $compiledPattern,
-				'http_methods' => $routeData['http_methods'],
-				'controller'   => $routeData['controller'],
-				'method'       => $routeData['method'],
-				'route'        => $routeData['route'],
-				'variables'    => $variables
+				'compiled_pattern' => $compiledPattern,
+				'http_methods'     => $routeData['http_methods'],
+				'controller'       => $routeData['controller'],
+				'method'           => $routeData['method'],
+				'route'            => $routeData['route'],
+				'variables'        => $variables
 			];
 		}
 		
