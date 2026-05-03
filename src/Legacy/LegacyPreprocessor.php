@@ -18,6 +18,11 @@
 			// Read the original file contents
 			$content = file_get_contents($filePath);
 			
+			// Validate that that worked
+			if ($content === false) {
+				throw new \RuntimeException("Failed to read file: {$filePath}");
+			}
+			
 			// Apply transformations in sequence
 			// Replace exit() calls with return statements for Canvas compatibility
 			$content = $this->replaceExitCalls($content);
