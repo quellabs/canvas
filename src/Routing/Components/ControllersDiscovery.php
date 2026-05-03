@@ -51,7 +51,7 @@
 			// Return a flat list of fully qualified controller class names
 			return array_values(array_filter(
 				array_merge($result, array_values($packageClasses)),
-				fn($value) => is_string($value) && class_exists($value)
+				fn($value) => class_exists($value)
 			));
 		}
 	}
