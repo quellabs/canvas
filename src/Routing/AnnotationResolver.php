@@ -71,8 +71,11 @@
 		private RouteDiscovery $routeDiscovery;
 		private RouteCacheManager $cacheManager;
 		
-		// Performance optimization cache
-		/** @var array{multi_level: array<int, array<string, list<array{controller: string, method: string, route_path: string, http_methods: list<string>, compiled_pattern: list<array{type: string, original?: string, is_multi_wildcard?: bool}>, priority: int}>>>, segment_count: array<int, list<array{controller: string, method: string, route_path: string, http_methods: list<string>, compiled_pattern: list<array{type: string, original?: string, is_multi_wildcard?: bool}>, priority: int}>>, http_methods: array<string, list<array{controller: string, method: string, route_path: string, http_methods: list<string>, compiled_pattern: list<array{type: string, original?: string, is_multi_wildcard?: bool}>, priority: int}>>, prefix_tree: array<string, mixed>}|null */
+		//
+		/**
+		 * Performance optimization cache
+		 * @var RouteIndex|null
+		 */
 		private ?array $routeIndex = null;
 		
 		/**
@@ -162,7 +165,7 @@
 		/**
 		 * Parse request URL into segments
 		 * @param string $requestUri Raw request URI
-		 * @return array<int, string> Parsed URL segments
+		 * @return list<string> Parsed URL segments
 		 */
 		private function parseRequestUrl(string $requestUri): array {
 			$result = [];
@@ -178,7 +181,7 @@
 		
 		/**
 		 * Get or build route index for fast lookups
-		 * @return array<string, mixed> Complete route index ready for lookups
+		 * @return RouteIndex Complete route index ready for lookups
 		 * @throws AnnotationReaderException
 		 */
 		private function getRouteIndex(): array {
