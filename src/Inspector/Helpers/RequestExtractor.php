@@ -210,7 +210,7 @@
 			$units = ['B', 'KB', 'MB', 'GB', 'TB'];
 			
 			// Calculate the appropriate unit (log base 1024)
-			$power = floor(log($bytes, 1024));
+			$power = (int)floor(log($bytes, 1024));
 			$power = min($power, count($units) - 1); // Don't exceed available units
 			
 			// Convert to the appropriate unit and round to 2 decimal places
