@@ -104,11 +104,19 @@
 			// Register Annotations Reader
 			$this->annotationsReader = $this->createAnnotationReader();
 			
-			// Register error handlers
+			// Determine the error handler directory
 			$errorHandlerDirectory = $this->configuration->get("error_handler_directory", ComposerUtils::getProjectRoot() . "/src/Errors");
-			$this->errorHandlers = ComposerUtils::findClassesInDirectory($errorHandlerDirectory, function ($e) {
-				return class_exists($e) && is_subclass_of($e, ErrorHandlerInterface::class);
-			});
+			
+			// Register error handlers
+			$handlers = ComposerUtils::findClassesInDirectory(
+				$errorHandlerDirectory,
+				function ($e) {
+					return class_exists($e) && is_subclass_of($e, ErrorHandlerInterface::class);
+				}
+			);
+			
+			/** @var array<int, class-string<ErrorHandlerInterface>> $handlers */
+			$this->errorHandlers = array_values($handlers);
 			
 			// Instantiate Dependency Injector and register default providers
 			$this->dependencyInjector = new CanvasContainer($this->annotationsReader);
