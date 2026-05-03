@@ -49,6 +49,17 @@
 			// in tab order and duplicates are removed
 			$panels = array_unique(array_merge(self::DEFAULT_PANELS, $config->get('panels', [])));
 			
+			// Validate panels
+			foreach ($panels as $panel) {
+				if (!is_string($panel) || !class_exists($panel)) {
+					throw new \InvalidArgumentException("Invalid panel class");
+				}
+				
+				if (!is_subclass_of($panel, InspectorPanelInterface::class)) {
+					throw new \InvalidArgumentException("Must implement InspectorPanelInterface");
+				}
+			}
+			
 			// Instantiate the requested panels
 			$this->initializePanels($panels);
 		}
@@ -123,13 +134,6 @@
 					// Validate that the class exists
 					if (!class_exists($className)) {
 						throw new \InvalidArgumentException("Panel class '{$className}' not found");
-					}
-					
-					// Validate that the class implements the required interface
-					if (!is_a($className, InspectorPanelInterface::class, true)) {
-						throw new \InvalidArgumentException(
-							"Panel class '{$className}' must implement InspectorPanelInterface"
-						);
 					}
 					
 					// Create the panel
