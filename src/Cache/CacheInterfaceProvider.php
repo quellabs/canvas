@@ -151,7 +151,15 @@
 				
 				// Extract parameters from the first annotation if it exists
 				if (!$annotations->isEmpty()) {
-					$params = $annotations[0]->getParameters();
+					$annotation = $annotations[0];
+					
+					if (!$annotation instanceof CacheContext) {
+						throw new \RuntimeException(
+							'Expected CacheContext annotation'
+						);
+					}
+					
+					$params = $annotation->getParameters();
 					$namespace = $params['namespace'] ?? $namespace;
 				}
 			}

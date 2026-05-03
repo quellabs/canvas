@@ -134,6 +134,11 @@
 					'config'    => $this->allParameters
 				]);
 				
+				// Validate that we actually got a CacheInterface
+				if (!$cache instanceof CacheInterface) {
+					throw new \RuntimeException('Cache service must implement CacheInterface');
+				}
+				
 				// Resolve a dynamic cache key
 				// Combines method signature with serialized arguments
 				$cacheKey = $this->resolveCacheKey($context);
@@ -150,7 +155,7 @@
 					
 					// Store with fresh TTL
 					// This atomic operation prevents other requests from also recomputing
-					$cache->put($cacheKey, $result, $this->ttl);
+					$cache->set($cacheKey, $result, $this->ttl);
 					
 					// Log early refresh (useful for monitoring stampede protection effectiveness)
 					$this->logger->info('Cache refreshed early (stampede protection)', [
@@ -259,7 +264,8 @@
 			$methodName = $context->getMethodName();
 			
 			// Extract short class name
-			$shortClassName = substr(strrchr($className, '\\'), 1) ?: $className;
+			$pos = strrchr($className, '\\');
+			$shortClassName = $pos !== false ? substr($pos, 1) : $className;
 			
 			// Convert class name to snake_case for readability
 			$classIdentifier = strtolower(preg_replace('/([a-z])([A-Z])/', '$1_$2', $shortClassName));
@@ -360,8 +366,10 @@
 				// Validate object is serializable
 				$this->validateSerializable($argument, $prefix);
 				
+				// Shorten class name
 				$className = get_class($argument);
-				$shortName = substr(strrchr($className, '\\'), 1) ?: $className;
+				$pos = strrchr($className, '\\');
+				$shortClassName = $pos !== false ? substr($pos, 1) : $className;
 				
 				// Strategy 1: Try to get a meaningful identifier from the object
 				// Best for entities with database IDs
@@ -374,13 +382,13 @@
 							"Object {$className}::getId() returned non-scalar value in {$prefix}"
 						);
 					}
-					return "{$prefix}:{$shortName}:" . $id;
+					return "{$prefix}:{$shortClassName}:" . $id;
 				}
 				
 				// Strategy 2: Use __toString if available
 				// Good for value objects with string representations
 				if (method_exists($argument, '__toString')) {
-					return "{$prefix}:{$shortName}:" . (string)$argument;
+					return "{$prefix}:{$shortClassName}:" . (string)$argument;
 				}
 				
 				// Strategy 3: Use toArray if available
@@ -389,14 +397,14 @@
 					$array = $argument->toArray();
 					$this->validateSerializable($array, $prefix);
 					$json = json_encode($array, JSON_THROW_ON_ERROR);
-					return "{$prefix}:{$shortName}:" . hash('sha256', $json);
+					return "{$prefix}:{$shortClassName}:" . hash('sha256', $json);
 				}
 				
 				// Strategy 4: For objects implementing JsonSerializable
 				
 				if ($argument instanceof \JsonSerializable) {
 					$json = json_encode($argument, JSON_THROW_ON_ERROR);
-					return "{$prefix}:{$shortName}:" . hash('sha256', $json);
+					return "{$prefix}:{$shortClassName}:" . hash('sha256', $json);
 				}
 				
 				// Strategy 5: Last resort - serialize object properties via reflection
@@ -419,7 +427,7 @@
 					}
 					
 					$json = json_encode($properties, JSON_THROW_ON_ERROR);
-					return "{$prefix}:{$shortName}:" . hash('sha256', $json);
+					return "{$prefix}:{$shortClassName}:" . hash('sha256', $json);
 					
 				} catch (\Exception $e) {
 					throw new \InvalidArgumentException(
@@ -584,10 +592,10 @@
 			}
 			
 			try {
+				// fetch the cache metadata
 				$metadata = $cache->getMetadata($cacheKey);
 				
 				// Need both creation time and TTL to calculate probability
-				
 				if (!$metadata || !isset($metadata['created_at'], $metadata['ttl'])) {
 					return false;
 				}
