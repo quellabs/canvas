@@ -43,6 +43,11 @@
 			// Fetch the response that came out of the controller
 			$content = $response->getContent();
 			
+			// Nothing to inject into
+			if ($content === false) {
+				return;
+			}
+			
 			// Only inject debug info into HTML responses
 			if (!$this->htmlAnalyzer->isHtmlResponse($response, $content)) {
 				return;
