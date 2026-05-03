@@ -51,8 +51,9 @@
 		
 		/**
 		 * Get any service from the Canvas container
-		 * @param string $service The service identifier/name to retrieve
-		 * @return mixed The requested service instance
+		 * @template T of object
+		 * @param class-string<T> $service The service identifier/name to retrieve
+		 * @return T The requested service instance
 		 * @throws \RuntimeException If the bridge hasn't been initialized
 		 */
 		public static function get(string $service): mixed {
@@ -82,8 +83,9 @@
 			if (!function_exists('canvas')) {
 				/**
 				 * Global helper function for accessing Canvas services
-				 * @param string|null $service Optional service name to retrieve
-				 * @return mixed If $service provided, returns the service; otherwise returns the container
+				 * @template T of object
+				 * @param class-string<T>|null $service Optional service name to retrieve
+				 * @return ($service is null ? Container : T) If $service provided, returns the service; otherwise returns the container
 				 * @phpstan-ignore-next-line
 				 */
 				function canvas(string $service = null): mixed {
