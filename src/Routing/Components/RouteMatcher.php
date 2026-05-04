@@ -359,6 +359,8 @@
 				'http_methods'     => $routeData['http_methods'],
 				'controller'       => $routeData['controller'],
 				'method'           => $routeData['method'],
+				'route_path'       => $routeData['route_path'],
+				'priority'         => $routeData['priority'],
 				'route'            => $routeData['route'],
 				'variables'        => $variables,
 			];

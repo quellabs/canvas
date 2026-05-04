@@ -7,7 +7,6 @@
 	use Quellabs\Canvas\Discover\MethodContextProvider;
 	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
 	use Quellabs\Canvas\Kernel;
-	use Quellabs\Canvas\Routing\Components\RouteMatcher;
 	use Quellabs\Canvas\Routing\Components\SignalConnector;
 	use Quellabs\Canvas\Routing\Context\MethodContext;
 	use Quellabs\DependencyInjection\Provider\SimpleBinding;
@@ -17,8 +16,7 @@
 	use Symfony\Component\HttpFoundation\Session\SessionInterface;
 	
 	/**
-	 * @phpstan-import-type RouteData from RouteMatcher
-	 * @phpstan-import-type MatchedRoute from RouteMatcher
+	 * @phpstan-import-type MatchedRoute from RouteTypes
 	 */
 	class RequestHandler {
 		
@@ -107,7 +105,7 @@
 		 * Resolves routes using modern annotation-based routing system
 		 * @param Request $request The incoming HTTP request to resolve
 		 * @param array<string, mixed>|null $urlData Null on entry, populated with resolved route data on return
-		 * @param-out RouteData $urlData The resolved URL data (never null after execution)
+		 * @param-out MatchedRoute $urlData The resolved URL data (never null after execution)
 		 * @return Response The response from the matched route handler
 		 * @throws RouteNotFoundException When no matching route is found
 		 * @throws AnnotationReaderException|\ReflectionException When annotation parsing fails
@@ -142,7 +140,7 @@
 		 * Execute a Canvas route
 		 * Creates MethodContext and registers it with DI for autowiring
 		 * @param Request $request
-		 * @param RouteData $urlData
+		 * @param MatchedRoute $urlData
 		 * @return Response
 		 * @throws AnnotationReaderException
 		 * @throws \ReflectionException

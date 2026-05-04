@@ -57,9 +57,9 @@
 	 * The resolver maintains full backward compatibility while providing significant
 	 * performance improvements, especially for applications with large numbers of routes.
      *
-	 * @phpstan-import-type Route from RouteCandidateFilter
-	 * @phpstan-import-type RouteIndex from RouteCandidateFilter
-	 * @phpstan-import-type RouteData from RouteMatcher
+	 * @phpstan-import-type RouteDefinition from RouteTypes
+	 * @phpstan-import-type RouteIndex from RouteTypes
+	 * @phpstan-import-type MatchedRoute from RouteTypes
 	 */
 	class AnnotationResolver extends AnnotationBase {
 		private bool $debugMode;
@@ -72,7 +72,6 @@
 		private RouteDiscovery $routeDiscovery;
 		private RouteCacheManager $cacheManager;
 		
-		//
 		/**
 		 * Performance optimization cache
 		 * @var RouteIndex|null
@@ -93,7 +92,7 @@
 		/**
 		 * Resolves an HTTP request to find the first matching route
 		 * @param Request $request The incoming HTTP request to resolve
-		 * @return RouteData Returns the first matched route info
+		 * @return MatchedRoute Returns the first matched route info
 		 * @throws RouteNotFoundException When no matching route is found
 		 * @throws AnnotationReaderException On error reading annotations
 		 */
@@ -118,7 +117,7 @@
 		 * 4. Prefix trie lookup for static routes
 		 *
 		 * @param Request $request The HTTP request object
-		 * @return array<int, array<string, mixed>> Array of matched route objects, empty if no matches found
+		 * @return list<MatchedRoute> Array of matched route objects, empty if no matches found
 		 * @throws AnnotationReaderException
 		 */
 		public function resolveAll(Request $request): array {
@@ -192,7 +191,7 @@
 			}
 			
 			// Get all routes (from cache or fresh build)
-			/** @var list<array{controller: string, method: string, route_path: string, http_methods: list<string>, compiled_pattern: list<array{type: string, original?: string, is_multi_wildcard?: bool}>, priority: int, route: \Quellabs\Canvas\Annotations\Route}> $allRoutes */
+			/** @var list<RouteDefinition> $allRoutes */
 			$allRoutes = $this->cacheManager->getCachedRoutes(function() {
 				return $this->routeDiscovery->buildRoutesFromControllers();
 			});

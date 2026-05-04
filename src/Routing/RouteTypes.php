@@ -11,11 +11,11 @@
 	 *
 	 * Import pattern (use only the types your file actually references):
 	 *
-	 *   @phpstan-import-type CompiledSegment from RouteTypes
-	 *   @phpstan-import-type RouteDefinition from RouteTypes
-	 *   @phpstan-import-type RouteIndex from RouteTypes
-	 *   @phpstan-import-type MatchedRoute from RouteTypes
-	 *   @phpstan-import-type IntermediateRoute from RouteTypes
+	 *   `@phpstan-import-type CompiledSegment from RouteTypes`
+	 *   `@phpstan-import-type RouteDefinition from RouteTypes`
+	 *   `@phpstan-import-type RouteIndex from RouteTypes`
+	 *   `@phpstan-import-type MatchedRoute from RouteTypes`
+	 *   `@phpstan-import-type IntermediateRoute from RouteTypes`
 	 *
 	 * Data flow through the pipeline:
 	 *
