@@ -169,12 +169,13 @@
 			$token = $request->request->get($this->tokenName);
 			
 			// Fall back to header (for AJAX requests)
-			if (!$token) {
-				$token = $request->headers->get($this->headerName);
+			if (!is_string($token) || $token === '') {
+				$headerToken = $request->headers->get($this->headerName);
+				$token = is_string($headerToken) ? $headerToken : null;
 			}
-			
+
 			// No token found in either location
-			if (!$token) {
+			if (!is_string($token) || $token === '') {
 				return false;
 			}
 			
