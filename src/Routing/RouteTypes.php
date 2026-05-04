@@ -36,7 +36,7 @@
 	 * }
 	 *
 	 * @phpstan-type RouteDefinition array{
-	 *     controller: string,
+	 *     controller: class-string,
 	 *     method: string,
 	 *     route_path: string,
 	 *     http_methods: list<string>,
@@ -53,7 +53,7 @@
 	 * }
 	 *
 	 * @phpstan-type MatchedRoute array{
-	 *     controller: string,
+	 *     controller: class-string,
 	 *     method: string,
 	 *     route_path: string,
 	 *     http_methods: list<string>,
@@ -65,7 +65,7 @@
 	 *
 	 * @phpstan-type IntermediateRoute array{
 	 *     http_methods: list<string>,
-	 *     controller: string,
+	 *     controller: class-string,
 	 *     method: string,
 	 *     route: \Quellabs\Canvas\Annotations\Route,
 	 *     route_path: string,
