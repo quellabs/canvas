@@ -110,13 +110,27 @@
 		 * @throws AnnotationReaderException
 		 */
 		private function getRoutePrefix(string $controller): string {
-			$classAnnotations = $this->kernel->getAnnotationsReader()->getClassAnnotations($controller, RoutePrefix::class);
+			// Fetch all RoutePrefix annotations
+			$classAnnotations = $this->kernel->getAnnotationsReader()->getClassAnnotations(
+				$controller,
+				RoutePrefix::class
+			);
 			
+			// If none found, return
 			if ($classAnnotations->isEmpty()) {
 				return '';
 			}
 			
-			return ltrim($classAnnotations[0]->getRoutePrefix(), '/');
+			// Extract first annotation
+			$annotation = $classAnnotations[0];
+			
+			// Unnecessary check, but there to satisfy phpstan
+			if (!$annotation instanceof RoutePrefix) {
+				return '';
+			}
+			
+			// Return the prefix
+			return ltrim($annotation->getRoutePrefix(), '/');
 		}
 		
 		/**
@@ -124,7 +138,7 @@
 		 * controller's route prefix with individual method route annotations.
 		 * Each route is assigned a priority based on its specificity to ensure
 		 * proper matching order during request processing.
-		 * @param string $controller The fully qualified controller class name
+		 * @param class-string $controller The fully qualified controller class name
 		 * @return list<IntermediateRoute> Array of route definitions with complete metadata
 		 * @throws AnnotationReaderException When annotation reading fails
 		 */
@@ -153,7 +167,7 @@
 		/**
 		 * Uses reflection to scan a controller class and extract Route annotations
 		 * from its public non-magic methods.
-		 * @param string $controller Controller class name to scan
+		 * @param class-string $controller Controller class name to scan
 		 * @return list<array{method: string, annotation: Route}> Array of ['method' => string, 'annotation' => Route] entries
 		 * @throws AnnotationReaderException When annotation reading or reflection fails
 		 */
@@ -163,11 +177,16 @@
 				$result = [];
 				
 				foreach ($reflectionClass->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
+					// Skip internal functions like __contruct
 					if (str_starts_with($method->getName(), '__')) {
 						continue;
 					}
 					
-					foreach ($this->kernel->getAnnotationsReader()->getMethodAnnotations($controller, $method->getName(), Route::class) as $annotation) {
+					// Fetch all method Route annotations
+					$methodAnnotations = $this->kernel->getAnnotationsReader()->getMethodAnnotations($controller, $method->getName(), Route::class);
+					
+					// Gather all annotations
+					foreach ($methodAnnotations->ofType(Route::class) as $annotation) {
 						$result[] = [
 							'method'     => $method->getName(),
 							'annotation' => $annotation

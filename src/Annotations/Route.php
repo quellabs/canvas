@@ -61,9 +61,7 @@
 		
 		/**
 		 * Gets the HTTP methods allowed for this route
-		 * @return array<int, string> List of allowed HTTP methods
-		 *               If not specified, defaults to GET
-		 *               If specified as a string, converts to a single-element array
+		 * @return list<string> List of allowed HTTP methods
 		 */
 		public function getMethods(): array {
 			// If no methods specified, default to GET
@@ -73,7 +71,7 @@
 			
 			// If methods is already an array, return it as is
 			if (is_array($this->parameters["methods"])) {
-				return $this->parameters["methods"];
+				return array_values($this->parameters["methods"]);
 			}
 			
 			// If methods is a string, convert to a single-element array
