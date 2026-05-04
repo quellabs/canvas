@@ -178,7 +178,7 @@
 			foreach ($discover->getProviders() as $provider) {
 				// Check if the discovered class implements the TaskInterface
 				// Only include classes that properly implement the task contract
-				if (!is_subclass_of($provider, TaskInterface::class)) {
+				if (!$provider instanceof TaskInterface) {
 					$providerClass = get_class($provider);
 					$this->logger->warning("Skipping task provider '{$providerClass}' - does not implement TaskInterface");
 					continue;
