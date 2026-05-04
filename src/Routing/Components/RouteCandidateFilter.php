@@ -157,7 +157,7 @@
 			// SORT_REGULAR ensures proper comparison of route arrays
 			// This final step ensures no route is checked multiple times
 			// during the subsequent matching phase
-			return array_unique($candidates, SORT_REGULAR);
+			return array_values(array_unique($candidates, SORT_REGULAR));
 		}
 		
 		/**
@@ -191,12 +191,12 @@
 				// This is crucial because only routes with wildcard parameters
 				// (like {path:**} or {args:*}) can match URLs with more segments
 				// than the route pattern itself contains
-				$wildcardRoutes = array_filter($routesWithFewerSegments, function ($route) {
+				$wildcardRoutes = array_values(array_filter($routesWithFewerSegments, function ($route) {
 					// Check if this route has parameters that can consume multiple segments
 					// Examples: {path:**} (greedy), {args:*} (non-greedy), or other
 					// variable-length parameter patterns
 					return $this->routeCanHandleVariableSegments($route);
-				});
+				}));
 				
 				// Intersect wildcard routes with method candidates
 				// This ensures we maintain the HTTP method constraint while
@@ -292,7 +292,7 @@
 				$segment = $compiledPattern[$position];
 				
 				// Only index static segments for fast elimination
-				if ($segment['type'] === 'static') {
+				if ($segment['type'] === 'static' && isset($segment['original'])) {
 					$staticValue = $segment['original'];
 					
 					// Create nested index: position -> static_value -> routes
@@ -328,14 +328,17 @@
 				if (!isset($current[$segment])) {
 					$current[$segment] = ['routes' => [], 'children' => []];
 				}
+				
 				$current = &$current[$segment]['children'];
 			}
 			
 			// Store route at the final node
 			$finalNode = &$index['prefix_tree'];
+			
 			foreach ($segments as $segment) {
 				$finalNode = &$finalNode[$segment];
 			}
+			
 			$finalNode['routes'][] = $route;
 		}
 		
@@ -559,12 +562,17 @@
 			// explode() splits the string into an array at each '/' character
 			$segments = explode('/', ltrim($routePath, '/'));
 			
-			// Filter out empty segments that might result from double slashes or trailing slashes
-			// array_filter() removes elements that evaluate to false (empty strings in this case)
-			// The anonymous function explicitly checks if segment is not empty for clarity
-			return array_filter($segments, function ($segment) {
-				return $segment !== ''; // Keep only non-empty segments
-			});
+			/**
+			 * Filter out empty segments that might result from double slashes or trailing slashes
+			 * array_filter() removes elements that evaluate to false (empty strings in this case)
+			 * The anonymous function explicitly checks if segment is not empty for clarity
+			 * @var list<string> $result
+			 */
+			$result = array_values(array_filter($segments, function ($segment) {
+				return $segment !== '';
+			}));
+			
+			return $result;
 		}
 		
 		/**
@@ -635,7 +643,10 @@
 					// 1. Current candidates (routes that passed previous filters)
 					// 2. Position matches (routes with matching static segment at this position)
 					// This progressively eliminates non-matching routes as we check each position
-					$candidates = $this->intersectRoutes($candidates, $positionMatches);
+					$candidates = $this->intersectRoutes(
+						$candidates,
+						$positionMatches
+					);
 				}
 				
 				// Note: If no routes match the static segment at this position, we continue
