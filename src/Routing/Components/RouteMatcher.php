@@ -36,7 +36,12 @@
 	 *     method: string,
 	 *     route_path: string,
 	 *     http_methods: list<string>,
-	 *     compiled_pattern: list<CompiledSegment>,
+	 *     variables: array<string, mixed>,
+	 *     compiled_pattern: list<array{
+	 *         type: string,
+	 *         original?: string,
+	 *         is_multi_wildcard?: bool
+	 *     }>,
 	 *     priority: int,
 	 *     route: Route
 	 * }

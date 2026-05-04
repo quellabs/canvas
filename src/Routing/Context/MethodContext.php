@@ -12,7 +12,7 @@
 	 */
 	class MethodContext implements MethodContextInterface {
 		
-		/** @var array<string, mixed> */
+		/** @var list<array<string, mixed>> */
 		private array $compiledPattern;
 		
 		private Request $request;
@@ -28,7 +28,7 @@
 		 * @param object $target The original object instance on which the method is being called
 		 * @param string $methodName Name of the method being invoked
 		 * @param array<string, mixed> $arguments Array of arguments passed to the method
-		 * @param array<string, mixed> $compiledPattern Matched pattern
+		 * @param list<array<string, mixed>> $compiledPattern Matched pattern
 		 */
 		public function __construct(
 			Request $request,              // The request object
@@ -95,7 +95,7 @@
 		
 		/**
 		 * Returns the pattern that was matched
-		 * @return array<string, mixed>
+		 * @return list<array<string, mixed>>
 		 */
 		public function getCompiledPattern(): array {
 			return $this->compiledPattern;

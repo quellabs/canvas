@@ -57,8 +57,9 @@
 	 * The resolver maintains full backward compatibility while providing significant
 	 * performance improvements, especially for applications with large numbers of routes.
      *
-	 * @phpstan-import-type Route from \Quellabs\Canvas\Routing\Components\RouteCandidateFilter
-	 * @phpstan-import-type RouteIndex from \Quellabs\Canvas\Routing\Components\RouteCandidateFilter
+	 * @phpstan-import-type Route from RouteCandidateFilter
+	 * @phpstan-import-type RouteIndex from RouteCandidateFilter
+	 * @phpstan-import-type RouteData from RouteMatcher
 	 */
 	class AnnotationResolver extends AnnotationBase {
 		private bool $debugMode;
@@ -92,7 +93,7 @@
 		/**
 		 * Resolves an HTTP request to find the first matching route
 		 * @param Request $request The incoming HTTP request to resolve
-		 * @return array<string, mixed> Returns the first matched route info
+		 * @return RouteData Returns the first matched route info
 		 * @throws RouteNotFoundException When no matching route is found
 		 * @throws AnnotationReaderException On error reading annotations
 		 */

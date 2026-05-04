@@ -25,7 +25,7 @@
 		/**
 		 * MatchingContext constructor
 		 * @param string[] $requestUrl
-		 * @param array<int, array<string, mixed>> $compiledPattern
+		 * @param list<array{type: string, original?: string, is_multi_wildcard?: bool}> $compiledPattern
 		 */
 		public function __construct(array $requestUrl, array $compiledPattern) {
 			$this->requestUrl = $requestUrl;
@@ -115,15 +115,13 @@
 		 * @return void
 		 */
 		public function addToVariableArray(string $name, string $value): void {
-			if (isset($this->variables[$name]) && is_string($this->variables[$name])) {
+			$current = $this->variables[$name] ?? [];
+			
+			if (is_string($current)) {
 				throw new \LogicException("Variable '$name' was already set as a scalar via setVariable().");
 			}
 			
-			if (!isset($this->variables[$name])) {
-				$this->variables[$name] = [];
-			}
-			
-			$this->variables[$name][] = $value;
+			$this->variables[$name] = [...$current, $value];
 		}
 		
 		/**

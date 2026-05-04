@@ -7,6 +7,7 @@
 	use Quellabs\Canvas\Discover\MethodContextProvider;
 	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
 	use Quellabs\Canvas\Kernel;
+	use Quellabs\Canvas\Routing\Components\RouteMatcher;
 	use Quellabs\Canvas\Routing\Components\SignalConnector;
 	use Quellabs\Canvas\Routing\Context\MethodContext;
 	use Quellabs\DependencyInjection\Provider\SimpleBinding;
@@ -15,6 +16,10 @@
 	use Symfony\Component\HttpFoundation\Session\Session;
 	use Symfony\Component\HttpFoundation\Session\SessionInterface;
 	
+	/**
+	 * @phpstan-import-type RouteData from RouteMatcher
+	 * @phpstan-import-type MatchedRoute from RouteMatcher
+	 */
 	class RequestHandler {
 		
 		/** @var Kernel Application kernel */
@@ -101,9 +106,9 @@
 		/**
 		 * Resolves routes using modern annotation-based routing system
 		 * @param Request $request The incoming HTTP request to resolve
-		 * @param array<string, mixed>|null $urlData Reference parameter to store resolved route data
+		 * @param array<string, mixed>|null $urlData Null on entry, populated with resolved route data on return
+		 * @param-out RouteData $urlData The resolved URL data (never null after execution)
 		 * @return Response The response from the matched route handler
-		 * @param-out array<string, mixed> $urlData The resolved URL data (never null after execution)
 		 * @throws RouteNotFoundException When no matching route is found
 		 * @throws AnnotationReaderException|\ReflectionException When annotation parsing fails
 		 */
@@ -137,7 +142,7 @@
 		 * Execute a Canvas route
 		 * Creates MethodContext and registers it with DI for autowiring
 		 * @param Request $request
-		 * @param array<string, mixed> $urlData
+		 * @param RouteData $urlData
 		 * @return Response
 		 * @throws AnnotationReaderException
 		 * @throws \ReflectionException
@@ -145,7 +150,10 @@
 		private function executeCanvasRoute(Request $request, array $urlData): Response {
 			// Get the controller instance from the dependency injection container
 			$dependencyInjector = $this->kernel->getDependencyInjector();
-			$controller = $dependencyInjector->get($urlData["controller"]);
+			
+			/** @var class-string $controllerClass */
+			$controllerClass = $urlData["controller"];
+			$controller = $dependencyInjector->get($controllerClass);
 			
 			// Register controller signals with the hub
 			$hub = $this->kernel->getSignalHub();
