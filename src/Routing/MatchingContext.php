@@ -115,6 +115,10 @@
 		 * @return void
 		 */
 		public function addToVariableArray(string $name, string $value): void {
+			if (isset($this->variables[$name]) && is_string($this->variables[$name])) {
+				throw new \LogicException("Variable '$name' was already set as a scalar via setVariable().");
+			}
+			
 			if (!isset($this->variables[$name])) {
 				$this->variables[$name] = [];
 			}
@@ -143,7 +147,7 @@
 			// All URL segments should be processed, unless the last route segment is a multi-wildcard
 			if ($this->urlIndex < count($this->requestUrl)) {
 				$lastRouteSegment = end($this->compiledPattern);
-				return SegmentTypes::isMultiWildcard($lastRouteSegment);
+				return $lastRouteSegment !== false && SegmentTypes::isMultiWildcard($lastRouteSegment);
 			}
 			
 			return true;
