@@ -259,22 +259,12 @@
 		}
 		
 		/**
-		 * Get first segment of route path
-		 * @param string $routePath
-		 * @return string
-		 */
-		public function getFirstSegment(string $routePath): string {
-			$segments = $this->parseRoutePath($routePath);
-			return $segments[0] ?? '';
-		}
-		
-		/**
 		 * Parses a route path string into clean segments for matching
 		 * @param string $routePath Raw route path like '/users/{id}/posts'
 		 * @return list<string> Clean route segments like ['users', '{id}', 'posts']
 		 */
 		private function parseRoutePath(string $routePath): array {
 			$segments = explode('/', ltrim($routePath, '/'));
-			return array_filter($segments, fn($segment) => $segment !== '');
+			return array_values(array_filter($segments, fn($segment) => $segment !== ''));
 		}
 	}
