@@ -55,7 +55,7 @@
 			// Note: This destructor provides best-effort cleanup but cannot guarantee
 			// lock release in cases of abrupt process termination (SIGKILL, crashes, etc.)
 		}
-
+		
 		/**
 		 * Marks the task as busy
 		 * @param string $taskName
@@ -183,6 +183,21 @@
 		}
 		
 		/**
+		 * Fetch the current process id (pid)
+		 * If this can't be retrieved, an exception is thrown
+		 * @return int
+		 */
+		private function getCurrentPid(): int {
+			$pid = getmypid();
+			
+			if ($pid === false) {
+				throw new RuntimeException('Failed to get process ID');
+			}
+			
+			return $pid;
+		}
+		
+		/**
 		 * Ensure storage (tables, files, etc.) exists
 		 * @return void
 		 */
@@ -211,11 +226,11 @@
 		private function writeTaskFile(string $taskFile, string $taskName, DateTime $dateTime): void {
 			// Create a data structure with task information
 			$taskData = [
-				'task_name'  => $taskName,                          // Human-readable task name
+				'task_name'  => $taskName,                                // Human-readable task name
 				'started_at' => $dateTime->format('Y-m-d H:i:s'),  // Formatted timestamp for readability
-				'timestamp'  => $dateTime->getTimestamp(),          // Unix timestamp for calculations
-				'pid'        => getmypid(),                         // Process ID for debugging/identification
-				'hostname'   => gethostname()                       // Server hostname for distributed systems
+				'timestamp'  => $dateTime->getTimestamp(      ),          // Unix timestamp for calculations
+				'pid'        => $this->getCurrentPid(),                   // Process ID for debugging/identification
+				'hostname'   => gethostname()                             // Server hostname for distributed systems
 			];
 			
 			// Convert the task data to JSON format with pretty printing
@@ -346,6 +361,7 @@
 			// Lock files use .lock extension to distinguish from task files
 			return $this->storageDirectory . DIRECTORY_SEPARATOR . $this->sanitizeTaskName($taskName) . '.lock';
 		}
+		
 		/**
 		 * Sanitize task name for use as filename
 		 * @param string $taskName
@@ -385,8 +401,8 @@
 				if ($this->tryAcquireLock($lockFile)) {
 					// Successfully acquired lock - track it to prevent cleanup of our own locks
 					$this->acquiredLocks[$lockFile] = [
-						'pid'  => getmypid(),  // Process ID for debugging
-						'time' => time()       // Acquisition time for staleness checks
+						'pid'  => $this->getCurrentPid(),  // Process ID for debugging
+						'time' => time()                   // Acquisition time for staleness checks
 					];
 					return;
 				}
@@ -404,15 +420,15 @@
 						"Failed to acquire lock within {$this->maxLockWaitTime} seconds after {$attempt} attempts: {$lockFile}"
 					);
 				}
-
+				
 				// Apply exponential backoff with jitter to reduce thundering herd
 				$jitterRange = $currentBackoffMs * self::JITTER_FACTOR;
 				$jitter = mt_rand((int)(-$jitterRange * 1000), (int)($jitterRange * 1000)) / 1000;
 				$sleepTimeMs = max(1, (int)($currentBackoffMs + $jitter));
-
+				
 				// Sleep for the calculated backoff time (convert ms to microseconds)
 				usleep($sleepTimeMs * 1000);
-
+				
 				// Increase backoff for next iteration, capped at maximum
 				$currentBackoffMs = min($currentBackoffMs * self::BACKOFF_MULTIPLIER, self::MAX_BACKOFF_MS);
 			}
@@ -436,7 +452,7 @@
 			
 			// Write lock metadata to the file for debugging and staleness detection
 			// Format: PID on first line, timestamp on second line
-			fwrite($lockHandle, getmypid() . "\n" . time());
+			fwrite($lockHandle, $this->getCurrentPid() . "\n" . time());
 			fclose($lockHandle);
 			
 			// Successfully acquired the lock
@@ -564,7 +580,7 @@
 			
 			$lockData = $this->readLockFile($lockFile);
 			
-			if ($lockData === null || $lockData['pid'] !== getmypid()) {
+			if ($lockData === null || $lockData['pid'] !== $this->getCurrentPid()) {
 				unset($this->acquiredLocks[$lockFile]);
 				return false;
 			}
