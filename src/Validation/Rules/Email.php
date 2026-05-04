@@ -22,7 +22,7 @@
 			}
 			
 			// Check if the value is a valid email address
-			return filter_var($value, FILTER_VALIDATE_EMAIL);
+			return filter_var($value, FILTER_VALIDATE_EMAIL) !== false;
 		}
 		
 		/**
