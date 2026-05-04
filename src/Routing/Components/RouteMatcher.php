@@ -5,6 +5,7 @@
 	use Quellabs\Canvas\Annotations\Route;
 	use Quellabs\Canvas\Routing\MatchingContext;
 	use Quellabs\Canvas\Routing\MatchResult;
+	use Quellabs\Canvas\Routing\RouteTypes;
 	use Quellabs\Canvas\Routing\SegmentTypes;
 	use Quellabs\Canvas\Routing\Strategies\SegmentMatchingStrategyInterface;
 	use Quellabs\Canvas\Routing\Strategies\StaticSegmentStrategy;
@@ -29,31 +30,9 @@
 	 * - Wildcard segments: single (*) and multi (**) segment consumption
 	 * - Partial variables: mixed static/dynamic segments (e.g., "v{path:**}")
 	 *
-	 * @phpstan-import-type CompiledSegment from RouteCandidateFilter
-	 *
-	 * @phpstan-type RouteData array{
-	 *     controller: string,
-	 *     method: string,
-	 *     route_path: string,
-	 *     http_methods: list<string>,
-	 *     variables: array<string, mixed>,
-	 *     compiled_pattern: list<array{
-	 *         type: string,
-	 *         original?: string,
-	 *         is_multi_wildcard?: bool
-	 *     }>,
-	 *     priority: int,
-	 *     route: Route
-	 * }
-	 *
-	 * @phpstan-type MatchedRoute array{
-	 *     compiled_pattern: list<CompiledSegment>,
-	 *     http_methods: list<string>,
-	 *     controller: string,
-	 *     method: string,
-	 *     route: Route,
-	 *     variables: array<string, mixed>
-	 * }
+	 * @phpstan-import-type CompiledSegment from RouteTypes
+	 * @phpstan-import-type RouteDefinition from RouteTypes
+	 * @phpstan-import-type MatchedRoute from RouteTypes
 	 */
 	class RouteMatcher {
 		
@@ -86,7 +65,7 @@
 		
 		/**
 		 * Match a URL against a single route.
-		 * @param RouteData $routeData Complete route configuration
+		 * @param RouteDefinition $routeData Complete route configuration
 		 * @param list<string> $requestSegments URL segments
 		 * @param string $originalUrl Full original URL (used for trailing slash check)
 		 * @param string $requestMethod HTTP method (GET, POST, etc.)
@@ -174,7 +153,7 @@
 		 * character-for-character. No variable extraction takes place.
 		 * @param list<CompiledSegment> $compiledPattern
 		 * @param list<string> $requestSegments
-		 * @param RouteData $routeData
+		 * @param RouteDefinition $routeData
 		 * @param int $segmentCount
 		 * @param int $patternCount
 		 * @return MatchedRoute|null
@@ -211,7 +190,7 @@
 		 * for non-wildcard dynamic routes an exact count is required.
 		 * @param list<CompiledSegment> $compiledPattern
 		 * @param list<string> $requestSegments
-		 * @param RouteData $routeData
+		 * @param RouteDefinition $routeData
 		 * @param int $segmentCount
 		 * @param int $patternCount
 		 * @return MatchedRoute|null
@@ -370,7 +349,7 @@
 		/**
 		 * Assemble the MatchedRoute array from a successful match.
 		 * @param list<CompiledSegment> $compiledPattern
-		 * @param RouteData $routeData
+		 * @param RouteDefinition $routeData
 		 * @param array<string, mixed> $variables Extracted route variables (empty for static routes)
 		 * @return MatchedRoute
 		 */

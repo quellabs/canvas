@@ -2,6 +2,8 @@
 	
 	namespace Quellabs\Canvas\Routing\Components;
 	
+	use Quellabs\Canvas\Routing\RouteTypes;
+	
 	/**
 	 * RoutePatternCompiler
 	 *
@@ -51,10 +53,24 @@
 	 * The compiler transforms human-readable route patterns into machine-optimized
 	 * matching structures, enabling fast URL resolution while supporting complex
 	 * routing scenarios including nested wildcards and type validation.
-     *
-	 * @phpstan-import-type CompiledSegment from RouteCandidateFilter
-	 * @phpstan-type VarInfo array{name: string, clean_name: string, regex: string, is_wildcard: bool, is_multi_wildcard: bool, original_content: string}
-	 * @phpstan-type PartialSegmentResult array{pattern: string, variables: list<string>, literal_prefix: string, literal_suffix: string, variable_info: list<VarInfo>}
+	 *
+	 * @phpstan-import-type CompiledSegment from RouteTypes
+	 * @phpstan-type VarInfo array{
+	 *     name: string,
+	 *     clean_name: string,
+	 *     regex: string,
+	 *     is_wildcard: bool,
+	 *     is_multi_wildcard: bool,
+	 *     original_content: string
+	 * }
+	 *
+	 * @phpstan-type PartialSegmentResult array{
+	 *     pattern: string,
+	 *     variables: list<string>,
+	 *     literal_prefix: string,
+	 *     literal_suffix: string,
+	 *     variable_info: list<VarInfo>
+	 * }
 	 */
 	class RoutePatternCompiler {
 		
@@ -128,7 +144,7 @@
 				
 				// Initialize the compiled segment structure with default values
 				$compiledSegment = $this->initializeCompiledSegment($type, $segment);
-
+				
 				// Add remaining segments count for optimization
 				$compiledSegment['remaining_segments_count'] = $totalSegments - $index - 1;
 				
@@ -371,7 +387,7 @@
 				$modifications['variable_names'] = $result['variables'];
 				$modifications['literal_prefix'] = $result['literal_prefix'];
 				$modifications['literal_suffix'] = $result['literal_suffix'];
-
+				
 				// Pre-compile pattern metadata for performance
 				$patternMetadata = $this->compilePatternMetadata($segment);
 				

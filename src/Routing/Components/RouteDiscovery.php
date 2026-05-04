@@ -3,10 +3,10 @@
 	namespace Quellabs\Canvas\Routing\Components;
 	
 	use Quellabs\Canvas\Annotations\RoutePrefix;
-	use Quellabs\Support\ComposerUtils;
 	use ReflectionException;
 	use Quellabs\Canvas\Annotations\Route;
 	use Quellabs\Canvas\Kernel;
+	use Quellabs\Canvas\Routing\RouteTypes;
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	
 	/**
@@ -42,9 +42,8 @@
 	 * - Route length (longer routes slightly favored)
 	 * - Fully static routes (highest priority bonus)
 	 *
-	 * @phpstan-import-type CompiledSegment from RouteCandidateFilter
-	 * @phpstan-import-type Route from RouteCandidateFilter as CompiledRoute
-	 * @phpstan-type IntermediateRoute array{http_methods: list<string>, controller: string, method: string, route: \Quellabs\Canvas\Annotations\Route, route_path: string, priority: int}
+	 * @phpstan-import-type RouteDefinition from RouteTypes
+	 * @phpstan-import-type IntermediateRoute from RouteTypes
      */
 	class RouteDiscovery {
 		
@@ -77,7 +76,7 @@
 		 * pre-compiles the route patterns for optimal runtime performance. The compiled
 		 * routes are sorted by priority to ensure correct matching order during request
 		 * processing.
-		 * @return list<CompiledRoute> Array of compiled route definitions sorted by priority (highest first)
+		 * @return list<RouteDefinition> Array of compiled route definitions sorted by priority (highest first)
 		 * @throws AnnotationReaderException
 		 */
 		public function buildRoutesFromControllers(): array {

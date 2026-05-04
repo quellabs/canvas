@@ -2,6 +2,7 @@
 	
 	namespace Quellabs\Canvas\Routing\Components;
 	
+	use Quellabs\Canvas\Routing\RouteTypes;
 	use Quellabs\Canvas\Routing\SegmentTypes;
 	
 	/**
@@ -52,8 +53,8 @@
 	 * ordering to ensure the most specific routes are matched first while maintaining
 	 * high performance across different route pattern complexities.
 	 *
-	 * @phpstan-import-type CompiledSegment from RouteCandidateFilter
-	 * @phpstan-import-type Route from RouteCandidateFilter
+	 * @phpstan-import-type CompiledSegment from RouteTypes
+	 * @phpstan-import-type RouteDefinition from RouteTypes
 	 */
 	class RouteSegmentAnalyzer {
 		
@@ -164,7 +165,7 @@
 		
 		/**
 		 * Classify route type for indexing
-		 * @param Route $route
+		 * @param RouteDefinition $route
 		 * @return string
 		 */
 		public function classifyRoute(array $route): string {
