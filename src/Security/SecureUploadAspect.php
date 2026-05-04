@@ -156,8 +156,13 @@
 		
 		/**
 		 * Processes all uploaded files
+		 *
+		 * Output is normalized: every field always maps to an indexed array of processed
+		 * file records, regardless of whether the field accepted one or multiple files.
+		 * This gives consumers a consistent shape to iterate over without branching on type.
+		 *
 		 * @param array<string, UploadedFile|array<int, UploadedFile>> $files Array of uploaded files
-		 * @return array<string, array<string, mixed>> Processed file information
+		 * @return array<string, array<int, array<string, mixed>>> Processed file information
 		 * @throws RuntimeException If validation fails
 		 */
 		private function processUploadedFiles(array $files): array {
@@ -174,18 +179,20 @@
 			
 			// Process each field containing uploaded files
 			foreach ($files as $fieldName => $file) {
-				// Single file upload - process directly
+				// Always initialize as an indexed array so the return type is uniform.
+				// Single-file fields get a one-element array; multi-file fields get N elements.
+				// Consumers can always foreach over $result[$field] without type-checking first.
+				$processedFiles[$fieldName] = [];
+				
 				if (!is_array($file)) {
-					$processedFiles[$fieldName] = $this->processSingleFile($file);
+					// Single UploadedFile: wrap in an array to match the normalized structure
+					$processedFiles[$fieldName][] = $this->processSingleFile($file);
 					continue;
 				}
 				
-				// Initialize array for this field's processed files
-				$processedFiles[$fieldName] = [];
-				
-				// Process each individual file in the array
-				foreach ($file as $index => $singleFile) {
-					$processedFiles[$fieldName][$index] = $this->processSingleFile($singleFile);
+				// Multiple UploadedFile objects for the same field name
+				foreach ($file as $singleFile) {
+					$processedFiles[$fieldName][] = $this->processSingleFile($singleFile);
 				}
 			}
 			
@@ -604,17 +611,31 @@
 			
 			// Iterate through each potential path
 			foreach ($paths as $path) {
-				// Check if the file exists and is executable at this path
+				// For absolute paths this correctly identifies the executable.
+				// For the bare 'clamscan' entry this will almost always return false because
+				// is_executable() does not search PATH — it only checks the literal path relative
+				// to cwd. The 'which' fallback below is the only reliable way to resolve bare
+				// binary names via PATH.
 				if (is_executable($path)) {
 					return $path;
 				}
 				
-				// If direct path check fails, try using the 'which' command to locate the executable
-				// The 'which' command searches the PATH environment variable for the executable
-				// Redirect stderr to /dev/null to suppress error messages if command not found
-				$which = trim(shell_exec("which {$path} 2>/dev/null"));
+				// shell_exec() returns string on success, false if the command could not be
+				// executed, and null if no output was produced. trim() requires a string, so
+				// any non-string result means the binary was not found — skip to the next candidate.
+				$output = shell_exec("which {$path} 2>/dev/null");
 				
-				// If 'which' found the executable and it's actually executable, return the path
+				if (!is_string($output)) {
+					// shell_exec() returned false or null — 'which' either failed to run or
+					// produced no output, meaning the binary is not on PATH.
+					continue;
+				}
+				
+				// 'which' ran successfully — trim whitespace and newlines from the result.
+				$which = trim($output);
+				
+				// If 'which' found the executable and it's actually executable, return the path.
+				// The empty-string guard handles the case where 'which' ran but matched nothing.
 				if ($which && is_executable($which)) {
 					return $which;
 				}
