@@ -73,8 +73,16 @@
 					// Resolve the provider instance from the container
 					$instance = $this->di->get($listener['className']);
 					
+					// Create the callable
+					$callable = [$instance, $listener['method']];
+					
+					// Validate that the callable is actually callable
+					if (!is_callable($callable)) {
+						continue;
+					}
+					
 					// Wire the signal to the method
-					$signal->connect([$instance, $listener['method']], $listener['priority']);
+					$signal->connect($callable, $listener['priority']);
 				}
 			}
 		}
@@ -137,7 +145,7 @@
 					
 					// Store the class name and method rather than a callable — instantiation
 					// is deferred to connect() where we know a matching signal exists
-					foreach ($annotations as $annotation) {
+					foreach ($annotations->ofType(ListenTo::class) as $annotation) {
 						$map[$annotation->getName()][] = [
 							'className' => $className,
 							'method'    => $method->getName(),
