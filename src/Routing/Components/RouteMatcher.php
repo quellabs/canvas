@@ -31,7 +31,7 @@
 	 *
 	 * @phpstan-import-type CompiledSegment from RouteCandidateFilter
 	 *
-	 * @phpstan-type Route array{
+	 * @phpstan-type RouteData array{
 	 *     controller: string,
 	 *     method: string,
 	 *     route_path: string,
@@ -54,6 +54,8 @@
 		
 		/** @var array<string, SegmentMatchingStrategyInterface> */
 		private array $strategies;
+		
+		/** @var bool True if a trailing slash is a different route */
 		private bool $matchTrailingSlashes;
 		
 		/**
@@ -61,8 +63,12 @@
 		 * Pre-initializes all strategy instances so they can be reused across matches.
 		 */
 		public function __construct(bool $matchTrailingSlashes = false) {
+			// True if a trailing slash is a different route
 			$this->matchTrailingSlashes = $matchTrailingSlashes;
 			
+			// Both MULTI_WILDCARD and MULTI_WILDCARD_VAR share the same strategy because the
+			// difference (named vs anonymous capture) is handled inside the strategy itself,
+			// not by dispatching to a different class.
 			$this->strategies = [
 				SegmentTypes::STATIC             => new StaticSegmentStrategy(),
 				SegmentTypes::VARIABLE           => new VariableSegmentStrategy(),
@@ -75,21 +81,24 @@
 		
 		/**
 		 * Match a URL against a single route.
-		 * @param Route $routeData Complete route configuration
+		 * @param RouteData $routeData Complete route configuration
 		 * @param list<string> $requestSegments URL segments
 		 * @param string $originalUrl Full original URL (used for trailing slash check)
 		 * @param string $requestMethod HTTP method (GET, POST, etc.)
 		 * @return MatchedRoute|null Matched route with extracted variables, or null on failure
 		 */
 		public function matchRoute(array $routeData, array $requestSegments, string $originalUrl, string $requestMethod): ?array {
+			// Reject mismatched HTTP methods before doing any pattern work.
 			if (!$this->httpMethodIsAllowed($requestMethod, $routeData['http_methods'])) {
 				return null;
 			}
 			
+			// Trailing-slash enforcement is opt-in; skip the check when the feature is disabled.
 			if ($this->matchTrailingSlashes && !$this->trailingSlashMatches($originalUrl, $routeData['route_path'])) {
 				return null;
 			}
 			
+			// Static routes get a dedicated fast path: no variable extraction, just literal comparison.
 			$compiledPattern = $routeData['compiled_pattern'];
 			$segmentCount = count($requestSegments);
 			$patternCount = count($compiledPattern);
@@ -107,6 +116,7 @@
 		
 		/**
 		 * Check whether the incoming HTTP method is accepted by this route.
+		 * Strict comparison prevents "get" accidentally matching "GET".
 		 * @param string $requestMethod Incoming method (e.g. "GET")
 		 * @param list<string> $allowedMethods Methods declared on the route
 		 */
@@ -120,10 +130,14 @@
 		 * both must either end with a slash or neither must.
 		 */
 		private function trailingSlashMatches(string $originalUrl, string $routePath): bool {
+			// Root is a special case: "/" ends with a slash but is not a "trailing" slash in
+			// the conventional sense, so we compare the two strings directly rather than
+			// applying the ends-with check that would make every root request match every root route.
 			if ($originalUrl === '/' || $routePath === '/') {
 				return $originalUrl === $routePath;
 			}
 			
+			// For all other paths, require that both either carry a trailing slash or neither does.
 			return str_ends_with($originalUrl, '/') === str_ends_with($routePath, '/');
 		}
 		
@@ -134,41 +148,51 @@
 		/**
 		 * Return true when every segment in the compiled pattern is a static (literal) segment.
 		 * Empty patterns are treated as static (root path).
-		 *
 		 * @param list<CompiledSegment> $compiledPattern
+		 * @return bool
 		 */
 		private function isStaticRoute(array $compiledPattern): bool {
 			foreach ($compiledPattern as $segment) {
+				// A single dynamic segment disqualifies the entire route from the fast path.
 				if (!SegmentTypes::isStatic($segment)) {
 					return false;
 				}
 			}
 			
+			// All segments passed, or the pattern is empty (root).
 			return true;
 		}
 		
 		/**
 		 * Match a fully static route by comparing each segment as a literal string.
-		 *
 		 * Static routes must have an exact segment count and every segment must match
 		 * character-for-character. No variable extraction takes place.
-		 *
 		 * @param list<CompiledSegment> $compiledPattern
 		 * @param list<string> $requestSegments
-		 * @param Route $routeData
+		 * @param RouteData $routeData
+		 * @param int $segmentCount
+		 * @param int $patternCount
 		 * @return MatchedRoute|null
 		 */
 		private function matchStaticRoute(array $compiledPattern, array $requestSegments, array $routeData, int $segmentCount, int $patternCount): ?array {
+			// Static routes have no wildcards so a length mismatch is an immediate failure.
 			if ($segmentCount !== $patternCount) {
 				return null;
 			}
 			
 			for ($i = 0; $i < $patternCount; $i++) {
-				if ($compiledPattern[$i]['original'] !== $requestSegments[$i]) {
+				if (
+					// Guard against a malformed compiled segment that is missing its literal value.
+					!isset($compiledPattern[$i]['original']) ||
+
+					// The request segment must be byte-identical to the compiled literal.
+					$compiledPattern[$i]['original'] !== $requestSegments[$i]
+				) {
 					return null;
 				}
 			}
 			
+			// All segments matched; pass an empty variables map since static routes capture nothing.
 			return $this->buildMatchResult($compiledPattern, $routeData, []);
 		}
 		
@@ -177,22 +201,24 @@
 		// -------------------------------------------------------------------------
 		
 		/**
-		 * Match a route that contains at least one dynamic segment (variable or wildcard).
-		 *
 		 * Validates that the request has an acceptable number of segments before running
 		 * the full pattern match. For wildcard routes the minimum required count is used;
 		 * for non-wildcard dynamic routes an exact count is required.
-		 *
 		 * @param list<CompiledSegment> $compiledPattern
 		 * @param list<string> $requestSegments
-		 * @param Route $routeData
+		 * @param RouteData $routeData
+		 * @param int $segmentCount
+		 * @param int $patternCount
 		 * @return MatchedRoute|null
 		 */
 		private function matchDynamicRoute(array $compiledPattern, array $requestSegments, array $routeData, int $segmentCount, int $patternCount): ?array {
+			// Cheap structural check before spinning up the strategy machinery.
 			if (!$this->segmentCountIsAcceptable($compiledPattern, $segmentCount, $patternCount)) {
 				return null;
 			}
 			
+			// $variables is populated by reference inside runStrategyMatch so that the
+			// strategy loop can accumulate captures without returning them through the call stack.
 			$variables = [];
 			
 			if (!$this->runStrategyMatch($requestSegments, $compiledPattern, $variables)) {
@@ -210,18 +236,25 @@
 		 * require an exact count because every segment maps one-to-one.
 		 *
 		 * @param list<CompiledSegment> $compiledPattern
+		 * @param int $segmentCount
+		 * @param int $patternCount
+		 * @return bool
 		 */
 		private function segmentCountIsAcceptable(array $compiledPattern, int $segmentCount, int $patternCount): bool {
 			if ($this->patternContainsWildcard($compiledPattern)) {
+				// Wildcard routes can consume more (or fewer, for **) segments than the pattern
+				// has entries, so only enforce the floor, not an exact count.
 				return $segmentCount >= $this->minimumSegmentsRequired($compiledPattern);
 			}
 			
+			// Pure-variable routes map one pattern segment to one request segment with no elasticity.
 			return $segmentCount === $patternCount;
 		}
 		
 		/**
 		 * Return true when the pattern contains at least one wildcard segment (single or multi).
 		 * @param list<CompiledSegment> $compiledPattern
+		 * @return bool
 		 */
 		private function patternContainsWildcard(array $compiledPattern): bool {
 			foreach ($compiledPattern as $segment) {
@@ -241,11 +274,14 @@
 		 * partial variable) requires at least one segment.
 		 *
 		 * @param list<CompiledSegment> $compiledPattern
+		 * @return int
 		 */
 		private function minimumSegmentsRequired(array $compiledPattern): int {
 			$minimum = 0;
 			
 			foreach ($compiledPattern as $segment) {
+				// Multi-wildcards are the only segment type that can match zero URL segments,
+				// so they are intentionally excluded from the minimum count.
 				if (!SegmentTypes::isMultiWildcard($segment)) {
 					$minimum++;
 				}
@@ -277,17 +313,22 @@
 		private function runStrategyMatch(array $requestSegments, array $compiledPattern, array &$variables): bool {
 			$context = new MatchingContext($requestSegments, $compiledPattern);
 			
+			// Iterate over pattern segments, not request segments, because wildcard strategies
+			// advance the request cursor by more than one step internally.
 			while ($context->hasMoreSegments()) {
 				$segment = $context->getCurrentRouteSegment();
 				$strategy = $this->getStrategy($segment['type']);
 				$result = $strategy->match($segment, $context);
 				
 				if ($result === MatchResult::COMPLETE_MATCH) {
+					// The strategy (typically MultiWildcard) consumed the remainder of the request
+					// in one call, so there is nothing left to iterate over.
 					$variables = $context->getVariables();
 					return true;
 				}
 				
 				if ($result === MatchResult::NO_MATCH) {
+					// Fail fast: no backtracking is attempted, so one failed segment ends the match.
 					return false;
 				}
 				
@@ -295,12 +336,18 @@
 				$context->advance();
 			}
 			
+			// The pattern is exhausted; collect whatever variables the strategies captured.
 			$variables = $context->getVariables();
+			
+			// Confirm that every request segment was consumed. If the request had more segments
+			// than the pattern covered, this returns false and the route is rejected.
 			return $context->validateFinalMatch();
 		}
 		
 		/**
 		 * Retrieve the pre-initialized strategy instance for a given segment type.
+		 * @param string $segmentType
+		 * @return SegmentMatchingStrategyInterface
 		 * @throws \InvalidArgumentException When no strategy exists for the given type
 		 */
 		private function getStrategy(string $segmentType): SegmentMatchingStrategyInterface {
@@ -318,7 +365,7 @@
 		/**
 		 * Assemble the MatchedRoute array from a successful match.
 		 * @param list<CompiledSegment> $compiledPattern
-		 * @param Route $routeData
+		 * @param RouteData $routeData
 		 * @param array<string, mixed> $variables Extracted route variables (empty for static routes)
 		 * @return MatchedRoute
 		 */
