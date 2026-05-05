@@ -79,7 +79,8 @@
 			// Replace the given statements for their Canvas counterparts
 			$result = preg_replace(array_keys($patterns), array_values($patterns), $content);
 			
-			// If that failed, throw
+			// A null result means PCRE failed - any surviving exit()/die() calls would
+			// terminate the PHP process directly, killing the Canvas request lifecycle
 			if ($result === null) {
 				throw new \RuntimeException("Failed to replace exit/die calls in preprocessed content");
 			}
@@ -97,12 +98,14 @@
 			// Match header() calls with string literals and optional parameters
 			$pattern = '/header\s*\(\s*([\'"])([^\1]*?)\1\s*(?:,\s*(true|false))?\s*(?:,\s*(\d+))?\s*\)/';
 			
-			return preg_replace_callback($pattern, function ($matches) {
+			$result = preg_replace_callback($pattern, function ($matches) {
 				$headerValue = $matches[2];
+				
+				// Default replace to true if not explicitly specified (mirrors PHP's own default)
 				$replace = $matches[3] ?? 'true';
 				$responseCode = $matches[4] ?? null;
 				
-				// Escape single quotes in the header value
+				// Escape single quotes in the header value to keep the generated code valid
 				$headerValue = str_replace("'", "\\'", $headerValue);
 				
 				// Build the canvas_header call
@@ -116,7 +119,15 @@
 				$call .= ")";
 				
 				return $call;
-			}, $content) ?? $content;
+			}, $content);
+			
+			// A null result means PCRE failed - raw header() calls would send headers
+			// directly, bypassing Canvas's response lifecycle
+			if ($result === null) {
+				throw new \RuntimeException("Failed to replace header() calls in preprocessed content");
+			}
+			
+			return $result;
 		}
 		
 		/**
@@ -125,13 +136,27 @@
 		 * @return string Content with http_response_code() calls replaced
 		 */
 		private function replaceHttpResponseCodeCalls(string $content): string {
-			// Match http_response_code() calls with numeric arguments
+			// Match http_response_code() calls with a numeric status code argument
+			// Captures the status code in group 1: http_response_code(404)
 			$pattern = '/http_response_code\s*\(\s*(\d+)\s*\)/';
 			
-			return preg_replace_callback($pattern, function ($matches) {
+			$result = preg_replace_callback($pattern, function ($matches) {
+				// Cast to int to strip any leading zeros from the matched digits
 				$statusCode = (int)$matches[1];
+				
+				// Rewrite as a canvas_header() Status line - this routes the response
+				// code through Canvas's header collection instead of sending it directly,
+				// which would bypass the framework's response lifecycle
 				return "canvas_header('Status: {$statusCode}', true)";
-			}, $content) ?? $content;
+			}, $content);
+			
+			// A null result means PCRE failed entirely - the file would retain the raw
+			// http_response_code() call and send headers outside Canvas's control
+			if ($result === null) {
+				throw new \RuntimeException("Failed to replace http_response_code() calls in preprocessed content");
+			}
+			
+			return $result;
 		}
 		
 		/**
@@ -145,14 +170,24 @@
 			// mysqli_query($connection, $query) or mysqli_query($connection, $query, $resultmode)
 			$pattern = '/\bmysqli_query\s*\(\s*([^,]+),\s*([^,)]+)(?:\s*,\s*([^)]+))?\s*\)/';
 			
-			return preg_replace_callback($pattern, function ($matches) {
+			$result = preg_replace_callback($pattern, function ($matches) {
 				$connection = trim($matches[1]);
 				$query = trim($matches[2]);
+				
+				// Optional third argument - preserve it if present
 				$resultMode = isset($matches[3]) ? ', ' . trim($matches[3]) : '';
 				
-				// Replace with monitored version
+				// Wrap with the monitored version so Canvas can intercept and log the query
 				return "canvas_mysqli_query({$connection}, {$query}{$resultMode})";
-			}, $content) ?? $content;
+			}, $content);
+			
+			// A null result means PCRE failed - the raw mysqli_query() would execute
+			// unmonitored, bypassing the inspector entirely
+			if ($result === null) {
+				throw new \RuntimeException("Failed to replace mysqli_query() calls in preprocessed content");
+			}
+			
+			return $result;
 		}
 		
 		/**
@@ -164,13 +199,22 @@
 			// Pattern to match mysqli_prepare calls
 			$pattern = '/\bmysqli_prepare\s*\(\s*([^,]+),\s*([^)]+)\s*\)/';
 			
-			return preg_replace_callback($pattern, function ($matches) {
+			// Perform the regexp rereplacement
+			$result = preg_replace_callback($pattern, function ($matches) {
 				$connection = trim($matches[1]);
 				$query = trim($matches[2]);
 				
-				// Replace with monitored version
+				// Wrap with the monitored version so Canvas can intercept prepared statements
 				return "canvas_mysqli_prepare({$connection}, {$query})";
-			}, $content) ?? $content;
+			}, $content);
+			
+			// A null result means PCRE failed - the raw mysqli_prepare() would execute
+			// unmonitored, bypassing the inspector entirely
+			if ($result === null) {
+				throw new \RuntimeException("Failed to replace mysqli_prepare() calls in preprocessed content");
+			}
+			
+			return $result;
 		}
 		
 		/**
@@ -190,7 +234,8 @@
 			// Replace the content
 			$result = preg_replace($pattern, 'canvas_create_pdo(', $content);
 			
-			// Failed? Throw
+			// A null result means PCRE failed - raw PDO instantiation would create an
+			// unwrapped connection that Canvas cannot monitor for query inspection
 			if ($result === null) {
 				throw new \RuntimeException("Failed to replace PDO instantiation in preprocessed content");
 			}
