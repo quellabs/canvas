@@ -351,13 +351,13 @@
 			// Each scope provides different granularity for rate limiting
 			$rawIdentifier = match ($this->scope) {
 				// Rate limit per IP address - useful for preventing abuse from single sources
-				'ip' => $request->getClientIp(),
+				'ip' => $request->getClientIp() ?? 'unknown_ip',
 				
 				// Rate limit per authenticated user - allows different limits for different users
 				'user' => $this->getUserIdentifier($request),
 				
 				// Rate limit per API key - useful for API quotas and partner management
-				'api_key' => $request->headers->get('X-API-Key', 'anonymous'),
+				'api_key' => $request->headers->get('X-API-Key', 'anonymous') ?? 'anonymous',
 				
 				// Global rate limit - applies to all requests regardless of source
 				'global' => 'global',
