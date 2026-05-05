@@ -76,7 +76,16 @@
 				'/\bdie\b(?!\s*[\(;])/' => 'throw new \Quellabs\Canvas\Legacy\LegacyExitException(0)'
 			];
 			
-			return preg_replace(array_keys($patterns), array_values($patterns), $content);
+			// Replace the given statements for their Canvas counterparts
+			$result = preg_replace(array_keys($patterns), array_values($patterns), $content);
+			
+			// If that failed, throw
+			if ($result === null) {
+				throw new \RuntimeException("Failed to replace exit/die calls in preprocessed content");
+			}
+			
+			// Return the replaced result
+			return $result;
 		}
 		
 		/**
@@ -107,7 +116,7 @@
 				$call .= ")";
 				
 				return $call;
-			}, $content);
+			}, $content) ?? $content;
 		}
 		
 		/**
@@ -122,7 +131,7 @@
 			return preg_replace_callback($pattern, function ($matches) {
 				$statusCode = (int)$matches[1];
 				return "canvas_header('Status: {$statusCode}', true)";
-			}, $content);
+			}, $content) ?? $content;
 		}
 		
 		/**
@@ -143,7 +152,7 @@
 				
 				// Replace with monitored version
 				return "canvas_mysqli_query({$connection}, {$query}{$resultMode})";
-			}, $content);
+			}, $content) ?? $content;
 		}
 		
 		/**
@@ -161,7 +170,7 @@
 				
 				// Replace with monitored version
 				return "canvas_mysqli_prepare({$connection}, {$query})";
-			}, $content);
+			}, $content) ?? $content;
 		}
 		
 		/**
@@ -178,7 +187,16 @@
 			// - new \Namespace\PDO(...) - won't match, which is correct
 			$pattern = '/\bnew\s+\\\\?PDO\s*\(/';
 			
-			return preg_replace($pattern, 'canvas_create_pdo(', $content);
+			// Replace the content
+			$result = preg_replace($pattern, 'canvas_create_pdo(', $content);
+			
+			// Failed? Throw
+			if ($result === null) {
+				throw new \RuntimeException("Failed to replace PDO instantiation in preprocessed content");
+			}
+			
+			// Return the replaced result
+			return $result;
 		}
 		
 		/**

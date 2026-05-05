@@ -373,6 +373,11 @@
 			// and ensures compatibility across different filesystems and operating systems
 			$sanitized = preg_replace('/[^a-zA-Z0-9_-]/', '_', $taskName);
 			
+			// Throw if preg_replace failed
+			if ($sanitized === null) {
+				throw new RuntimeException('FileTaskStorage: sanitizeTaskName failed');
+			}
+			
 			// Limit the filename length to 100 characters
 			// This prevents filesystem errors on systems with filename length limits
 			// and keeps filenames manageable

@@ -22,9 +22,9 @@
 		 * RoutesBase constructor
 		 * @param ConsoleInput $input
 		 * @param ConsoleOutput $output
-		 * @param ProviderInterface|null $provider
+		 * @param ProviderInterface $provider
 		 */
-		public function __construct(ConsoleInput $input, ConsoleOutput $output, ?ProviderInterface $provider = null) {
+		public function __construct(ConsoleInput $input, ConsoleOutput $output, ProviderInterface $provider) {
 			parent::__construct($input, $output, $provider);
 			
 			// Config for AnnotationsReader
