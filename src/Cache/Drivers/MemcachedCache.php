@@ -474,58 +474,34 @@
 		 * @throws \Exception If all retries fail
 		 */
 		private function executeWithRetry(callable $operation): mixed {
-			$attempts = 0;
-			$lastException = null;
-			
-			// Retry loop - continue until max retries reached or operation succeeds
-			while ($attempts < $this->maxRetries) {
+			for ($attempts = 0; $attempts < $this->maxRetries; $attempts++) {
 				try {
-					// Execute the memcached operation (get, set, delete, etc.)
 					$result = $operation();
-					
-					// Check the result code to determine if the operation was successful
-					// or encountered an error that we should handle
 					$resultCode = $this->memcached->getResultCode();
 					
-					// These result codes indicate successful operations or expected states:
-					// - RES_SUCCESS: Operation completed successfully
-					// - RES_NOTFOUND: Key doesn't exist (expected for get operations on missing keys)
-					// - RES_NOTSTORED: Key wasn't stored (expected for add operations on existing keys)
 					if ($resultCode === Memcached::RES_SUCCESS ||
 						$resultCode === Memcached::RES_NOTFOUND ||
 						$resultCode === Memcached::RES_NOTSTORED) {
 						return $result;
 					}
 					
-					// Check if this is a recoverable error that we should retry
-					// Examples: connection timeouts, temporary server unavailability, network issues
 					if ($this->isRecoverableError($resultCode)) {
-						// Throw exception to trigger retry logic with backoff
 						throw new \Exception("Memcached error: " . $this->memcached->getResultMessage());
 					}
 					
-					// Non-recoverable error (e.g., invalid arguments, protocol errors)
-					// Return the result immediately without retrying as these won't be fixed by retrying
 					return $result;
 					
 				} catch (\Exception $e) {
-					// Store the exception in case we need to re-throw after all retries fail
-					$lastException = $e;
-					$attempts++;
-					
-					// If we haven't exhausted all retries, wait before the next attempt
-					if ($attempts < $this->maxRetries) {
-						// Exponential backoff: wait 100ms, then 200ms, then 400ms, etc.
-						// This reduces load on memcached servers and increases chance of recovery
-						// Formula: 100ms * 2^(attempts-1) = 100ms, 200ms, 400ms, 800ms...
-						usleep(100000 * pow(2, $attempts - 1));
+					if ($attempts + 1 < $this->maxRetries) {
+						usleep(100000 * pow(2, $attempts));
+					} else {
+						throw new \Exception($e->getMessage(), $e->getCode(), $e);
 					}
 				}
 			}
 			
-			// All retries exhausted - re-throw the last exception encountered
-			// Preserve the original exception chain for debugging purposes
-			throw new \Exception($lastException->getMessage(), $lastException->getCode(), $lastException);
+			// Unreachable, but satisfies static analysers
+			throw new \Exception('Memcached operation failed: ' . $this->memcached->getResultMessage());
 		}
 		
 		/**
