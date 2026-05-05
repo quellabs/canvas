@@ -120,12 +120,6 @@ return `
                     <span class="canvas-debug-label">Route Pattern:</span>
                     <span class="canvas-debug-value">\${route.pattern || 'N/A'}</span>
                 </div>
-                \${route.legacy ? `
-                <div class="canvas-debug-info-item">
-                    <span class="canvas-debug-label">Legacy File:</span>
-                    <span class="canvas-debug-value">\${route.legacyFile}</span>
-                </div>
-                ` : ''}
             </div>
         </div>
         

@@ -66,11 +66,8 @@
 		/** @var ConfigurationInterface Inspector/debug bar configuration */
 		private ConfigurationInterface $inspector_configuration;
 		
-		/** @var bool Whether legacy fallback mode is enabled */
-		private bool $legacyEnabled;
-		
 		/** @var LegacyHandler|null Legacy fallback request handler, null when legacy is disabled */
-		private ?LegacyHandler $legacyFallbackHandler;
+		private ?LegacyHandler $legacyFallbackHandler = null;
 		
 		/** @var Container Dependency injection container */
 		private Container $dependencyInjector;
@@ -135,10 +132,7 @@
 			$this->dependencyInjector->register(new SimpleBinding(SignalHub::class, $this->signalHub));
 			$this->dependencyInjector->register(new SimpleBinding(AnnotationReader::class, $this->annotationsReader));
 			$this->dependencyInjector->register(new CacheInterfaceProvider($this->dependencyInjector, $this->annotationsReader));
-			
-			// Initialize legacy fallback handler to null explicitly to please phpstan
-			$this->legacyFallbackHandler = null;
-			
+
 			// Initialize legacy support
 			$this->initializeLegacySupport();
 		}
@@ -188,14 +182,18 @@
 		 * @return bool
 		 */
 		public function isLegacyEnabled(): bool {
-			return $this->legacyEnabled;
+			return $this->legacyFallbackHandler !== null;
 		}
 		
 		/**
 		 * Returns the legacy fallback handler object
-		 * @return LegacyHandler|null
+		 * @return LegacyHandler
 		 */
-		public function getLegacyHandler(): ?LegacyHandler {
+		public function getLegacyHandler(): LegacyHandler {
+			if ($this->legacyFallbackHandler === null) {
+				throw new \LogicException('Legacy routing is not enabled.');
+			}
+			
 			return $this->legacyFallbackHandler;
 		}
 		
@@ -216,11 +214,10 @@
 			
 			// Run the request through the routing system
 			$urlData = null;
-			$isLegacyPath = false;
 			
 			try {
 				$requestHandler = new RequestHandler($this);
-				$response = $requestHandler->handle($request, $urlData, $isLegacyPath);
+				$response = $requestHandler->handle($request, $urlData);
 			} catch (\Throwable $e) {
 				$response = $this->createErrorResponse($e, $request);
 			}
@@ -228,11 +225,10 @@
 			// Publish request telemetry — belongs here, not inside the renderer
 			$this->canvasQuerySignal->emit([
 				'request'           => $request,
-				'legacy_path'       => $isLegacyPath,
 				'http_methods'      => $urlData['http_methods'] ?? null,
 				'controller'        => $urlData['controller'] ?? null,
 				'method'            => $urlData['method'] ?? null,
-				'pattern'           => !$isLegacyPath && $urlData !== null ? $urlData['route']?->getRoute() : '',
+				'pattern'           => $urlData !== null ? $urlData['route']?->getRoute() : '',
 				'parameters'        => $urlData['variables'] ?? null,
 				'execution_time_ms' => (microtime(true) - $start) * 1000,
 				'memory_used_bytes' => memory_get_usage(true) - $memoryStart
@@ -297,7 +293,7 @@
 		 */
 		public function __toString(): string {
 			// Determine legacy feature status - convert boolean to readable string
-			$legacyStatus = $this->legacyEnabled ? 'enabled' : 'disabled';
+			$legacyStatus = $this->isLegacyEnabled() ? 'enabled' : 'disabled';
 			
 			// Get debug mode from configuration with fallback to production mode
 			// Uses type-safe configuration retrieval with default value
@@ -326,7 +322,7 @@
 				'debug_mode'     => $this->configuration->getAs('debug_mode', 'bool', false),
 				
 				// Whether legacy features are enabled
-				'legacy_enabled' => $this->legacyEnabled,
+				'legacy_enabled' => $this->isLegacyEnabled(),
 				
 				// List of all available configuration keys (for inspecting what's configured)
 				'config_keys'    => array_keys($this->configuration->all()),
@@ -362,10 +358,9 @@
 		 * @return void
 		 */
 		private function initializeLegacySupport(): void {
-			// Check if legacy fallthrough is enabled
-			$this->legacyEnabled = $this->configuration->getAs('legacy_enabled', 'bool', false);
+			$legacyEnabled = $this->configuration->getAs('legacy_enabled', 'bool', false);
 			
-			if ($this->legacyEnabled) {
+			if ($legacyEnabled) {
 				// Only initialize bridge when legacy support is enabled
 				LegacyBridge::initialize($this->dependencyInjector);
 				

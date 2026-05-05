@@ -7,6 +7,7 @@
 	use Quellabs\Canvas\Discover\MethodContextProvider;
 	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
 	use Quellabs\Canvas\Kernel;
+	use Quellabs\Canvas\Legacy\LegacyHandler;
 	use Quellabs\Canvas\Routing\Components\SignalConnector;
 	use Quellabs\Canvas\Routing\Context\MethodContext;
 	use Quellabs\DependencyInjection\Provider\SimpleBinding;
@@ -35,37 +36,25 @@
 		 * Process an HTTP request through the controller system and return the response
 		 * @param Request $request The incoming HTTP request object
 		 * @param array<string, mixed>|null $urlData
-		 * @param bool $isLegacyPath
 		 * @return Response HTTP response to be sent back to the client
 		 * @throws AnnotationReaderException|RouteNotFoundException|\ReflectionException
 		 */
-		public function handle(Request $request, ?array &$urlData, bool &$isLegacyPath): Response {
-			// Initialize variables to track route resolution and performance metrics
-			$urlData = null;           // Will hold resolved route data if found
-			$isLegacyPath = false;     // Flag to track if legacy routing was used
-			
+		public function handle(Request $request, ?array &$urlData): Response {
 			// Set up request environment and get service providers
 			$providers = $this->prepareRequest($request);
 			
 			try {
-				$response = $this->modernResolve($request, $urlData);
+				return $this->modernResolve($request, $urlData);
 			} catch (RouteNotFoundException $e) {
-				// Check if legacy routing is enabled and a handler is configured
-				// If not, rethrow the exception
-				if (!$this->kernel->isLegacyEnabled() || !$this->kernel->getLegacyHandler()) {
-					// No legacy fallback configured,
+				if (!$this->kernel->isLegacyEnabled()) {
 					throw $e;
 				}
 				
-				// Resolve the legacy path
-				$response = $this->legacyResolve($request, $isLegacyPath);
+				return $this->legacyResolve($request);
 			} finally {
 				// Always clean up request resources, regardless of success/failure
 				$this->cleanupRequest($providers);
 			}
-			
-			// Return the final HTTP response to be sent to the client
-			return $response;
 		}
 		
 		/**
@@ -124,15 +113,10 @@
 		/**
 		 * Fallback to legacy routing system when modern resolution fails
 		 * @param Request $request The incoming HTTP request to resolve
-		 * @param bool $isLegacyPath Reference parameter - set to true if legacy routing is used
 		 * @return Response The response from legacy handler or 404 if routing fails
 		 * @throws RouteNotFoundException
 		 */
-		private function legacyResolve(Request $request, bool &$isLegacyPath): Response {
-			// Mark that we're using legacy routing for this request
-			$isLegacyPath = true;
-			
-			// Delegate to the legacy routing handler
+		private function legacyResolve(Request $request): Response {
 			return $this->kernel->getLegacyHandler()->handle($request);
 		}
 		
