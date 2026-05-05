@@ -85,25 +85,28 @@
 		public function getEventsBySignal(string $signal): array {
 			return $this->getEventsBySignals([$signal]);
 		}
-
+		
 		/**
 		 * Connects to debug signals that already exist in the SignalHub
 		 * @param SignalHub $signalHub The signal hub to check for existing signals
 		 */
 		private function connectToCanvasQuerySignal(SignalHub $signalHub): void {
-			// Connect to the specific debug signal for canvas queries
-			// This is needed because the signal might already exist when this collector is created
-			try {
-				$signalHub->getSignal('debug.canvas.query')->connect(function (array $data): void {
-					// Store the event data with timestamp
-					$this->events[] = [
-						'signal'    => 'debug.canvas.query',
-						'data'      => $data,
-						'timestamp' => microtime(true),
-					];
-				});
-			} catch (\Throwable $exception) {
+			// Fetch the signal
+			$signal = $signalHub->getSignal('debug.canvas.query');
+			
+			// If none found, abort
+			if (!$signal) {
+				return;
 			}
+			
+			// Connect signal to slot
+			$signal->connect(function (array $data): void {
+				$this->events[] = [
+					'signal'    => 'debug.canvas.query',
+					'data'      => $data,
+					'timestamp' => microtime(true),
+				];
+			});
 		}
 		
 		/**
@@ -122,7 +125,7 @@
 			if ($signal === $pattern) {
 				return true;
 			}
-
+			
 			// If no wildcard found, return false
 			if (!str_contains($pattern, '*') && !str_contains($pattern, '?')) {
 				return false;
@@ -134,7 +137,7 @@
 			// \* becomes .* (matches zero or more characters)
 			// \? becomes .  (matches exactly one character)
 			$regexPattern = '/^' . str_replace(['*', '?'], ['.*', '.'], preg_quote($pattern, '/')) . '$/';
-			return (bool) preg_match($regexPattern, $signal);
+			return (bool)preg_match($regexPattern, $signal);
 		}
 		
 		/**
