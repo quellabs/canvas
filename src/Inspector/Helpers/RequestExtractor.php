@@ -81,7 +81,18 @@
 					continue;
 				}
 				
-				$filtered[$name] = count($values) === 1 ? $values[0] : implode(', ', $values);
+				// Normalize values to strings
+				$stringValues = array_map(
+					static fn($value): string => (string) $value,
+					$values
+				);
+				
+				// Collect values
+				if (count($stringValues) === 1) {
+					$filtered[$name] = $stringValues[0];
+				} else {
+					$filtered[$name] = implode(', ', $stringValues);
+				}
 			}
 			
 			return $filtered;
