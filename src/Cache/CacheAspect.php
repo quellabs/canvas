@@ -86,15 +86,15 @@
 		 * @param array<string, mixed> $__all__ Special 'magic' variable that receives all InterceptWith parameters from DI
 		 */
 		public function __construct(
-			Container $di = null,
+			Container        $di = null,
 			?LoggerInterface $logger = null,
-			?string   $driver = null,
-			?string   $key = null,
-			int       $ttl = 3600,
-			string    $namespace = 'default',
-			bool      $gracefulFallback = true,
-			float     $beta = 0.0,
-			array     $__all__ = []
+			?string          $driver = null,
+			?string          $key = null,
+			int              $ttl = 3600,
+			string           $namespace = 'default',
+			bool             $gracefulFallback = true,
+			float            $beta = 0.0,
+			array            $__all__ = []
 		) {
 			$this->allParameters = $__all__;
 			$this->di = $di;
@@ -125,6 +125,13 @@
 		public function around(MethodContextInterface $context, callable $proceed): mixed {
 			$cacheKey = null;
 			
+			// Ignore around aspect if dependency injection is not configured
+			if ($this->di === null) {
+				throw new \RuntimeException(
+					'CacheAspect: Dependency injection container is not configured — cannot resolve CacheInterface'
+				);
+			}
+			
 			try {
 				// Initialize cache with concurrency protection
 				// The cache interface handles thread-safety and race conditions
@@ -141,9 +148,8 @@
 				// Check for probabilistic early expiration to prevent stampede
 				// When beta > 0, occasionally refreshes cache before expiration
 				// This prevents multiple requests from simultaneously recomputing on expiry
-				
 				if ($this->beta > 0.0 && $this->shouldRecomputeEarly($cache, $cacheKey)) {
-					// Recompute the value
+					// Recompute the value and keep track of how long that took
 					$computeStart = microtime(true);
 					$result = $proceed();
 					$computeTime = microtime(true) - $computeStart;
@@ -154,9 +160,9 @@
 					
 					// Log early refresh (useful for monitoring stampede protection effectiveness)
 					$this->logger->info('Cache refreshed early (stampede protection)', [
-						'cache_key' => $cacheKey,
+						'cache_key'       => $cacheKey,
 						'compute_time_ms' => round($computeTime * 1000, 2),
-						'beta' => $this->beta
+						'beta'            => $this->beta
 					]);
 					
 					return $result;
@@ -171,7 +177,7 @@
 					
 					// Only log cache misses (cache hits are silent for performance)
 					$this->logger->info('Cache miss - computed value', [
-						'cache_key' => $cacheKey,
+						'cache_key'       => $cacheKey,
 						'compute_time_ms' => round($computeTime * 1000, 2)
 					]);
 					
@@ -181,12 +187,12 @@
 			} catch (\Exception $e) {
 				// Log cache failure with full context for debugging
 				$this->logger->error('Cache aspect failed', [
-					'cache_key' => $cacheKey,
-					'namespace' => $this->namespace,
-					'method' => $context->getMethodName(),
-					'class' => get_class($context->getClass()),
-					'error' => $e->getMessage(),
-					'error_class' => get_class($e),
+					'cache_key'         => $cacheKey,
+					'namespace'         => $this->namespace,
+					'method'            => $context->getMethodName(),
+					'class'             => get_class($context->getClass()),
+					'error'             => $e->getMessage(),
+					'error_class'       => get_class($e),
 					'graceful_fallback' => $this->gracefulFallback
 				]);
 				
@@ -200,9 +206,11 @@
 				// Strict mode: propagate error to caller
 				throw new \RuntimeException(
 					sprintf(
-						'Cache aspect failed for %s::%s: %s',
+						'CacheAspect failed for %s::%s (namespace: %s, key: %s): %s — set gracefulFallback=true to bypass on cache failure',
 						get_class($context->getClass()),
 						$context->getMethodName(),
+						$this->namespace,
+						$cacheKey ?? 'unresolved',
 						$e->getMessage()
 					),
 					0,
@@ -260,10 +268,24 @@
 			
 			// Extract short class name
 			$pos = strrchr($className, '\\');
-			$shortClassName = $pos !== false ? substr($pos, 1) : $className;
+			
+			if ($pos !== false) {
+				$shortClassName = substr($pos, 1);
+			} else {
+				$shortClassName = $className;
+			}
 			
 			// Convert class name to snake_case for readability
-			$classIdentifier = strtolower(preg_replace('/([a-z])([A-Z])/', '$1_$2', $shortClassName));
+			$result = preg_replace('/([a-z])([A-Z])/', '$1_$2', $shortClassName);
+			
+			if ($result === null) {
+				throw new \RuntimeException(
+					"CacheAspect: Failed to generate cache key — could not convert class name '{$shortClassName}' to snake_case (PCRE error: " . preg_last_error_msg() . ")"
+				);
+			}
+			
+			// Lowercase the snake case string
+			$classIdentifier = strtolower($result);
 			
 			// Create the method-specific key
 			return "{$classIdentifier}.{$methodName}";
@@ -288,7 +310,7 @@
 			if (strlen($serialized) > 50) {
 				$prefix = substr($serialized, 0, 30);
 				$hash = hash('sha256', $serialized);
-
+				
 				// Use first 16 chars of SHA-256 (64-bit collision resistance)
 				return $this->sanitizeValue($prefix) . '_' . substr($hash, 0, 16);
 			}
@@ -516,11 +538,25 @@
 			// Only allow alphanumeric, dash, underscore, and period
 			$sanitized = preg_replace('/[^a-zA-Z0-9\-_.]/', '-', $stringValue);
 			
+			// Throw when value could not be sanitized
+			if ($sanitized === null) {
+				throw new \RuntimeException(
+					"CacheAspect: Failed to generate cache key — could not sanitize value for key segment (PCRE error: " . preg_last_error_msg() . ")"
+				);
+			}
+			
 			// Remove consecutive dashes and trim
 			$sanitized = preg_replace('/-+/', '-', $sanitized);
-			$sanitized = trim($sanitized, '-');
 			
-			// Ensure we have a non-empty result
+			// Throw when value could not be sanitized
+			if ($sanitized === null) {
+				throw new \RuntimeException(
+					"CacheAspect: Failed to generate cache key — could not collapse consecutive dashes in key segment (PCRE error: " . preg_last_error_msg() . ")"
+				);
+			}
+			
+			// Trim and return
+			$sanitized = trim($sanitized, '-');
 			return $sanitized ?: 'empty';
 		}
 		
@@ -533,6 +569,13 @@
 			// Remove any remaining unreplaced placeholders
 			// These might come from custom key templates
 			$key = preg_replace('/\{[^}]+}/', 'missing', $key);
+			
+			// Throw when regexp failed
+			if ($key === null) {
+				throw new \RuntimeException(
+					"CacheAspect: Failed to generate cache key — could not replace unresolved placeholders in key template (PCRE error: " . preg_last_error_msg() . ")"
+				);
+			}
 			
 			// Ensure key isn't too long (many cache systems have 250 char limits)
 			// If too long, create a hybrid: readable prefix + hash suffix
@@ -629,7 +672,7 @@
 				// Log as warning since stampede protection won't work
 				$this->logger->warning('Cache metadata unavailable - stampede protection disabled', [
 					'cache_key' => $cacheKey,
-					'error' => $e->getMessage()
+					'error'     => $e->getMessage()
 				]);
 				
 				return false;
