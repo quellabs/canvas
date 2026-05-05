@@ -399,7 +399,6 @@
 		 */
 		private function executeWithRetry(callable $operation): mixed {
 			$attempts = 0;
-			$lastException = null;
 			
 			// Keep trying until we reach the maximum retry limit
 			while ($attempts < $this->maxRetries) {
@@ -407,30 +406,30 @@
 					// Attempt to execute the Redis operation
 					return $operation();
 				} catch (RedisException $e) {
-					// Store the exception in case this is the final attempt
-					$lastException = $e;
 					$attempts++;
 					
-					// If we haven't exhausted all retries, wait and try to reconnect
-					if ($attempts < $this->maxRetries) {
-						// Exponential backoff: 100ms, 200ms, 400ms...
-						// This prevents overwhelming a struggling Redis server
-						usleep(100000 * pow(2, $attempts - 1));
-						
-						// Attempt to reconnect to Redis
-						try {
-							$this->redis->ping();
-						} catch (RedisException $reconnectException) {
-							// The connection is still broken, but we'll try the operation again
-							// The next retry attempt will either succeed or fail again
-						}
+					// All retry attempts have been exhausted
+					// Re-throw the last exception so the caller knows what went wrong
+					if ($attempts >= $this->maxRetries) {
+						throw new \Exception($e->getMessage(), $e->getCode(), $e);
+					}
+					
+					// Exponential backoff: 100ms, 200ms, 400ms...
+					// This prevents overwhelming a struggling Redis server
+					usleep(100000 * pow(2, $attempts - 1));
+					
+					// Attempt to reconnect to Redis
+					try {
+						$this->redis->ping();
+					} catch (RedisException $reconnectException) {
+						// The connection is still broken, but we'll try the operation again
+						// The next retry attempt will either succeed or fail again
 					}
 				}
 			}
 			
-			// All retry attempts have been exhausted
-			// Re-throw the last exception so the caller knows what went wrong
-			throw new \Exception($lastException->getMessage(), $lastException->getCode(), $lastException);
+			// Unreachable: loop always returns or throws on final attempt
+			throw new \RuntimeException('Retry loop exhausted without result');
 		}
 		
 		/**
