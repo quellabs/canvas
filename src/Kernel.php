@@ -93,7 +93,9 @@
 				$this->canvasQuerySignal = new Signal('debug.canvas.query');
 				$this->signalHub->registerSignal($this->canvasQuerySignal);
 			} else {
-				$this->canvasQuerySignal = $this->signalHub->getSignal('debug.canvas.query');
+				/** @var Signal $signal */
+				$signal = $this->signalHub->getSignal('debug.canvas.query');
+				$this->canvasQuerySignal = $signal;
 			}
 			
 			// Store the configuration array
@@ -238,6 +240,7 @@
 			
 			// Inject debugging information into the response for development
 			if ($debugBarEnabled) {
+				/** @var EventCollector $debugCollector */
 				$this->injectDebugBar($debugCollector, $request, $response);
 			}
 			
@@ -255,11 +258,11 @@
 		
 		/**
 		 * Inject debug bar into response if debug collector is available
-		 * @param EventCollector|null $debugCollector Debug collector instance
+		 * @param EventCollector $debugCollector Debug collector instance
 		 * @param Request $request The HTTP request
 		 * @param Response $response The HTTP response to inject into
 		 */
-		private function injectDebugBar(?EventCollector $debugCollector, Request $request, Response $response): void {
+		private function injectDebugBar(EventCollector $debugCollector, Request $request, Response $response): void {
 			try {
 				$debugBar = new Inspector($debugCollector, $this->getInspectorConfiguration());
 				$debugBar->inject($request, $response);
