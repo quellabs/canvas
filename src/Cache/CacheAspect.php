@@ -210,7 +210,7 @@
 						get_class($context->getClass()),
 						$context->getMethodName(),
 						$this->namespace,
-						$cacheKey ?? 'unresolved',
+						$cacheKey,
 						$e->getMessage()
 					),
 					0,

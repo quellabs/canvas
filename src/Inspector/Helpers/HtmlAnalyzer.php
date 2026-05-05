@@ -14,7 +14,7 @@
 		 */
 		public function isHtmlResponse(Response $response, string $content): bool {
 			// Check Content-Type header first
-			$contentType = $response->headers->get('Content-Type', '');
+			$contentType = (string) $response->headers->get('Content-Type', '');
 			
 			// If explicitly set to non-HTML, don't inject
 			if (preg_match('/application\/(json|xml|pdf|octet-stream)|text\/(plain|css|javascript)/', $contentType)) {
