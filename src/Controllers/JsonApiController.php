@@ -3,7 +3,7 @@
 	namespace Quellabs\Canvas\Controllers;
 	
 	use Quellabs\DependencyInjection\Container;
-	use Quellabs\ObjectQuel\ObjectQuel\QuelException;
+	use Quellabs\ObjectQuel\Exception\QuelException;
 	use Quellabs\ObjectQuel\OrmException;
 	use Quellabs\ObjectQuel\ReflectionManagement\PropertyHandler;
 	use Quellabs\ObjectQuel\Serialization\Serializers\JsonApiSerializer;
