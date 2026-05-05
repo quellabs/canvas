@@ -15,9 +15,9 @@
 
 		/**
 		 * Static reference to the dependency injection container
-		 * @var Container|null
+		 * @var Container
 		 */
-		private static ?Container $container = null;
+		private static Container $container;
 		
 		/**
 		 * Flag to track whether the bridge has been initialized
@@ -54,15 +54,8 @@
 		 * @template T of object
 		 * @param class-string<T> $service The service identifier/name to retrieve
 		 * @return T The requested service instance
-		 * @throws \RuntimeException If the bridge hasn't been initialized
 		 */
-		public static function get(string $service): mixed {
-			// Ensure the bridge has been initialized before attempting to access services
-			if (!self::$container) {
-				throw new \RuntimeException('LegacyBridge not initialized.');
-			}
-			
-			// Delegate to the container's get method
+		public static function get(string $service): object {
 			return self::$container->get($service);
 		}
 		
