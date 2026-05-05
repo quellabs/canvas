@@ -280,7 +280,8 @@
 			// Pattern matches include statements with or without parentheses
 			$pattern = '/\b((?:include|require)(?:_once)?)\s*[\(\s]\s*([\'"])([^\2]*?)\2\s*[\)\s]*;/i';
 			
-			return preg_replace_callback($pattern, function ($matches) use ($currentDir) {
+			// Execute the preg_replace
+			$result = preg_replace_callback($pattern, function ($matches) use ($currentDir) {
 				$statement = $matches[1];    // include, require, etc.
 				$quoteChar = $matches[2];    // ' or "
 				$includePath = $matches[3];  // Original path
@@ -302,6 +303,14 @@
 				// Return original statement if no processed version found
 				return $matches[0];
 			}, $content);
+			
+			// Handle error
+			if ($result === null) {
+				throw new \RuntimeException("Failed to rewrite include paths: {$content}");
+			}
+			
+			// Return the result
+			return $result;
 		}
 		
 		/**
