@@ -272,6 +272,11 @@
 			// Get the actual MIME type detected by the server
 			$mimeType = $file->getMimeType();
 			
+			// Throw exception when the mimetype cannot be determined
+			if ($mimeType === null) {
+				throw new RuntimeException("Could not determine file MIME type");
+			}
+			
 			// Check if the file extension is in our whitelist of allowed extensions
 			if (!in_array($extension, $this->allowedExtensions)) {
 				// Create a user-friendly list of allowed extensions for the error message
@@ -592,10 +597,10 @@
 		 */
 		private function sanitizeFilename(string $filename): string {
 			// Remove or replace dangerous characters
-			$filename = preg_replace('/[^a-zA-Z0-9._-]/', '_', $filename);
+			$filename = preg_replace('/[^a-zA-Z0-9._-]/', '_', $filename) ?? $filename;
 			
 			// Prevent multiple dots
-			$filename = preg_replace('/\.+/', '.', $filename);
+			$filename = preg_replace('/\.+/', '.', $filename) ?? $filename;
 			
 			// Ensure it doesn't start with a dot
 			return ltrim($filename, '.');
@@ -671,8 +676,8 @@
 		 * @return Response Error response
 		 */
 		private function createErrorResponse(string $message, Request $request): Response {
-			$contentType = $request->headers->get('Content-Type', '');
-			$acceptHeader = $request->headers->get('Accept', '');
+			$contentType = (string)$request->headers->get('Content-Type', '');
+			$acceptHeader = (string)$request->headers->get('Accept', '');
 			
 			if ($request->isXmlHttpRequest() ||
 				str_contains($contentType, 'application/json') ||
