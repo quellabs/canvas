@@ -37,12 +37,12 @@
 					
 					// Remove javascript: protocols (e.g., javascript:alert('xss'))
 					// This prevents execution of JavaScript in href attributes and similar contexts
-					$tagContent = preg_replace('/javascript:/i', '', $tagContent);
+					$tagContent = preg_replace('/javascript:/i', '', $tagContent) ?? $tagContent;
 					
 					// Remove event handlers within this tag
-					$tagContent = preg_replace('/\s+on\w+\s*=\s*"[^"]*"/i', '', $tagContent);
-					$tagContent = preg_replace('/\s+on\w+\s*=\s*\'[^\']*\'/i', '', $tagContent);
-					$tagContent = preg_replace('/\s+on\w+\s*=\s*[^\s>]+/i', '', $tagContent);
+					$tagContent = preg_replace('/\s+on\w+\s*=\s*"[^"]*"/i', '', $tagContent) ?? $tagContent;
+					$tagContent = preg_replace('/\s+on\w+\s*=\s*\'[^\']*\'/i', '', $tagContent) ?? $tagContent;
+					$tagContent = preg_replace('/\s+on\w+\s*=\s*[^\s>]+/i', '', $tagContent) ?? $tagContent;
 					
                     // Return new content
 					return '<' . $tagContent . '>';
