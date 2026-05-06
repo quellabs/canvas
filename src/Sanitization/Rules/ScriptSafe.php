@@ -48,15 +48,15 @@
 					return '<' . $tagContent . '>';
 				},
 				$value
-			);
+			) ?? $value;
             
             // Remove script tags and their content
-			$value = preg_replace('/<\s*script[^>]*>.*?<\s*\/\s*script\s*>/is', '', $value);
+			$value = preg_replace('/<\s*script[^>]*>.*?<\s*\/\s*script\s*>/is', '', $value) ?? $value;
 
             // Remove any remaining self-closing script tags
-			$value = preg_replace('/<\s*script[^>]*\/?>/i', '', $value);
+			$value = preg_replace('/<\s*script[^>]*\/?>/i', '', $value) ?? $value;
 
             // Remove any orphaned closing script tags
-			return preg_replace('/<\s*\/\s*script\s*>/i', '', $value);
+			return preg_replace('/<\s*\/\s*script\s*>/i', '', $value) ?? $value;
 		}
 	}
