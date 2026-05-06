@@ -51,16 +51,16 @@
 					$tagContent = $matches[1];
 					
 					// Remove style attributes with double quotes
-					$tagContent = preg_replace('/\s+style\s*=\s*"[^"]*"/i', '', $tagContent);
+					$tagContent = preg_replace('/\s+style\s*=\s*"[^"]*"/i', '', $tagContent) ?? $tagContent;
 					
 					// Remove style attributes with single quotes
-					$tagContent = preg_replace('/\s+style\s*=\s*\'[^\']*\'/i', '', $tagContent);
+					$tagContent = preg_replace('/\s+style\s*=\s*\'[^\']*\'/i', '', $tagContent) ?? $tagContent;
 					
 					// Remove style attributes without quotes (malformed)
-					$tagContent = preg_replace('/\s+style\s*=\s*[^\s>]+/i', '', $tagContent);
+					$tagContent = preg_replace('/\s+style\s*=\s*[^\s>]+/i', '', $tagContent) ?? $tagContent;
 					
 					// Remove standalone style attribute names
-					$tagContent = preg_replace('/\s+style(?=\s|$)/i', '', $tagContent);
+					$tagContent = preg_replace('/\s+style(?=\s|$)/i', '', $tagContent) ?? $tagContent;
 					
 					// Return cleaned content
 					return '<' . $tagContent . '>';
