@@ -190,7 +190,8 @@
 			
 			// Check if it's an AJAX request wanting JSON
 			if ($request->isXmlHttpRequest()) {
-				$acceptHeader = $request->headers->get('Accept', '');
+				$acceptHeader = (string)$request->headers->get('Accept', '');
+				
 				if (str_contains($acceptHeader, 'application/json')) {
 					return true;
 				}

@@ -14,9 +14,9 @@
 		
 		/**
 		 * Default error message set during validation
-		 * @var string|null
+		 * @var string
 		 */
-		protected ?string $defaultMessage = "";
+		protected string $defaultMessage = "";
 		
 		/**
 		 * Minimum value to check

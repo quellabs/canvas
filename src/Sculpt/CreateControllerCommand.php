@@ -102,7 +102,7 @@ HELPX;
 		 */
 		private function sanitizeControllerName(string $controllerName): string {
 			// Remove 'Controller' suffix if user included it
-			$controllerName = preg_replace('/Controller$/i', '', trim($controllerName));
+			$controllerName = preg_replace('/Controller$/i', '', trim($controllerName)) ?? $controllerName;;
 			
 			// Convert to PascalCase - capitalize first letter and after underscores/hyphens
 			$controllerName = str_replace(['-', '_'], ' ', $controllerName);

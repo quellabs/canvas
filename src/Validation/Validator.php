@@ -145,6 +145,6 @@
 		private function replaceVariablesInErrorString(string $string, array $variables): string {
 			return preg_replace_callback('/{{\s*([a-zA-Z_]\w*)\s*}}/', function ($matches) use ($variables) {
 				return $variables[$matches[1]] ?? $matches[0];
-			}, $string);
+			}, $string) ?? $string;
 		}
 	}
