@@ -46,13 +46,10 @@
 		 * @return Response|null Returns null to continue execution, or a Response to short-circuit
 		 */
 		public function before(MethodContextInterface $context): ?Response {
-			// Skip sanitization if no sanitizer is configured
-			if (!$this->sanitizationClass) {
-				return null;
-			}
-			
 			// Get the sanitizer instance and rules
 			$sanitizer = $this->createSanitizer();
+			
+			// Fetch the rules off the sanitizer
 			$rules = $sanitizer->getRules();
 			
 			// Sanitize the request data
@@ -69,17 +66,22 @@
 		 * @throws \RuntimeException If sanitization class cannot be instantiated
 		 */
 		private function createSanitizer(): SanitizationInterface {
+			// Skip sanitization if no sanitizer is configured
+			if ($this->sanitizationClass === null) {
+				throw new \LogicException('SanitizeAspect requires a sanitization class to be configured');
+			}
+			
 			// Check if the specified class exists in the current namespace/autoloader
 			// This prevents runtime errors when trying to instantiate non-existent classes
 			if (!class_exists($this->sanitizationClass)) {
-				throw new \InvalidArgumentException("Sanitization class '{$this->sanitizationClass}' does not exist");
+				throw new \LogicException("Sanitization class '{$this->sanitizationClass}' does not exist");
 			}
 			
 			// Verify that the class implements the SanitizationInterface
 			// This ensures the class has all required methods defined by the interface contract
 			// Using is_subclass_of() to check interface implementation (works for both classes and interfaces)
 			if (!is_subclass_of($this->sanitizationClass, SanitizationInterface::class)) {
-				throw new \InvalidArgumentException("Sanitization class '{$this->sanitizationClass}' must implement SanitizationInterface");
+				throw new \LogicException("Sanitization class '{$this->sanitizationClass}' must implement SanitizationInterface");
 			}
 			
 			try {

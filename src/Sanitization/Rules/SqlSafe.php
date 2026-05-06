@@ -36,7 +36,7 @@
 			
 			// Apply each dangerous pattern regex to remove potential SQL injection attempts
 			foreach ($this->dangerousPatterns as $pattern) {
-				$value = preg_replace($pattern, '', $value);
+				$value = preg_replace($pattern, '', $value) ?? $value;
 			}
 			
 			// Return the sanitized string
