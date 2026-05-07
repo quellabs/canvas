@@ -129,7 +129,7 @@ const queries = data.queries.map((query, qi) => {
         : '';
 
     return `
-        <div>
+        <div style="width:100%">
             <div class="canvas-query-header">
                 <div class="canvas-query-header-cell">ObjectQuel</div>
                 <div class="canvas-query-header-cell canvas-query-header-cell-right">
@@ -137,9 +137,9 @@ const queries = data.queries.map((query, qi) => {
                     <div class="canvas-sql-step-buttons">${stepButtons}</div>
                 </div>
             </div>
-            <div class="canvas-query-body" style="margin-bottom: 12px;">
+            <div class="canvas-query-body">
                 <div class="canvas-query-body-left">
-                    <pre class="canvas-debug-code">${escapeHtml(query.query || '')}</pre>
+                    <pre class="canvas-debug-code">${escapeHtml(query.query || '').trim()}</pre>
                 </div>
                 <div class="canvas-query-body-right">${sqlBlocks}</div>
             </div>
@@ -172,20 +172,22 @@ JS;
 		 */
 		public function getCss(): string {
 			return <<<'CSS'
-.canvas-query-list {
+#panel-queries .canvas-query-list {
     display: flex;
     flex-direction: column;
     gap: 24px;
+    width: 100%;
 }
 
-.canvas-query-header {
+#panel-queries .canvas-query-header {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     border-bottom: 1px solid #e2e4e9;
     margin-bottom: 8px;
+    width: 100%;
 }
 
-.canvas-query-header-cell {
+#panel-queries .canvas-query-header-cell {
     padding: 0 0 6px;
     font-size: 11px;
     font-weight: 500;
@@ -194,18 +196,18 @@ JS;
     letter-spacing: 0.05em;
 }
 
-.canvas-query-header-cell-right {
+#panel-queries .canvas-query-header-cell-right {
     display: flex;
     align-items: center;
     justify-content: space-between;
 }
 
-.canvas-sql-step-buttons {
+#panel-queries .canvas-sql-step-buttons {
     display: flex;
     gap: 4px;
 }
 
-.canvas-sql-step-btn {
+#panel-queries .canvas-sql-step-btn {
     font-size: 11px;
     padding: 1px 8px;
     border-radius: 4px;
@@ -215,61 +217,65 @@ JS;
     cursor: pointer;
 }
 
-.canvas-sql-step-btn.active {
+#panel-queries .canvas-sql-step-btn.active {
     background: #f3f4f6;
     border-color: #d1d5db;
     color: #111827;
     font-weight: 500;
 }
 
-.canvas-query-body {
+#panel-queries .canvas-query-body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    width: 100%;
+    margin-bottom: 12px;
 }
 
-.canvas-query-body-left {
+#panel-queries .canvas-query-body-left {
     padding-right: 16px;
     border-right: 1px solid #e2e4e9;
+    min-width: 0;
 }
 
-.canvas-query-body-right {
+#panel-queries .canvas-query-body-right {
     padding-left: 16px;
+    min-width: 0;
 }
 
-.canvas-query-body-left .canvas-debug-code,
-.canvas-query-body-right .canvas-debug-code {
+#panel-queries .canvas-debug-code {
+    margin: 0;
+    padding: 0;
     border: none;
     background: transparent;
-    padding: 0;
-}
-
-.canvas-debug-code {
-    margin: 0;
     font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
     font-size: 12px;
     white-space: pre-wrap;
     word-break: break-word;
     line-height: 1.6;
     color: #111827;
+    display: block;
+    width: 100%;
+    overflow-x: visible;
+    text-align: left;
 }
 
-.canvas-params-table-wrap {
+#panel-queries .canvas-params-table-wrap {
     border: 1px solid #e2e4e9;
     border-radius: 6px;
     overflow: hidden;
 }
 
-.canvas-params-table {
+#panel-queries .canvas-params-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 12px;
 }
 
-.canvas-params-table thead tr {
+#panel-queries .canvas-params-table thead tr {
     background: #f9fafb;
 }
 
-.canvas-params-table th {
+#panel-queries .canvas-params-table th {
     padding: 4px 10px;
     font-size: 11px;
     font-weight: 500;
@@ -278,20 +284,40 @@ JS;
     border-bottom: 1px solid #e2e4e9;
 }
 
-.canvas-params-table th:first-child,
-.canvas-params-table td:first-child {
+#panel-queries .canvas-params-table th:first-child,
+#panel-queries .canvas-params-table td:first-child {
     border-right: 1px solid #e2e4e9;
 }
 
-.canvas-params-table td {
+#panel-queries .canvas-params-table td {
     padding: 4px 10px;
     font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
     color: #111827;
 }
 
-.canvas-params-table tr + tr td {
+#panel-queries .canvas-params-table tr + tr td {
     border-top: 1px solid #e2e4e9;
 }
 CSS;
+		}
+		
+		private function dedent(string $text): string {
+			$text = trim($text);
+			$lines = explode("\n", $text);
+			
+			$minIndent = PHP_INT_MAX;
+			foreach ($lines as $line) {
+				if (trim($line) === '') continue;
+				$minIndent = min($minIndent, strlen($line) - strlen(ltrim($line)));
+			}
+			
+			if ($minIndent === PHP_INT_MAX || $minIndent === 0) {
+				return $text;
+			}
+			
+			return implode("\n", array_map(
+				fn(string $line) => strlen($line) >= $minIndent ? substr($line, $minIndent) : $line,
+				$lines
+			));
 		}
 	}

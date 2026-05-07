@@ -535,21 +535,6 @@ CSS;
     color: #856404;
 }
 
-/* Code Blocks - For SQL, templates, etc. */
-.canvas-debug-code {
-    background: #ffffff;
-    color: #d63384;
-    padding: 8px;
-    border-radius: 3px;
-    display: block;
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-    font-size: 12px;
-    line-height: 1.4;
-    white-space: pre-wrap;
-    border: 1px solid #e0e0e0;
-    overflow-x: auto;
-}
-
 /* Item Lists - For queries, files, etc. */
 .canvas-debug-item-list {
     display: flex;
