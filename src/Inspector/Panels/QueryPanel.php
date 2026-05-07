@@ -257,6 +257,7 @@ JS;
     width: 100%;
     overflow-x: visible;
     text-align: left;
+    tab-size: 2;
 }
 
 #panel-queries .canvas-params-table-wrap {
