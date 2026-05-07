@@ -300,24 +300,4 @@ JS;
 }
 CSS;
 		}
-		
-		private function dedent(string $text): string {
-			$text = trim($text);
-			$lines = explode("\n", $text);
-			
-			$minIndent = PHP_INT_MAX;
-			foreach ($lines as $line) {
-				if (trim($line) === '') continue;
-				$minIndent = min($minIndent, strlen($line) - strlen(ltrim($line)));
-			}
-			
-			if ($minIndent === PHP_INT_MAX || $minIndent === 0) {
-				return $text;
-			}
-			
-			return implode("\n", array_map(
-				fn(string $line) => strlen($line) >= $minIndent ? substr($line, $minIndent) : $line,
-				$lines
-			));
-		}
 	}
