@@ -63,6 +63,9 @@
 		/** @var bool Store original filenames in metadata */
 		private bool $preserveOriginalNames;
 		
+		/** @var bool If true, returns an error response immediately on validation failure instead of writing failure info to request attributes */
+		private bool $immediateResponse;
+		
 		/**
 		 * Constructor
 		 * @param string $uploadPath Base directory for uploads (relative to project root)
@@ -77,6 +80,7 @@
 		 * @param string $directoryStructure Directory structure pattern (Y/m/d for date-based)
 		 * @param bool $createDirectories Create directories if they don't exist
 		 * @param bool $preserveOriginalNames Store original filenames in request attributes
+		 * @param bool $immediateResponse If true, returns an error response immediately on validation failure instead of writing failure info to request attributes
 		 */
 		public function __construct(
 			string $uploadPath = 'storage/uploads',
@@ -94,7 +98,8 @@
 			bool   $randomizeFilenames = true,
 			string $directoryStructure = 'Y/m/d',
 			bool   $createDirectories = true,
-			bool   $preserveOriginalNames = true
+			bool   $preserveOriginalNames = true,
+			bool   $immediateResponse = false
 		) {
 			$this->uploadPath = rtrim($uploadPath, '/');
 			$this->allowedExtensions = array_map('strtolower', $allowedExtensions);
@@ -108,6 +113,7 @@
 			$this->directoryStructure = $directoryStructure;
 			$this->createDirectories = $createDirectories;
 			$this->preserveOriginalNames = $preserveOriginalNames;
+			$this->immediateResponse = $immediateResponse;
 		}
 		
 		/**
@@ -148,9 +154,18 @@
 				
 			} catch (RuntimeException $e) {
 				// Handle any errors that occurred during file processing
-				// This could include validation failures, storage issues, or security violations
-				// Return an error response instead of continuing to the controller
-				return $this->createErrorResponse($e->getMessage(), $request);
+				if ($this->immediateResponse) {
+					return $this->createErrorResponse($e->getMessage(), $request);
+				}
+				
+				// Default behavior: write failure info to request attributes and let the controller handle it
+				$request->attributes->set('upload_successful', false);
+				$request->attributes->set('upload_error', [
+					'type'    => 'upload_failed',
+					'message' => $e->getMessage()
+				]);
+				
+				return null;
 			}
 		}
 		

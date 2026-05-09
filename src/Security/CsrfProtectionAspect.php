@@ -47,8 +47,8 @@
 		/** @var int Maximum number of tokens to store per intention (prevents session bloat) * */
 		private int $maxTokens;
 		
-		/** @var bool If true, suppresses immediate error response and adds error to request instead */
-		private bool $suppressResponse;
+		/** @var bool If true, returns an error response immediately instead of writing failure info to request attributes */
+		private bool $immediateResponse;
 		
 		/**
 		 * Constructor
@@ -57,7 +57,7 @@
 		 * @param string $intention Token intention/purpose for scoping
 		 * @param array<string> $exemptMethods HTTP methods exempt from CSRF protection
 		 * @param int $maxTokens Maximum number of tokens to store per intention (prevents session bloat)
-		 * @param bool $suppressResponse If true, suppresses immediate error response and adds error to request attributes instead
+		 * @param bool $immediateResponse If true, returns an error response immediately instead of writing failure info to request attributes
 		 */
 		public function __construct(
 			string $tokenName = self::DEFAULT_TOKEN_NAME,
@@ -65,14 +65,14 @@
 			string $intention = 'default',
 			array  $exemptMethods = ['GET', 'HEAD', 'OPTIONS'],
 			int    $maxTokens = 10,
-			bool   $suppressResponse = false
+			bool   $immediateResponse = false
 		) {
 			$this->exemptMethods = $exemptMethods;
 			$this->intention = $intention;
 			$this->headerName = $headerName;
 			$this->tokenName = $tokenName;
 			$this->maxTokens = $maxTokens;
-			$this->suppressResponse = $suppressResponse;
+			$this->immediateResponse = $immediateResponse;
 		}
 		
 		/**
@@ -101,36 +101,28 @@
 			// Validate CSRF token for state-changing requests (POST, PUT, DELETE, PATCH)
 			$isValid = $this->validateCsrfToken($csrfManager, $request);
 			
-			if (!$isValid) {
-				if ($this->suppressResponse) {
-					// Add failure status to request object
-					$request->attributes->set('csrf_validation_succeeded', false);
-					
-					// Set error information
-					$request->attributes->set('csrf_error', [
-						'type'    => 'csrf_token_invalid',
-						'message' => 'Invalid or missing CSRF token'
-					]);
-					
-					// Generate fresh token for re-rendered form
-					$token = $csrfManager->generateToken($this->intention);
-					$request->attributes->set('csrf_token', $token);
-					$request->attributes->set('csrf_token_name', $this->tokenName);
-					
-					// Continue execution, let controller handle error
-					return null;
-				}
-				
+			if ($isValid) {
+				$request->attributes->set('csrf_validation_succeeded', true);
+				$this->addTokenToRequest($csrfManager, $request);
+				return null;
+			}
+			
+			// Validation failed
+			if ($this->immediateResponse) {
 				return $this->createErrorResponse($request);
 			}
 			
-			// Validation succeeded - always set status
-			$request->attributes->set('csrf_validation_succeeded', true);
+			// Default behavior: write failure info to request attributes and let the controller handle it
+			$request->attributes->set('csrf_validation_succeeded', false);
+			$request->attributes->set('csrf_error', [
+				'type'    => 'csrf_token_invalid',
+				'message' => 'Invalid or missing CSRF token'
+			]);
 			
-			// Add fresh token to request for use in response/templates
-			$this->addTokenToRequest($csrfManager, $request);
-			
-			// Continue with normal execution
+			// Generate fresh token for re-rendered form
+			$token = $csrfManager->generateToken($this->intention);
+			$request->attributes->set('csrf_token', $token);
+			$request->attributes->set('csrf_token_name', $this->tokenName);
 			return null;
 		}
 		
@@ -173,7 +165,7 @@
 				$headerToken = $request->headers->get($this->headerName);
 				$token = is_string($headerToken) ? $headerToken : null;
 			}
-
+			
 			// No token found in either location
 			if (!is_string($token) || $token === '') {
 				return false;
