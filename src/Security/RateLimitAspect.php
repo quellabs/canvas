@@ -8,7 +8,6 @@
 	use Quellabs\Contracts\Cache\CacheInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
-	use Symfony\Component\HttpFoundation\JsonResponse;
 	
 	/**
 	 * Rate limiting aspect using various strategies
@@ -58,9 +57,7 @@
 		 * @param string $identifier
 		 * @param string[] $exemptMethods
 		 * @param string $headerPrefix
-		 * @param bool $throwOnFailure If true, throws RateLimitException on failure instead of writing
-		 *                             failure info to request attributes. Use when you want the framework's
-		 *                             central exception handler to deal with rate limiting errors uniformly.
+		 * @param bool $throwOnFailure If true, throws RateLimitException on failure
 		 */
 		public function __construct(
 			CacheInterface $cache,
@@ -162,6 +159,7 @@
 				throw new RateLimitException("Rate limit exceeded");
 			}
 			
+			// Continue to controller
 			return null;
 		}
 		

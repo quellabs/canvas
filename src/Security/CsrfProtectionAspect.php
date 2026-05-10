@@ -137,6 +137,7 @@
 				throw new CsrfTokenException('Invalid or missing CSRF token');
 			}
 			
+			// Continue to controller
 			return null;
 		}
 		

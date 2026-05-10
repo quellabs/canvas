@@ -87,10 +87,7 @@
 		 * @param int $maxImageHeight Maximum allowed image height
 		 * @param bool $randomizeFilenames Generate random filenames
 		 * @param string $directoryStructure Directory structure pattern (Y/m/d for date-based)
-		 * @param bool $throwOnFailure If true, throws UploadException on validation failure instead of
-		 *                            writing failure info to request attributes. Use when you want the
-		 *                            framework's central exception handler to deal with upload errors
-		 *                            uniformly. The exception carries the full per-file result set.
+		 * @param bool $throwOnFailure If true, throws UploadException on validation failure
 		 */
 		public function __construct(
 			string $uploadPath = 'storage/uploads',
@@ -184,12 +181,14 @@
 			
 			// Expose aggregated warnings so controllers can surface skipped-check notices to users
 			$request->attributes->set('upload_warnings', $warnings);
-			
+
+			// Throw on failure
 			if (!$allSuccessful && $this->throwOnFailure) {
 				$message = $batchError ?? 'One or more uploaded files failed validation';
 				throw new UploadException($message, $processedFiles, $batchError);
 			}
 			
+			// Continue to controller
 			return null;
 		}
 		
