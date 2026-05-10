@@ -2,6 +2,8 @@
 	
 	namespace Quellabs\Canvas\Security;
 	
+	use RuntimeException;
+	use Random\RandomException;
 	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -9,7 +11,6 @@
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
 	use Quellabs\Support\ComposerUtils;
-	use RuntimeException;
 	
 	/**
 	 * Secure Upload Aspect
@@ -64,12 +65,6 @@
 		/** @var string Directory structure for organizing uploads */
 		private string $directoryStructure;
 		
-		/** @var bool Create directories if they don't exist */
-		private bool $createDirectories;
-		
-		/** @var bool Store original filenames in metadata */
-		private bool $preserveOriginalNames;
-		
 		/** @var bool If true, returns an error response immediately on validation failure instead of writing failure info to request attributes */
 		private bool $immediateResponse;
 		
@@ -85,8 +80,6 @@
 		 * @param int $maxImageHeight Maximum allowed image height
 		 * @param bool $randomizeFilenames Generate random filenames
 		 * @param string $directoryStructure Directory structure pattern (Y/m/d for date-based)
-		 * @param bool $createDirectories Create directories if they don't exist
-		 * @param bool $preserveOriginalNames Store original filenames in request attributes
 		 * @param bool $immediateResponse If true, returns an error response immediately on validation failure instead of writing failure info to request attributes
 		 */
 		public function __construct(
@@ -104,8 +97,6 @@
 			int    $maxImageHeight = 2048,
 			bool   $randomizeFilenames = true,
 			string $directoryStructure = 'Y/m/d',
-			bool   $createDirectories = true,
-			bool   $preserveOriginalNames = true,
 			bool   $immediateResponse = false
 		) {
 			$this->uploadPath = rtrim($uploadPath, '/');
@@ -118,8 +109,6 @@
 			$this->maxImageHeight = $maxImageHeight;
 			$this->randomizeFilenames = $randomizeFilenames;
 			$this->directoryStructure = $directoryStructure;
-			$this->createDirectories = $createDirectories;
-			$this->preserveOriginalNames = $preserveOriginalNames;
 			$this->immediateResponse = $immediateResponse;
 		}
 		
@@ -236,54 +225,70 @@
 				];
 			}
 			
-			// Initialize array to store processed file information
-			$processedFiles = [];
+			// Pass 1: validate every file without touching storage.
+			// Keyed identically to $files so we can pair validation results with
+			// the original UploadedFile objects in pass 2.
+			$validationResults = [];
+			$batchHasErrors = false;
 			
-			// Process each field containing uploaded files
 			foreach ($files as $fieldName => $file) {
-				// Always initialize as an indexed array so the return type is uniform.
-				// Single-file fields get a one-element array; multi-file fields get N elements.
-				// Consumers can always foreach over $result[$field] without type-checking first.
-				$processedFiles[$fieldName] = [];
-				
-				// Normalize single files into an array so both cases share the same processing path
+				$validationResults[$fieldName] = [];
 				$fileList = is_array($file) ? $file : [$file];
 				
 				foreach ($fileList as $singleFile) {
 					$validation = $this->collectValidationResult($singleFile);
+					$validationResults[$fieldName][] = $validation;
 					
 					if (!empty($validation['errors'])) {
+						$batchHasErrors = true;
+					}
+				}
+			}
+			
+			// Pass 2: if any file failed validation, return failure records for the entire
+			// batch without storing anything. This prevents partial writes where some files
+			// land in permanent storage while others were rejected.
+			$processedFiles = [];
+			$allMoveWarnings = [];
+			
+			foreach ($files as $fieldName => $file) {
+				$processedFiles[$fieldName] = [];
+				$fileList = is_array($file) ? $file : [$file];
+				
+				foreach ($fileList as $index => $singleFile) {
+					$validation = $validationResults[$fieldName][$index];
+					
+					if ($batchHasErrors) {
+						// At least one file in the batch failed — do not store any file.
+						// Files that passed validation are reported as not stored so the
+						// caller gets a consistent all-or-nothing result.
 						$processedFiles[$fieldName][] = [
 							'success'       => false,
-							'errors'        => $validation['errors'],
-							'warnings'      => $validation['warnings'],
-							'original_name' => $this->preserveOriginalNames ? $singleFile->getClientOriginalName() : null,
+							'errors'        => !empty($validation['errors']) ? $validation['errors'] : ['Upload cancelled: another file in this batch failed validation'],
+							'original_name' => $singleFile->getClientOriginalName(),
 						];
+						
 						continue;
 					}
 					
-					// Validation passed — attempt to move the file to permanent storage
+					// All files passed validation — move this file to permanent storage
 					$fileResult = $this->processSingleFile($singleFile);
-					$fileResult['warnings'] = $validation['warnings'];
+					$allMoveWarnings = array_merge($allMoveWarnings, $fileResult['warnings']);
+					unset($fileResult['warnings']);
 					$processedFiles[$fieldName][] = $fileResult;
 				}
 			}
 			
-			// Aggregate all per-file warnings into a top-level list for quick inspection
-			$allWarnings = [];
-			
-			foreach ($processedFiles as $fieldFiles) {
-				foreach ($fieldFiles as $fileResult) {
-					foreach ($fileResult['warnings'] as $warning) {
-						$allWarnings[] = $warning;
-					}
-				}
-			}
+			// Aggregate all warnings into a batch-level list:
+			// - validation warnings (e.g. virus scan skipped) come from pass 1
+			// - move warnings (e.g. chmod failed) come from pass 2
+			$flatValidations = array_merge(...array_values($validationResults));
+			$allWarnings = array_values(array_unique(array_merge(array_merge(...array_column($flatValidations, 'warnings')), $allMoveWarnings)));
 			
 			// Return the array of all processed file information
 			return [
 				'batch_error' => null,
-				'warnings'    => array_values(array_unique($allWarnings)),
+				'warnings'    => $allWarnings,
 				'files'       => $processedFiles,
 			];
 		}
@@ -306,14 +311,15 @@
 		 * @return array{errors: array<int, string>, warnings: array<int, string>}
 		 */
 		private function collectValidationResult(UploadedFile $file): array {
+			// A PHP upload error means the file itself is broken; no further checks make sense
 			if (!$file->isValid()) {
-				// A PHP upload error means the file itself is broken; no further checks make sense
 				return [
 					'errors'   => [$this->getUploadErrorMessage($file->getError())],
 					'warnings' => [],
 				];
 			}
 			
+			// Validate sizes
 			$errors = [
 				$this->validateFileSize($file),
 				$this->validateFileType($file),
@@ -343,41 +349,49 @@
 		 * Validation is intentionally absent here — callers must run collectValidationErrors()
 		 * first and only invoke this method when that returns an empty array.
 		 * This method never throws; move and post-move failures are returned in 'errors'.
-		 *
 		 * @param UploadedFile $file The uploaded file to store (must already be validated)
 		 * @return array<string, mixed> File metadata with 'success' flag and 'errors' array
 		 */
 		private function processSingleFile(UploadedFile $file): array {
 			try {
-				// Move file from temporary upload location to secure permanent storage
-				$targetPath = $this->generateTargetPath($file);           // Generate unique secure file path
-				$movedFile = $this->moveUploadedFile($file, $targetPath); // Perform the actual file move
+				// Determine the final storage path, then move the file out of PHP's temp directory.
+				// generateTargetPath() applies the configured directory structure and filename strategy.
+				// moveUploadedFile() performs the move and sets permissions; any chmod warnings are returned.
+				$targetPath = $this->generateTargetPath($file);
+				
+				// Move the file to the ultimate destination
+				$moveResult = $this->moveUploadedFile($file, $targetPath);
+				
+				// Record the file data
+				$movedFile = $moveResult['path'];
+				$moveWarnings = $moveResult['warnings'];
 			} catch (\Exception $e) {
-				// File move or post-move operations failed (e.g. disk full, permissions)
-				// Return a failure result so the batch is not interrupted
+				// Storage failed (e.g. disk full, permission denied). Return a failure record
+				// rather than throwing so the caller can handle it without a try/catch.
 				return [
 					'success'       => false,
 					'errors'        => [$e->getMessage()],
 					'warnings'      => [],
-					'original_name' => $this->preserveOriginalNames ? $file->getClientOriginalName() : null,
+					'original_name' => $file->getClientOriginalName(),
 				];
 			}
 			
-			// Return comprehensive file information for database storage and client response
+			// Strip the absolute project root from the stored path so controllers get a
+			// portable relative path they can store in a database without embedding server layout.
 			$relativePath = str_replace(ComposerUtils::getProjectRoot() . '/', '', $movedFile);
 			
 			return [
 				'success'       => true,
 				'errors'        => [],
-				// Preserve original filename only if configuration allows it
-				'original_name' => $this->preserveOriginalNames ? $file->getClientOriginalName() : null,
-				'filename'      => basename($movedFile),                 // New filename after processing
-				'path'          => $movedFile,                           // Full absolute path to file
-				'relative_path' => $relativePath,                        // Path relative to application root
-				'size'          => $file->getSize(),                     // File size in bytes
-				'mime_type'     => $file->getMimeType(),                 // MIME type for content handling
-				'extension'     => $file->getClientOriginalExtension(),  // File extension from original upload
-				'uploaded_at'   => date('Y-m-d H:i:s'),                 // Timestamp of successful processing
+				'warnings'      => $moveWarnings,
+				'original_name' => $file->getClientOriginalName(), // Client-supplied name, never used for storage
+				'filename'      => basename($movedFile),           // Randomized or sanitized name on disk
+				'path'          => $movedFile,                     // Absolute path
+				'relative_path' => $relativePath,                  // Path relative to project root
+				'size'          => $file->getSize(),               // Bytes
+				'mime_type'     => $file->getMimeType(),           // Server-detected, not client-supplied
+				'extension'     => strtolower($file->getClientOriginalExtension()), // Normalised to lowercase
+				'uploaded_at'   => date('Y-m-d H:i:s'),
 			];
 		}
 		
@@ -575,20 +589,19 @@
 			
 			// Note: Exit code 0 means file is clean
 			// Exit code 2 would indicate a ClamAV internal error — warn rather than fail
-			if ($returnCode === 2) {
-				return ['error' => null, 'warning' => 'Virus scan skipped: ClamAV returned an error'];
-			}
-			
-			return ['error' => null, 'warning' => null];
+			$warningMessage = $returnCode === 2 ? 'Virus scan skipped: ClamAV returned an error' : null;
+			return ['error' => null, 'warning' => $warningMessage];
 		}
 		
 		/**
 		 * Generates target path for uploaded file
 		 * @param UploadedFile $file The uploaded file
 		 * @return string Full target path
+		 * @throws RandomException
 		 */
 		private function generateTargetPath(UploadedFile $file): string {
-			$baseDir = ComposerUtils::getProjectRoot() . '/' . $this->uploadPath;
+			// Create upload dir
+			$baseDir = ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . $this->uploadPath;
 			
 			// Generate directory structure
 			$targetDir = $this->directoryStructure
@@ -598,14 +611,14 @@
 			// Create directories if needed
 			// The !is_dir() check after mkdir() handles the race condition where another process
 			// creates the directory between our check and our mkdir() call
-			if ($this->createDirectories && !is_dir($targetDir) && !mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
+			if (!is_dir($targetDir) && !mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
 				throw new RuntimeException("Failed to create upload directory: {$targetDir}");
 			}
 			
 			// Generate filename
 			// Extension is lowercased to ensure consistency regardless of what the client sent.
 			// Even though the extension was validated earlier, the client may have uploaded ".JPEG"
-			// while validation normalised to ".jpeg" — storage must reflect the canonical form.
+			// while validation normalized to ".jpeg" — storage must reflect the canonical form.
 			$extension = strtolower($file->getClientOriginalExtension());
 			$filename = $this->randomizeFilenames
 				? bin2hex(random_bytes(16)) . '.' . $extension
@@ -618,31 +631,32 @@
 		 * Moves uploaded file to target location
 		 * @param UploadedFile $file The uploaded file
 		 * @param string $targetPath Target file path
-		 * @return string Final file path
+		 * @return array{path: string, warnings: array<int, string>} Path and any non-fatal warnings
 		 * @throws RuntimeException If move fails
 		 */
-		private function moveUploadedFile(UploadedFile $file, string $targetPath): string {
+		private function moveUploadedFile(UploadedFile $file, string $targetPath): array {
 			try {
+				$warnings = [];
+				
 				// Move the uploaded file from temporary location to the target path
 				// dirname() gets the directory path, basename() gets the filename
 				$file->move(dirname($targetPath), basename($targetPath));
 				
 				// Set secure file permissions (owner: read/write, group/others: read only)
 				// 0644 = rw-r--r-- prevents execution while allowing read access
-				// Failure is non-fatal but noted: the file is stored, but permissions may be too permissive
+				// Failure is non-fatal: the file is stored, but permissions may be too permissive
 				if (!chmod($targetPath, 0644)) {
 					// chmod can legitimately fail on some filesystems (e.g. FAT, network mounts, object storage)
-					// Treat as a warning rather than a hard failure — the upload itself succeeded
-					trigger_error("SecureUploadAspect: chmod failed on {$targetPath}", E_USER_WARNING);
+					$warnings[] = "chmod failed on {$targetPath}: file permissions could not be set to 0644";
 				}
 				
 				// Write Apache-specific .htaccess protection to the upload directory.
-				// This is a secondary defence — uploads should ideally live outside the web root.
+				// This is a secondary defense — uploads should ideally live outside the web root.
 				// Has no effect on Nginx, Caddy, Swoole, or any non-Apache server.
 				$this->createHtaccessProtection(dirname($targetPath));
 				
-				// Return the full path to the successfully moved file
-				return $targetPath;
+				// Return result
+				return ['path' => $targetPath, 'warnings' => $warnings];
 				
 			} catch (\Exception $e) {
 				// Re-throw any errors as a more specific RuntimeException
