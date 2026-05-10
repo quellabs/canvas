@@ -65,8 +65,8 @@
 		 * @param array<string> $exemptMethods HTTP methods exempt from CSRF protection
 		 * @param int $maxTokens Maximum number of tokens to store per intention (prevents session bloat)
 		 * @param bool $throwOnFailure If true, throws CsrfTokenException on failure instead of writing
-		 *                            failure info to request attributes. Use when you want the framework's
-		 *                            central exception handler to deal with CSRF errors uniformly.
+		 *                             failure info to request attributes. Use when you want the framework's
+		 *                             central exception handler to deal with CSRF errors uniformly.
 		 */
 		public function __construct(
 			string $tokenName = self::DEFAULT_TOKEN_NAME,
@@ -118,11 +118,6 @@
 				return null;
 			}
 			
-			// Validation failed — throw if opted in, otherwise write to attributes and continue
-			if ($this->throwOnFailure) {
-				throw new CsrfTokenException('Invalid or missing CSRF token');
-			}
-			
 			// Default: write failure info to request attributes and let the controller handle it.
 			// A fresh token is generated here so the controller can re-render the form immediately
 			// without a separate round-trip to fetch a new token.
@@ -136,6 +131,12 @@
 			$token = $csrfManager->generateToken($this->intention);
 			$request->attributes->set('csrf_token', $token);
 			$request->attributes->set('csrf_token_name', $this->tokenName);
+			
+			// Validation failed — throw if opted in, otherwise write to attributes and continue
+			if ($this->throwOnFailure) {
+				throw new CsrfTokenException('Invalid or missing CSRF token');
+			}
+			
 			return null;
 		}
 		

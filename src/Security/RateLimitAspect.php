@@ -1,9 +1,10 @@
 <?php
 	
-	namespace Quellabs\Canvas\RateLimiting;
+	namespace Quellabs\Canvas\Security;
 	
 	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
+	use Quellabs\Canvas\Security\Exceptions\RateLimitException;
 	use Quellabs\Contracts\Cache\CacheInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
@@ -44,6 +45,9 @@
 		/** @var string Rate limit header prefix */
 		private string $headerPrefix;
 		
+		/** @var bool If true, throws RateLimitException on failure instead of writing to request attributes */
+		private bool $throwOnFailure;
+		
 		/**
 		 * RateLimitAspect constructor
 		 * @param CacheInterface $cache
@@ -54,6 +58,9 @@
 		 * @param string $identifier
 		 * @param string[] $exemptMethods
 		 * @param string $headerPrefix
+		 * @param bool $throwOnFailure If true, throws RateLimitException on failure instead of writing
+		 *                             failure info to request attributes. Use when you want the framework's
+		 *                             central exception handler to deal with rate limiting errors uniformly.
 		 */
 		public function __construct(
 			CacheInterface $cache,
@@ -63,7 +70,8 @@
 			string         $scope = 'ip',
 			string         $identifier = '',
 			array          $exemptMethods = ['GET', 'HEAD', 'OPTIONS'],
-			string         $headerPrefix = 'X-RateLimit'
+			string         $headerPrefix = 'X-RateLimit',
+			bool           $throwOnFailure = false
 		) {
 			$this->cache = $cache;
 			$this->limit = $limit;
@@ -73,7 +81,9 @@
 			$this->identifier = $identifier;
 			$this->exemptMethods = $exemptMethods;
 			$this->headerPrefix = $headerPrefix;
+			$this->throwOnFailure = $throwOnFailure;
 			
+			// Validate limit and window correctness
 			if ($limit <= 0 || $window <= 0) {
 				throw new \InvalidArgumentException('Limit and window must be positive integers');
 			}
@@ -85,7 +95,7 @@
 			
 			// Validate scope
 			if (!in_array($scope, self::VALID_SCOPES)) {
-				throw new \InvalidArgumentException("Invalid scope '$scope'. Valid options: " . implode(', ', self::VALID_SCOPES));
+				throw new \InvalidArgumentException("Invalid scope '{$scope}'. Valid options: " . implode(', ', self::VALID_SCOPES));
 			}
 			
 			// Validate custom scope has identifier
@@ -118,11 +128,12 @@
 			
 			// Apply the selected rate limiting strategy using match expression
 			// Each strategy returns an array with 'count', 'exceeded', and 'reset_time'
+			/** @noinspection PhpDuplicateMatchArmBodyInspection */
 			$result = match ($this->strategy) {
 				'fixed_window' => $this->fixedWindowStrategy($key, $currentTime),
 				'sliding_window' => $this->slidingWindowStrategy($key, $currentTime),
 				'token_bucket' => $this->tokenBucketStrategy($key, $currentTime),
-				default => $this->fixedWindowStrategy($key, $currentTime) // Fallback strategy
+				default => $this->fixedWindowStrategy($key, $currentTime)
 			};
 			
 			// Prepare rate limit headers for the response
@@ -142,13 +153,15 @@
 				"{$this->headerPrefix}-Strategy"  => $this->strategy
 			]);
 			
-			// Check if the rate limit has been exceeded
-			if ($result['exceeded']) {
-				// Create and return a rate limit exceeded response (typically 429 Too Many Requests)
-				return $this->createRateLimitResponse($request, $result);
+			// Set result
+			$request->attributes->set('rate_limit_result', $result);
+			$request->attributes->set('rate_limit_exceeded', $result['exceeded']);
+			
+			// Throw exception if exceeded
+			if ($result['exceeded'] && $this->throwOnFailure) {
+				throw new RateLimitException("Rate limit exceeded");
 			}
 			
-			// Rate limit isn't exceeded, allow the request to continue to the next middleware/handler
 			return null;
 		}
 		
@@ -416,55 +429,5 @@
 			
 			// Fallback to IP if no user found
 			return 'anonymous_' . $request->getClientIp();
-		}
-		
-		/**
-		 * Create appropriate rate limit exceeded response
-		 * @param Request $request
-		 * @param array{count: int, exceeded: bool, reset_time: int, retry_after: int} $result
-		 * @return Response
-		 */
-		private function createRateLimitResponse(Request $request, array $result): Response {
-			$headers = [
-				"{$this->headerPrefix}-Limit"     => $this->limit,
-				"{$this->headerPrefix}-Remaining" => 0,
-				"{$this->headerPrefix}-Reset"     => $result['reset_time'],
-				'Retry-After'                     => $result['retry_after']
-			];
-			
-			// Return JSON for API requests, HTML for web requests
-			if ($this->isApiRequest($request)) {
-				return new JsonResponse([
-					'error'       => 'Rate limit exceeded',
-					'message'     => "Too many requests. Limit: {$this->limit} per {$this->window} seconds.",
-					'retry_after' => $result['retry_after']
-				], 429, $headers);
-			}
-			
-			// For web requests, return a simple HTML response
-			$html = "
-<!DOCTYPE html>
-<html lang=\"eng\">
-<head><title>Rate Limit Exceeded</title></head>
-<body>
-    <h1>Too Many Requests</h1>
-    <p>You have exceeded the rate limit of {$this->limit} requests per {$this->window} seconds.</p>
-    <p>Please try again in {$result['retry_after']} seconds.</p>
-</body>
-</html>";
-			
-			return new Response($html, 429, $headers);
-		}
-		
-		/**
-		 * Determine if this is an API request
-		 * @param Request $request
-		 * @return bool
-		 */
-		private function isApiRequest(Request $request): bool {
-			return
-				$request->headers->get('Accept') === 'application/json' ||
-				str_starts_with($request->getPathInfo(), '/api/') ||
-				$request->headers->has('X-API-Key');
 		}
 	}
