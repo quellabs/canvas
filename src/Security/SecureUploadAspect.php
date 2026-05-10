@@ -260,11 +260,11 @@
 					
 					if ($batchHasErrors) {
 						// At least one file in the batch failed — do not store any file.
-						// Files that passed validation are reported as not stored so the
-						// caller gets a consistent all-or-nothing result.
+						// success=false on every record signals the all-or-nothing outcome;
+						// upload_batch_error on the request gives the controller a single place to check.
 						$processedFiles[$fieldName][] = [
 							'success'       => false,
-							'errors'        => !empty($validation['errors']) ? $validation['errors'] : ['Upload cancelled: another file in this batch failed validation'],
+							'errors'        => $validation['errors'], // empty for files that passed validation
 							'original_name' => $singleFile->getClientOriginalName(),
 						];
 						
