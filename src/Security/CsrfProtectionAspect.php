@@ -159,7 +159,7 @@
 			}
 			
 			// No token found in either location
-			if (!is_string($token) || $token === '') {
+			if ($token === null || $token === '') {
 				return false;
 			}
 			
