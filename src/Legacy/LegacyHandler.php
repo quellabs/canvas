@@ -109,19 +109,25 @@
 		 * @return int Number of files removed
 		 */
 		public function clearCache(): int {
+			// Skip cleanup when preprocessing is disabled
+			// or the cache directory does not exist.
 			if (!$this->preprocessingEnabled || !is_dir($this->cacheDir)) {
 				return 0;
 			}
 			
+			// Collect all cached PHP preprocessing files.
 			$files = glob($this->cacheDir . '/*.php');
 			
+			// glob() returns false on filesystem errors.
 			if ($files === false) {
 				return 0;
 			}
 			
+			// Track how many files were successfully deleted.
 			$removed = 0;
 			
 			foreach ($files as $file) {
+				// Only count files that were actually removed.
 				if (unlink($file)) {
 					++$removed;
 				}
