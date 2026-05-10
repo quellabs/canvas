@@ -45,11 +45,11 @@
 		/** @var bool Enable virus scanning if available */
 		private bool $virusScan;
 		
-		/** @var bool Validate image dimensions and content */
-		private bool $validateImages;
+		/** @var int Maximum image width */
+		private int $maxImageWidth;
 		
-		/** @var array<string,int> Maximum image dimensions [width, height] */
-		private array $maxImageDimensions;
+		/** @var int Maximum image width */
+		private int $maxImageHeight;
 		
 		/** @var bool Generate random filenames to prevent conflicts */
 		private bool $randomizeFilenames;
@@ -74,8 +74,8 @@
 		 * @param int $maxFileSize Maximum file size in bytes
 		 * @param int $maxFiles Maximum number of files per request
 		 * @param bool $virusScan Enable virus scanning if ClamAV is available
-		 * @param bool $validateImages Validate image content and dimensions
-		 * @param array<string,int> $maxImageDimensions Maximum image dimensions [width, height]
+		 * @param int $maxImageWidth Maximum allowed image width
+		 * @param int $maxImageHeight Maximum allowed image height
 		 * @param bool $randomizeFilenames Generate random filenames
 		 * @param string $directoryStructure Directory structure pattern (Y/m/d for date-based)
 		 * @param bool $createDirectories Create directories if they don't exist
@@ -93,8 +93,8 @@
 			int    $maxFileSize = 5242880, // 5MB
 			int    $maxFiles = 5,
 			bool   $virusScan = false,
-			bool   $validateImages = true,
-			array  $maxImageDimensions = ['width' => 2048, 'height' => 2048],
+			int    $maxImageWidth = 2048,
+			int    $maxImageHeight = 2048,
 			bool   $randomizeFilenames = true,
 			string $directoryStructure = 'Y/m/d',
 			bool   $createDirectories = true,
@@ -107,8 +107,8 @@
 			$this->maxFileSize = $maxFileSize;
 			$this->maxFiles = $maxFiles;
 			$this->virusScan = $virusScan;
-			$this->validateImages = $validateImages;
-			$this->maxImageDimensions = $maxImageDimensions;
+			$this->maxImageWidth = $maxImageWidth;
+			$this->maxImageHeight = $maxImageHeight;
 			$this->randomizeFilenames = $randomizeFilenames;
 			$this->directoryStructure = $directoryStructure;
 			$this->createDirectories = $createDirectories;
@@ -375,7 +375,7 @@
 			// If getimagesize() fails, either the file is not an image
 			// or it has already failed validation in validateImageContent()
 			if ($imageInfo === false) {
-				return; // Not an image or already failed validation
+				return;
 			}
 			
 			// Extract width and height from the image info array
@@ -383,13 +383,8 @@
 			[$width, $height] = $imageInfo;
 			
 			// Check if either dimension exceeds the configured maximum limits
-			if ($width > $this->maxImageDimensions['width'] || $height > $this->maxImageDimensions['height']) {
-				// Get max dimensions for error message
-				$maxW = $this->maxImageDimensions['width'];
-				$maxH = $this->maxImageDimensions['height'];
-				
-				// Throw descriptive error with actual vs allowed dimensions
-				throw new RuntimeException("Image dimensions ({$width}x{$height}) exceed maximum allowed ({$maxW}x{$maxH})");
+			if ($width > $this->maxImageWidth || $height > $this->maxImageHeight) {
+				throw new RuntimeException("Image dimensions ({$width}x{$height}) exceed maximum allowed ({$this->maxImageWidth}x{$this->maxImageHeight})");
 			}
 		}
 		
@@ -562,15 +557,6 @@
 			
 			// Return total count of all files
 			return $count;
-		}
-		
-		/**
-		 * Checks if file is an image
-		 * @param UploadedFile $file The uploaded file
-		 * @return bool True if file is an image
-		 */
-		private function isImage(UploadedFile $file): bool {
-			return str_starts_with($file->getMimeType() ?? '', 'image/');
 		}
 		
 		/**
