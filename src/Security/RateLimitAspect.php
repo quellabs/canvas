@@ -252,14 +252,13 @@
 			$count = count($timestamps);
 			
 			return [
-				'count'       => $count,                                    // Current request count in sliding window
-				'exceeded'    => $count > $this->limit,                 // Whether limit is exceeded
-				'reset_time'  => $currentTime + $this->window,        // When current window fully expires
+				'count'       => $count,                         // Current request count in sliding window
+				'exceeded'    => $count > $this->limit,          // Whether limit is exceeded
+				'reset_time'  => $currentTime + $this->window,   // When current window fully expires
 				
 				// Calculate retry_after: if exceeded, wait until oldest request expires
 				// If not exceeded, no wait time needed
-				'retry_after' => $count > $this->limit ?
-					($timestamps[0] + $this->window) - $currentTime : 0
+				'retry_after' => $count > $this->limit ? ($timestamps[0] + $this->window) - $currentTime : 0
 			];
 		}
 		
