@@ -6,7 +6,7 @@
 	use Random\RandomException;
 	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
-	use Quellabs\Canvas\Security\Exceptions\UploadException;
+	use Quellabs\Canvas\Exceptions\UploadException;
 	use Symfony\Component\HttpFoundation\File\UploadedFile;
 	use Symfony\Component\HttpFoundation\Response;
 	use Quellabs\Support\ComposerUtils;

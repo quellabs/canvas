@@ -2,7 +2,7 @@
 	
 	namespace Quellabs\Canvas\Security;
 	
-	use Quellabs\Canvas\Security\Exceptions\CsrfTokenException;
+	use Quellabs\Canvas\Exceptions\CsrfTokenException;
 	use Quellabs\Canvas\Security\Foundation\CsrfTokenManager;
 	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;

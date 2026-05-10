@@ -1,6 +1,6 @@
 <?php
 	
-	namespace Quellabs\Canvas\Security\Exceptions;
+	namespace Quellabs\Canvas\Exceptions;
 	
 	use RuntimeException;
 	
