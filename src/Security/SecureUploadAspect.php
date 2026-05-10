@@ -8,7 +8,7 @@
 	use Symfony\Component\HttpFoundation\JsonResponse;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
-	use Quellabs\Discover\ComposerUtils;
+	use Quellabs\Support\ComposerUtils;
 	use RuntimeException;
 	
 	/**
@@ -144,10 +144,10 @@
 			
 			// Process and validate the uploaded files
 			// All errors — batch-level and per-file — are returned in the result, never thrown
-			$result         = $this->processUploadedFiles($files);
+			$result = $this->processUploadedFiles($files);
 			$processedFiles = $result['files'];
-			$batchError     = $result['batch_error'];
-			$warnings       = $result['warnings'];
+			$batchError = $result['batch_error'];
+			$warnings = $result['warnings'];
 			
 			// Determine overall success: no batch error and every individual file must have passed
 			// Controllers can check this flag to confirm all files were handled properly
@@ -210,12 +210,13 @@
 		 * Each record contains a 'success' flag and an 'errors' array so consumers can
 		 * handle partial batch failures without catching exceptions.
 		 *
-		 * The return value always has two keys:
+		 * The return value always has three keys:
 		 * - 'batch_error': a string if a batch-level check failed (e.g. too many files), null otherwise
+		 * - 'warnings':    aggregated, deduplicated warning messages across all files
 		 * - 'files':       the per-field, per-file result arrays (empty when batch_error is set)
 		 *
 		 * @param array<string, UploadedFile|array<int, UploadedFile>> $files Array of uploaded files
-		 * @return array{batch_error: string|null, files: array<string, array<int, array<string, mixed>>>}
+		 * @return array{batch_error: string|null, warnings: string[], files: array<string, array<int, array<string, mixed>>>}
 		 */
 		private function processUploadedFiles(array $files): array {
 			// Count total number of files to validate against limits
@@ -262,8 +263,8 @@
 					}
 					
 					// Validation passed — attempt to move the file to permanent storage
-					$fileResult                    = $this->processSingleFile($singleFile);
-					$fileResult['warnings']        = $validation['warnings'];
+					$fileResult = $this->processSingleFile($singleFile);
+					$fileResult['warnings'] = $validation['warnings'];
 					$processedFiles[$fieldName][] = $fileResult;
 				}
 			}
@@ -328,8 +329,8 @@
 			
 			// Virus scan returns both an error and a warning channel
 			$virusScanResult = $this->scanForViruses($file);
-			$errors[]         = $virusScanResult['error'];
-			$warnings         = array_values(array_filter([$virusScanResult['warning']]));
+			$errors[] = $virusScanResult['error'];
+			$warnings = array_values(array_filter([$virusScanResult['warning']]));
 			
 			return [
 				'errors'   => array_values(array_filter($errors)),
@@ -350,7 +351,7 @@
 			try {
 				// Move file from temporary upload location to secure permanent storage
 				$targetPath = $this->generateTargetPath($file);           // Generate unique secure file path
-				$movedFile  = $this->moveUploadedFile($file, $targetPath); // Perform the actual file move
+				$movedFile = $this->moveUploadedFile($file, $targetPath); // Perform the actual file move
 			} catch (\Exception $e) {
 				// File move or post-move operations failed (e.g. disk full, permissions)
 				// Return a failure result so the batch is not interrupted
@@ -606,7 +607,7 @@
 			// Even though the extension was validated earlier, the client may have uploaded ".JPEG"
 			// while validation normalised to ".jpeg" — storage must reflect the canonical form.
 			$extension = strtolower($file->getClientOriginalExtension());
-			$filename  = $this->randomizeFilenames
+			$filename = $this->randomizeFilenames
 				? bin2hex(random_bytes(16)) . '.' . $extension
 				: $this->sanitizeFilename($file->getClientOriginalName());
 			
