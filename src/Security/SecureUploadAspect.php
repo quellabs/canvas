@@ -6,9 +6,8 @@
 	use Random\RandomException;
 	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
+	use Quellabs\Canvas\Security\Exceptions\UploadException;
 	use Symfony\Component\HttpFoundation\File\UploadedFile;
-	use Symfony\Component\HttpFoundation\JsonResponse;
-	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
 	use Quellabs\Support\ComposerUtils;
 	
@@ -32,6 +31,14 @@
 	 * - The .htaccess protection written by this class is a secondary defence layer that only
 	 *   works on Apache with AllowOverride enabled. It provides NO protection on Nginx, Caddy,
 	 *   RoadRunner, Swoole, or any other server. Do not rely on it as your sole protection.
+	 *
+	 * Failure modes:
+	 * - Default (throwOnFailure = false): writes upload_successful = false, the per-file results,
+	 *   and any batch error to the request attributes, then continues. The controller is responsible
+	 *   for checking these attributes and deciding how to respond.
+	 * - throwOnFailure = true: throws UploadException, which carries the full per-file result set
+	 *   and the batch error so the framework's exception handler (or a catching controller) can
+	 *   surface granular error information without re-running validation.
 	 */
 	class SecureUploadAspect implements BeforeAspectInterface {
 		
@@ -56,7 +63,7 @@
 		/** @var int Maximum image width */
 		private int $maxImageWidth;
 		
-		/** @var int Maximum image width */
+		/** @var int Maximum image height */
 		private int $maxImageHeight;
 		
 		/** @var bool Generate random filenames to prevent conflicts */
@@ -65,8 +72,8 @@
 		/** @var string Directory structure for organizing uploads */
 		private string $directoryStructure;
 		
-		/** @var bool If true, returns an error response immediately on validation failure instead of writing failure info to request attributes */
-		private bool $immediateResponse;
+		/** @var bool If true, throws UploadException on validation failure instead of writing failure info to request attributes */
+		private bool $throwOnFailure;
 		
 		/**
 		 * Constructor
@@ -80,7 +87,10 @@
 		 * @param int $maxImageHeight Maximum allowed image height
 		 * @param bool $randomizeFilenames Generate random filenames
 		 * @param string $directoryStructure Directory structure pattern (Y/m/d for date-based)
-		 * @param bool $immediateResponse If true, returns an error response immediately on validation failure instead of writing failure info to request attributes
+		 * @param bool $throwOnFailure If true, throws UploadException on validation failure instead of
+		 *                            writing failure info to request attributes. Use when you want the
+		 *                            framework's central exception handler to deal with upload errors
+		 *                            uniformly. The exception carries the full per-file result set.
 		 */
 		public function __construct(
 			string $uploadPath = 'storage/uploads',
@@ -97,7 +107,7 @@
 			int    $maxImageHeight = 2048,
 			bool   $randomizeFilenames = true,
 			string $directoryStructure = 'Y/m/d',
-			bool   $immediateResponse = false
+			bool   $throwOnFailure = false
 		) {
 			$this->uploadPath = rtrim($uploadPath, '/');
 			$this->allowedExtensions = array_map('strtolower', $allowedExtensions);
@@ -109,13 +119,21 @@
 			$this->maxImageHeight = $maxImageHeight;
 			$this->randomizeFilenames = $randomizeFilenames;
 			$this->directoryStructure = $directoryStructure;
-			$this->immediateResponse = $immediateResponse;
+			$this->throwOnFailure = $throwOnFailure;
 		}
 		
 		/**
-		 * Processes file uploads before the controller method executes
+		 * Processes file uploads before the controller method executes.
+		 *
+		 * On success, request attributes are always populated regardless of throwOnFailure.
+		 * On failure:
+		 * - throwOnFailure = false: attributes are populated and execution continues
+		 * - throwOnFailure = true: UploadException is thrown with the full result set attached
+		 *
 		 * @param MethodContextInterface $context The method execution context
-		 * @return Response|null Returns error response if validation fails (in immediateResponse mode), null to continue
+		 * @return Response|null Always returns null; throws UploadException if throwOnFailure is
+		 *                       enabled and validation fails
+		 * @throws UploadException If throwOnFailure is true and one or more files fail validation
 		 */
 		public function before(MethodContextInterface $context): ?Response {
 			// Extract the HTTP request from the method context
@@ -131,8 +149,8 @@
 				return null; // No files to process
 			}
 			
-			// Process and validate the uploaded files
-			// All errors — batch-level and per-file — are returned in the result, never thrown
+			// Process and validate the uploaded files.
+			// All errors — batch-level and per-file — are returned in the result, never thrown.
 			$result = $this->processUploadedFiles($files);
 			$processedFiles = $result['files'];
 			$batchError = $result['batch_error'];
@@ -153,8 +171,8 @@
 				}
 			}
 			
-			// Store the processed file information in the request attributes
-			// This makes the per-file results (including any errors) available to the controller
+			// Always write results to request attributes — controllers and exception handlers
+			// both benefit from having the full result set available without re-running validation
 			$request->attributes->set('uploaded_files', $processedFiles);
 			
 			// Set a flag indicating whether all uploads processed successfully
@@ -167,28 +185,12 @@
 			// Expose aggregated warnings so controllers can surface skipped-check notices to users
 			$request->attributes->set('upload_warnings', $warnings);
 			
-			// Return null to indicate the request should continue to the controller
-			if ($allSuccessful || !$this->immediateResponse) {
-				return null;
+			if (!$allSuccessful && $this->throwOnFailure) {
+				$message = $batchError ?? 'One or more uploaded files failed validation';
+				throw new UploadException($message, $processedFiles, $batchError);
 			}
 			
-			// In immediateResponse mode, collect all errors and return a single response
-			$errors = [];
-			
-			// Include the batch-level error first if present (e.g. too many files)
-			if ($batchError !== null) {
-				$errors[] = $batchError;
-			}
-			
-			foreach ($processedFiles as $fieldName => $fieldFiles) {
-				foreach ($fieldFiles as $index => $fileResult) {
-					foreach ($fileResult['errors'] as $error) {
-						$errors[] = "[{$fieldName}[{$index}]] {$error}";
-					}
-				}
-			}
-			
-			return $this->createErrorResponse(implode('; ', $errors), $request);
+			return null;
 		}
 		
 		/**
@@ -326,8 +328,8 @@
 				$this->validateFileName($file),
 			];
 			
-			// Image-specific validators only run when the file is actually an image
-			// Running getimagesize() on PDFs or DOCX files returns false, causing false positives
+			// Image-specific validators only run when the file is actually an image.
+			// Running getimagesize() on PDFs or DOCX files returns false, causing false positives.
 			if ($this->isImage($file)) {
 				$errors[] = $this->validateImageContent($file);
 				$errors[] = $this->validateImageDimensions($file);
@@ -346,8 +348,8 @@
 		
 		/**
 		 * Moves a validated file to permanent storage and returns its metadata.
-		 * Validation is intentionally absent here — callers must run collectValidationErrors()
-		 * first and only invoke this method when that returns an empty array.
+		 * Validation is intentionally absent here — callers must run collectValidationResult()
+		 * first and only invoke this method when that returns an empty errors array.
 		 * This method never throws; move and post-move failures are returned in 'errors'.
 		 * @param UploadedFile $file The uploaded file to store (must already be validated)
 		 * @return array<string, mixed> File metadata with 'success' flag and 'errors' array
@@ -438,8 +440,8 @@
 				return "File type '{$mimeType}' not allowed";
 			}
 			
-			// Additional security layer: ensure the file extension matches the actual content
-			// This prevents attacks where someone renames a malicious file (e.g., .exe to .jpg)
+			// Additional security layer: ensure the file extension matches the actual content.
+			// This prevents attacks where someone renames a malicious file (e.g., .exe to .jpg).
 			if (!$this->extensionMatchesMimeType($extension, $mimeType)) {
 				return "File extension does not match file content";
 			}
@@ -502,8 +504,8 @@
 				return "Invalid image file";
 			}
 			
-			// Check if MIME type from getimagesize matches uploaded MIME type
-			// This prevents malicious files with fake extensions or headers
+			// Check if MIME type from getimagesize matches uploaded MIME type.
+			// This prevents malicious files with fake extensions or headers.
 			if ($imageInfo['mime'] !== $file->getMimeType()) {
 				return "Image file content does not match declared type";
 			}
@@ -652,7 +654,7 @@
 				
 				// Write Apache-specific .htaccess protection to the upload directory.
 				// This is a secondary defense — uploads should ideally live outside the web root.
-				// Has no effect on Nginx, Caddy, Swoole, or any non-Apache server.
+				// Has no effect on Nginx, Caddy, RoadRunner, Swoole, or any other server.
 				$this->createHtaccessProtection(dirname($targetPath));
 				
 				// Return result
@@ -825,29 +827,5 @@
 			];
 			
 			return $errors[$error] ?? 'Unknown upload error';
-		}
-		
-		/**
-		 * Creates appropriate error response
-		 * @param string $message Error message
-		 * @param Request $request HTTP request
-		 * @return Response Error response
-		 */
-		private function createErrorResponse(string $message, Request $request): Response {
-			$contentType = (string)$request->headers->get('Content-Type', '');
-			$acceptHeader = (string)$request->headers->get('Accept', '');
-			
-			if ($request->isXmlHttpRequest() ||
-				str_contains($contentType, 'application/json') ||
-				str_contains($acceptHeader, 'application/json')) {
-				return new JsonResponse([
-					'error'   => 'Upload failed',
-					'message' => $message
-				], 422);
-			}
-			
-			// For regular form submissions, you might want to redirect or render an error page
-			// This is a simple implementation - customize based on your needs
-			return new Response($message, 422);
 		}
 	}

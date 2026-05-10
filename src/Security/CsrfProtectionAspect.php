@@ -2,11 +2,11 @@
 	
 	namespace Quellabs\Canvas\Security;
 	
+	use Quellabs\Canvas\Security\Exceptions\CsrfTokenException;
 	use Quellabs\Canvas\Security\Foundation\CsrfTokenManager;
 	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Random\RandomException;
-	use Symfony\Component\HttpFoundation\JsonResponse;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
 	
@@ -20,9 +20,16 @@
 	 * - Validates CSRF tokens for POST, PUT, DELETE, PATCH requests
 	 * - Skips validation for safe methods (GET, HEAD, OPTIONS)
 	 * - Supports token validation from both form data and headers
-	 * - Provides appropriate error responses for both AJAX and regular requests
 	 * - Automatically adds CSRF tokens to request attributes for use in controllers/templates
-	 * - Configurable error handling: immediate response or deferred to controller
+	 * - Configurable failure handling: attribute-based (default) or exception
+	 *
+	 * Failure modes:
+	 * - Default (throwOnFailure = false): writes csrf_validation_succeeded = false and a csrf_error
+	 *   array to the request attributes, then continues. The controller is responsible for checking
+	 *   these attributes and deciding how to respond (e.g. re-rendering the form with an error).
+	 * - throwOnFailure = true: throws CsrfTokenException, which the framework's exception handler
+	 *   converts into an HTTP response. Use this when you want centralized, uniform error handling
+	 *   and do not need per-controller CSRF failure logic.
 	 */
 	class CsrfProtectionAspect implements BeforeAspectInterface {
 		
@@ -44,11 +51,11 @@
 		/** @var array<string> HTTP methods that are exempt from CSRF protection (safe methods) */
 		private array $exemptMethods;
 		
-		/** @var int Maximum number of tokens to store per intention (prevents session bloat) * */
+		/** @var int Maximum number of tokens to store per intention (prevents session bloat) */
 		private int $maxTokens;
 		
-		/** @var bool If true, returns an error response immediately instead of writing failure info to request attributes */
-		private bool $immediateResponse;
+		/** @var bool If true, throws CsrfTokenException on failure instead of writing to request attributes */
+		private bool $throwOnFailure;
 		
 		/**
 		 * Constructor
@@ -57,7 +64,9 @@
 		 * @param string $intention Token intention/purpose for scoping
 		 * @param array<string> $exemptMethods HTTP methods exempt from CSRF protection
 		 * @param int $maxTokens Maximum number of tokens to store per intention (prevents session bloat)
-		 * @param bool $immediateResponse If true, returns an error response immediately instead of writing failure info to request attributes
+		 * @param bool $throwOnFailure If true, throws CsrfTokenException on failure instead of writing
+		 *                            failure info to request attributes. Use when you want the framework's
+		 *                            central exception handler to deal with CSRF errors uniformly.
 		 */
 		public function __construct(
 			string $tokenName = self::DEFAULT_TOKEN_NAME,
@@ -65,14 +74,14 @@
 			string $intention = 'default',
 			array  $exemptMethods = ['GET', 'HEAD', 'OPTIONS'],
 			int    $maxTokens = 10,
-			bool   $immediateResponse = false
+			bool   $throwOnFailure = false
 		) {
 			$this->exemptMethods = $exemptMethods;
 			$this->intention = $intention;
 			$this->headerName = $headerName;
 			$this->tokenName = $tokenName;
 			$this->maxTokens = $maxTokens;
-			$this->immediateResponse = $immediateResponse;
+			$this->throwOnFailure = $throwOnFailure;
 		}
 		
 		/**
@@ -80,8 +89,10 @@
 		 * It validates CSRF tokens for state-changing requests and adds tokens
 		 * to the request for use in controllers and templates.
 		 * @param MethodContextInterface $context The method execution context
-		 * @return Response|null Returns error response if validation fails, null to continue execution
+		 * @return Response|null Always returns null; throws CsrfTokenException if throwOnFailure is
+		 *                       enabled and validation fails, otherwise writes failure info to attributes
 		 * @throws RandomException
+		 * @throws CsrfTokenException If throwOnFailure is true and the CSRF token is missing or invalid
 		 */
 		public function before(MethodContextInterface $context): ?Response {
 			// Fetch the request
@@ -90,12 +101,12 @@
 			// Create the token manager
 			$csrfManager = new CsrfTokenManager($request->getSession(), $this->maxTokens);
 			
-			// Skip CSRF protection for safe methods (GET, HEAD, OPTIONS)
-			// These methods should not change server state, so CSRF protection is not needed
+			// Skip CSRF protection for safe methods (GET, HEAD, OPTIONS).
+			// These methods should not change server state, so CSRF protection is not needed.
 			if (in_array($request->getMethod(), $this->exemptMethods)) {
 				$request->attributes->set('csrf_validation_succeeded', true);
 				$this->addTokenToRequest($csrfManager, $request);
-				return null; // Continue with normal execution
+				return null;
 			}
 			
 			// Validate CSRF token for state-changing requests (POST, PUT, DELETE, PATCH)
@@ -107,12 +118,14 @@
 				return null;
 			}
 			
-			// Validation failed
-			if ($this->immediateResponse) {
-				return $this->createErrorResponse($request);
+			// Validation failed — throw if opted in, otherwise write to attributes and continue
+			if ($this->throwOnFailure) {
+				throw new CsrfTokenException('Invalid or missing CSRF token');
 			}
 			
-			// Default behavior: write failure info to request attributes and let the controller handle it
+			// Default: write failure info to request attributes and let the controller handle it.
+			// A fresh token is generated here so the controller can re-render the form immediately
+			// without a separate round-trip to fetch a new token.
 			$request->attributes->set('csrf_validation_succeeded', false);
 			$request->attributes->set('csrf_error', [
 				'type'    => 'csrf_token_invalid',
@@ -124,29 +137,6 @@
 			$request->attributes->set('csrf_token', $token);
 			$request->attributes->set('csrf_token_name', $this->tokenName);
 			return null;
-		}
-		
-		/**
-		 * Creates appropriate error response for CSRF validation failure
-		 *
-		 * Returns different response formats based on request type:
-		 * - JSON response for AJAX requests
-		 * - Plain text response for regular form submissions
-		 *
-		 * @param Request $request The HTTP request
-		 * @return Response The error response
-		 */
-		protected function createErrorResponse(Request $request): Response {
-			// Handle AJAX requests with JSON response
-			if ($request->isXmlHttpRequest()) {
-				return new JsonResponse([
-					'error'   => 'CSRF token validation failed',
-					'message' => 'Invalid or missing CSRF token'
-				], 403);
-			}
-			
-			// Handle regular form submissions with plain text response
-			return new Response('CSRF token validation failed', 403);
 		}
 		
 		/**
@@ -183,7 +173,6 @@
 		 * @param Request $request The HTTP request
 		 */
 		private function addTokenToRequest(CsrfTokenManager $csrfManager, Request $request): void {
-			// Make token available to controllers and templates
 			$token = $csrfManager->getToken($this->intention);
 			$request->attributes->set('csrf_token', $token);
 			$request->attributes->set('csrf_token_name', $this->tokenName);
