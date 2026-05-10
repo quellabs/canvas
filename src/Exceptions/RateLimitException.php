@@ -14,6 +14,6 @@
 	 * should use the default attribute-based path instead of enabling throwOnFailure,
 	 * or catch this exception explicitly in their own exception handler.
 	 */
-	class RateLimitException extends RuntimeException {
+	class RateLimitException extends HttpException {
 	
 	}

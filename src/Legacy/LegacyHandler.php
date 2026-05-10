@@ -101,7 +101,7 @@
 			}
 			
 			// No resolver could handle this path
-			throw RouteNotFoundException::forLegacyFallthrough($request->getPathInfo());
+			throw new RouteNotFoundException("No route found", 404);
 		}
 		
 		/**

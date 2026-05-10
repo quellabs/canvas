@@ -2,8 +2,6 @@
 	
 	namespace Quellabs\Canvas\Exceptions;
 	
-	use RuntimeException;
-	
 	/**
 	 * Thrown by SecureUploadAspect when throwOnFailure is enabled and
 	 * one or more uploaded files fail validation.
@@ -17,7 +15,7 @@
 	 * The full per-file result set is preserved in $processedFiles so that an
 	 * exception handler can still surface granular error information if needed.
 	 */
-	class UploadException extends RuntimeException {
+	class UploadException extends HttpException {
 		
 		/** @var array<string, array<int, array<string, mixed>>> Per-field, per-file validation results */
 		private array $processedFiles;
