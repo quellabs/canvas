@@ -8,6 +8,7 @@
 	use Symfony\Component\HttpFoundation\JsonResponse;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
+	use Quellabs\Discover\ComposerUtils;
 	use RuntimeException;
 	
 	/**
@@ -21,9 +22,15 @@
 	 * - File size limits with configurable maximums
 	 * - Filename sanitization to prevent directory traversal
 	 * - Virus scanning integration (if available)
-	 * - Safe storage location outside web root
 	 * - Content validation for image files
-	 * - Execution prevention for uploaded files
+	 * - Execution prevention via .htaccess (Apache only — see note below)
+	 *
+	 * Deployment requirements:
+	 * - Upload directory SHOULD be outside the public web root. This is the primary execution
+	 *   prevention layer and works on all web servers (Apache, Nginx, Caddy, Swoole, etc.).
+	 * - The .htaccess protection written by this class is a secondary defence layer that only
+	 *   works on Apache with AllowOverride enabled. It provides NO protection on Nginx, Caddy,
+	 *   RoadRunner, Swoole, or any other server. Do not rely on it as your sole protection.
 	 */
 	class SecureUploadAspect implements BeforeAspectInterface {
 		
@@ -119,7 +126,7 @@
 		/**
 		 * Processes file uploads before the controller method executes
 		 * @param MethodContextInterface $context The method execution context
-		 * @return Response|null Returns error response if validation fails, null to continue
+		 * @return Response|null Returns error response if validation fails (in immediateResponse mode), null to continue
 		 */
 		public function before(MethodContextInterface $context): ?Response {
 			// Extract the HTTP request from the method context
@@ -135,38 +142,64 @@
 				return null; // No files to process
 			}
 			
-			try {
-				// Process and validate the uploaded files
-				// This method likely handles file validation, moving files to permanent storage,
-				// generating file metadata, and performing security checks
-				$processedFiles = $this->processUploadedFiles($files);
-				
-				// Store the processed file information in the request attributes
-				// This makes the file data available to the controller method
-				$request->attributes->set('uploaded_files', $processedFiles);
-				
-				// Set a flag indicating successful upload processing
-				// Controllers can check this to confirm files were handled properly
-				$request->attributes->set('upload_successful', true);
-				
-				// Return null to indicate the request should continue to the controller
-				return null;
-				
-			} catch (RuntimeException $e) {
-				// Handle any errors that occurred during file processing
-				if ($this->immediateResponse) {
-					return $this->createErrorResponse($e->getMessage(), $request);
+			// Process and validate the uploaded files
+			// All errors — batch-level and per-file — are returned in the result, never thrown
+			$result         = $this->processUploadedFiles($files);
+			$processedFiles = $result['files'];
+			$batchError     = $result['batch_error'];
+			$warnings       = $result['warnings'];
+			
+			// Determine overall success: no batch error and every individual file must have passed
+			// Controllers can check this flag to confirm all files were handled properly
+			$allSuccessful = $batchError === null;
+			
+			if ($allSuccessful) {
+				foreach ($processedFiles as $fieldFiles) {
+					foreach ($fieldFiles as $fileResult) {
+						if (!$fileResult['success']) {
+							$allSuccessful = false;
+							break 2;
+						}
+					}
 				}
-				
-				// Default behavior: write failure info to request attributes and let the controller handle it
-				$request->attributes->set('upload_successful', false);
-				$request->attributes->set('upload_error', [
-					'type'    => 'upload_failed',
-					'message' => $e->getMessage()
-				]);
-				
+			}
+			
+			// Store the processed file information in the request attributes
+			// This makes the per-file results (including any errors) available to the controller
+			$request->attributes->set('uploaded_files', $processedFiles);
+			
+			// Set a flag indicating whether all uploads processed successfully
+			$request->attributes->set('upload_successful', $allSuccessful);
+			
+			// Expose the batch-level error so controllers can distinguish failure reasons
+			// (e.g. too many files vs. per-file validation failure vs. no files uploaded)
+			$request->attributes->set('upload_batch_error', $batchError);
+			
+			// Expose aggregated warnings so controllers can surface skipped-check notices to users
+			$request->attributes->set('upload_warnings', $warnings);
+			
+			// Return null to indicate the request should continue to the controller
+			if ($allSuccessful || !$this->immediateResponse) {
 				return null;
 			}
+			
+			// In immediateResponse mode, collect all errors and return a single response
+			$errors = [];
+			
+			// Include the batch-level error first if present (e.g. too many files)
+			if ($batchError !== null) {
+				$errors[] = $batchError;
+			}
+			
+			foreach ($processedFiles as $fieldName => $fieldFiles) {
+				foreach ($fieldFiles as $index => $fileResult) {
+					foreach ($fileResult['errors'] as $error) {
+						$errors[] = "[{$fieldName}[{$index}]] {$error}";
+					}
+				}
+			}
+			
+			return $this->createErrorResponse(implode('; ', $errors), $request);
 		}
 		
 		/**
@@ -174,23 +207,36 @@
 		 *
 		 * Output is normalized: every field always maps to an indexed array of processed
 		 * file records, regardless of whether the field accepted one or multiple files.
-		 * This gives consumers a consistent shape to iterate over without branching on type.
+		 * Each record contains a 'success' flag and an 'errors' array so consumers can
+		 * handle partial batch failures without catching exceptions.
+		 *
+		 * The return value always has two keys:
+		 * - 'batch_error': a string if a batch-level check failed (e.g. too many files), null otherwise
+		 * - 'files':       the per-field, per-file result arrays (empty when batch_error is set)
 		 *
 		 * @param array<string, UploadedFile|array<int, UploadedFile>> $files Array of uploaded files
-		 * @return array<string, array<int, array<string, mixed>>> Processed file information
-		 * @throws RuntimeException If validation fails
+		 * @return array{batch_error: string|null, files: array<string, array<int, array<string, mixed>>>}
 		 */
 		private function processUploadedFiles(array $files): array {
+			// Count total number of files to validate against limits
+			$totalFiles = 0;
+			
+			foreach ($files as $file) {
+				$totalFiles += is_array($file) ? count($file) : 1;
+			}
+			
+			// Validate the file count at the batch level before touching any individual file.
+			// Reported as a batch_error so the caller never needs to catch an exception.
+			if ($totalFiles > $this->maxFiles) {
+				return [
+					'batch_error' => "Too many files uploaded. Maximum allowed: {$this->maxFiles}",
+					'warnings'    => [],
+					'files'       => [],
+				];
+			}
+			
 			// Initialize array to store processed file information
 			$processedFiles = [];
-			
-			// Count total number of files to validate against limits
-			$totalFiles = $this->countFiles($files);
-			
-			// Validate that the number of uploaded files doesn't exceed the maximum allowed
-			if ($totalFiles > $this->maxFiles) {
-				throw new RuntimeException("Too many files uploaded. Maximum allowed: {$this->maxFiles}");
-			}
 			
 			// Process each field containing uploaded files
 			foreach ($files as $fieldName => $file) {
@@ -199,116 +245,199 @@
 				// Consumers can always foreach over $result[$field] without type-checking first.
 				$processedFiles[$fieldName] = [];
 				
-				if (!is_array($file)) {
-					// Single UploadedFile: wrap in an array to match the normalized structure
-					$processedFiles[$fieldName][] = $this->processSingleFile($file);
-					continue;
-				}
+				// Normalize single files into an array so both cases share the same processing path
+				$fileList = is_array($file) ? $file : [$file];
 				
-				// Multiple UploadedFile objects for the same field name
-				foreach ($file as $singleFile) {
-					$processedFiles[$fieldName][] = $this->processSingleFile($singleFile);
+				foreach ($fileList as $singleFile) {
+					$validation = $this->collectValidationResult($singleFile);
+					
+					if (!empty($validation['errors'])) {
+						$processedFiles[$fieldName][] = [
+							'success'       => false,
+							'errors'        => $validation['errors'],
+							'warnings'      => $validation['warnings'],
+							'original_name' => $this->preserveOriginalNames ? $singleFile->getClientOriginalName() : null,
+						];
+						continue;
+					}
+					
+					// Validation passed — attempt to move the file to permanent storage
+					$fileResult                    = $this->processSingleFile($singleFile);
+					$fileResult['warnings']        = $validation['warnings'];
+					$processedFiles[$fieldName][] = $fileResult;
+				}
+			}
+			
+			// Aggregate all per-file warnings into a top-level list for quick inspection
+			$allWarnings = [];
+			
+			foreach ($processedFiles as $fieldFiles) {
+				foreach ($fieldFiles as $fileResult) {
+					foreach ($fileResult['warnings'] as $warning) {
+						$allWarnings[] = $warning;
+					}
 				}
 			}
 			
 			// Return the array of all processed file information
-			return $processedFiles;
+			return [
+				'batch_error' => null,
+				'warnings'    => array_values(array_unique($allWarnings)),
+				'files'       => $processedFiles,
+			];
 		}
 		
 		/**
-		 * Processes a single uploaded file through validation, security checks, and storage
-		 * @param UploadedFile $file The uploaded file to process
-		 * @return array<string, mixed> File information including paths, metadata, and upload timestamp
-		 * @throws RuntimeException If validation fails or file processing encounters errors
+		 * Checks whether the uploaded file is an image based on its MIME type
+		 * @param UploadedFile $file The uploaded file
+		 * @return bool True if the file is an image
 		 */
-		private function processSingleFile(UploadedFile $file): array {
-			// Check if the file upload completed successfully without errors
+		private function isImage(UploadedFile $file): bool {
+			return str_starts_with((string)$file->getMimeType(), 'image/');
+		}
+		
+		/**
+		 * Runs all validation checks against a file and returns every error and warning found.
+		 * This method never throws — each validator returns a string on failure or null on success.
+		 * Warnings indicate checks that were requested but could not be performed (e.g. ClamAV not installed).
+		 *
+		 * @param UploadedFile $file The uploaded file to validate
+		 * @return array{errors: array<int, string>, warnings: array<int, string>}
+		 */
+		private function collectValidationResult(UploadedFile $file): array {
 			if (!$file->isValid()) {
-				throw new RuntimeException("File upload error: " . $this->getUploadErrorMessage($file->getError()));
+				// A PHP upload error means the file itself is broken; no further checks make sense
+				return [
+					'errors'   => [$this->getUploadErrorMessage($file->getError())],
+					'warnings' => [],
+				];
 			}
 			
-			// Perform basic security and business rule validations
-			$this->validateFileSize($file);          // Check file doesn't exceed size limits
-			$this->validateFileType($file);          // Ensure file type is in allowed list
-			$this->validateFileName($file);          // Sanitize filename for security
-			$this->validateImageContent($file);      // Verify actual image content matches extension (no-op if not an image)
-			$this->validateImageDimensions($file);   // Check image meets size requirements (no-op if not an image)
-			$this->scanForViruses($file);            // Scan file for malicious content (no-op if virus scan disabled)
+			$errors = [
+				$this->validateFileSize($file),
+				$this->validateFileType($file),
+				$this->validateFileName($file),
+			];
 			
-			// Move file from temporary upload location to secure permanent storage
-			$targetPath = $this->generateTargetPath($file);        // Generate unique secure file path
-			$movedFile = $this->moveUploadedFile($file, $targetPath);  // Perform the actual file move
+			// Image-specific validators only run when the file is actually an image
+			// Running getimagesize() on PDFs or DOCX files returns false, causing false positives
+			if ($this->isImage($file)) {
+				$errors[] = $this->validateImageContent($file);
+				$errors[] = $this->validateImageDimensions($file);
+			}
 			
-			// Return comprehensive file information for database storage and client response
-			$relativePath = str_replace(getcwd() . '/', '', $movedFile);
+			// Virus scan returns both an error and a warning channel
+			$virusScanResult = $this->scanForViruses($file);
+			$errors[]         = $virusScanResult['error'];
+			$warnings         = array_values(array_filter([$virusScanResult['warning']]));
 			
 			return [
+				'errors'   => array_values(array_filter($errors)),
+				'warnings' => $warnings,
+			];
+		}
+		
+		/**
+		 * Moves a validated file to permanent storage and returns its metadata.
+		 * Validation is intentionally absent here — callers must run collectValidationErrors()
+		 * first and only invoke this method when that returns an empty array.
+		 * This method never throws; move and post-move failures are returned in 'errors'.
+		 *
+		 * @param UploadedFile $file The uploaded file to store (must already be validated)
+		 * @return array<string, mixed> File metadata with 'success' flag and 'errors' array
+		 */
+		private function processSingleFile(UploadedFile $file): array {
+			try {
+				// Move file from temporary upload location to secure permanent storage
+				$targetPath = $this->generateTargetPath($file);           // Generate unique secure file path
+				$movedFile  = $this->moveUploadedFile($file, $targetPath); // Perform the actual file move
+			} catch (\Exception $e) {
+				// File move or post-move operations failed (e.g. disk full, permissions)
+				// Return a failure result so the batch is not interrupted
+				return [
+					'success'       => false,
+					'errors'        => [$e->getMessage()],
+					'warnings'      => [],
+					'original_name' => $this->preserveOriginalNames ? $file->getClientOriginalName() : null,
+				];
+			}
+			
+			// Return comprehensive file information for database storage and client response
+			$relativePath = str_replace(ComposerUtils::getProjectRoot() . '/', '', $movedFile);
+			
+			return [
+				'success'       => true,
+				'errors'        => [],
 				// Preserve original filename only if configuration allows it
 				'original_name' => $this->preserveOriginalNames ? $file->getClientOriginalName() : null,
-				'filename'      => basename($movedFile),                  // New filename after processing
-				'path'          => $movedFile,                            // Full absolute path to file
-				'relative_path' => $relativePath,                         // Path relative to application root
-				'size'          => $file->getSize(),                      // File size in bytes
-				'mime_type'     => $file->getMimeType(),                  // MIME type for content handling
-				'extension'     => $file->getClientOriginalExtension(),   // File extension from original upload
-				'uploaded_at'   => date('Y-m-d H:i:s')             // Timestamp of successful processing
+				'filename'      => basename($movedFile),                 // New filename after processing
+				'path'          => $movedFile,                           // Full absolute path to file
+				'relative_path' => $relativePath,                        // Path relative to application root
+				'size'          => $file->getSize(),                     // File size in bytes
+				'mime_type'     => $file->getMimeType(),                 // MIME type for content handling
+				'extension'     => $file->getClientOriginalExtension(),  // File extension from original upload
+				'uploaded_at'   => date('Y-m-d H:i:s'),                 // Timestamp of successful processing
 			];
 		}
 		
 		/**
 		 * Validates file size
 		 * @param UploadedFile $file The uploaded file
-		 * @throws RuntimeException If file is too large
+		 * @return string|null Error message, or null if valid
 		 */
-		private function validateFileSize(UploadedFile $file): void {
+		private function validateFileSize(UploadedFile $file): ?string {
 			if ($file->getSize() > $this->maxFileSize) {
 				$maxSizeMB = round($this->maxFileSize / 1024 / 1024, 1);
-				throw new RuntimeException("File too large. Maximum size allowed: {$maxSizeMB}MB");
+				return "File too large. Maximum size allowed: {$maxSizeMB}MB";
 			}
+			
+			return null;
 		}
 		
 		/**
 		 * Validates file type by extension and MIME type
 		 * @param UploadedFile $file The uploaded file
-		 * @throws RuntimeException If file type is not allowed
+		 * @return string|null Error message, or null if valid
 		 */
-		private function validateFileType(UploadedFile $file): void {
+		private function validateFileType(UploadedFile $file): ?string {
 			// Get file extension in lowercase for case-insensitive comparison
 			$extension = strtolower($file->getClientOriginalExtension());
 			
 			// Get the actual MIME type detected by the server
 			$mimeType = $file->getMimeType();
 			
-			// Throw exception when the mimetype cannot be determined
+			// Return an error when the mimetype cannot be determined
 			if ($mimeType === null) {
-				throw new RuntimeException("Could not determine file MIME type");
+				return "Could not determine file MIME type";
 			}
 			
 			// Check if the file extension is in our whitelist of allowed extensions
-			if (!in_array($extension, $this->allowedExtensions)) {
+			if (!in_array($extension, $this->allowedExtensions, true)) {
 				// Create a user-friendly list of allowed extensions for the error message
 				$allowed = implode(', ', $this->allowedExtensions);
-				throw new RuntimeException("File extension '{$extension}' not allowed. Allowed types: {$allowed}");
+				return "File extension '{$extension}' not allowed. Allowed types: {$allowed}";
 			}
 			
 			// Verify the MIME type is also allowed (prevents spoofing via filename)
-			if (!in_array($mimeType, $this->allowedMimeTypes)) {
-				throw new RuntimeException("File type '{$mimeType}' not allowed");
+			if (!in_array($mimeType, $this->allowedMimeTypes, true)) {
+				return "File type '{$mimeType}' not allowed";
 			}
 			
 			// Additional security layer: ensure the file extension matches the actual content
 			// This prevents attacks where someone renames a malicious file (e.g., .exe to .jpg)
 			if (!$this->extensionMatchesMimeType($extension, $mimeType)) {
-				throw new RuntimeException("File extension does not match file content");
+				return "File extension does not match file content";
 			}
+			
+			return null;
 		}
 		
 		/**
 		 * Validates filename for security issues
 		 * @param UploadedFile $file The uploaded file
-		 * @throws RuntimeException If filename is dangerous
+		 * @return string|null Error message, or null if valid
 		 */
-		private function validateFileName(UploadedFile $file): void {
+		private function validateFileName(UploadedFile $file): ?string {
 			// Get the original filename as provided by the client
 			// Note: This comes from user input and should never be trusted
 			$filename = $file->getClientOriginalName();
@@ -316,58 +445,63 @@
 			// Check for directory traversal attempts
 			// These characters could allow an attacker to escape the intended upload directory
 			if (str_contains($filename, '..') || str_contains($filename, '/') || str_contains($filename, '\\')) {
-				throw new RuntimeException("Filename contains invalid characters");
+				return "Filename contains invalid characters";
 			}
 			
 			// Check for executable extensions in compound filenames
 			// Split filename by dots to examine each part (e.g., "file.php.txt" becomes ["file", "php", "txt"])
 			$parts = explode('.', $filename);
 			
-			// Only check compound filenames (more than 2 parts: name + extension)
-			// This prevents files like "malicious.php.txt" from being uploaded
-			if (count($parts) > 2) {
-				// List of potentially dangerous executable file extensions
-				// These could be executed by the web server if placed in accessible directories
-				$dangerousExtensions = ['php', 'phtml', 'php3', 'php4', 'php5', 'pl', 'py', 'jsp', 'asp', 'sh', 'cgi'];
-				
-				// Check each part of the filename against the dangerous extensions list
-				foreach ($parts as $part) {
-					// Case-insensitive comparison to catch variations like "PHP", "Php", etc.
-					if (in_array(strtolower($part), $dangerousExtensions)) {
-						throw new RuntimeException("Filename contains potentially dangerous extension");
-					}
+			// Simple filenames (name + single extension) don't need compound extension checks
+			if (count($parts) <= 2) {
+				return null;
+			}
+			
+			// List of potentially dangerous executable file extensions
+			// These could be executed by the web server if placed in accessible directories
+			$dangerousExtensions = ['php', 'phtml', 'php3', 'php4', 'php5', 'pl', 'py', 'jsp', 'asp', 'sh', 'cgi'];
+			
+			// Check each part of the filename against the dangerous extensions list
+			foreach ($parts as $part) {
+				// Case-insensitive comparison to catch variations like "PHP", "Php", etc.
+				if (in_array(strtolower($part), $dangerousExtensions, true)) {
+					return "Filename contains potentially dangerous extension";
 				}
 			}
+			
+			return null;
 		}
 		
 		/**
 		 * Validates image content and structure
 		 * @param UploadedFile $file The uploaded file
-		 * @throws RuntimeException If image is invalid
+		 * @return string|null Error message, or null if valid
 		 */
-		private function validateImageContent(UploadedFile $file): void {
+		private function validateImageContent(UploadedFile $file): ?string {
 			// Attempt to get image information using getimagesize()
 			// The @ symbol suppresses warnings for non-image files
 			$imageInfo = @getimagesize($file->getPathname());
 			
 			// If getimagesize() returns false, the file is not a valid image
 			if ($imageInfo === false) {
-				throw new RuntimeException("Invalid image file");
+				return "Invalid image file";
 			}
 			
 			// Check if MIME type from getimagesize matches uploaded MIME type
 			// This prevents malicious files with fake extensions or headers
 			if ($imageInfo['mime'] !== $file->getMimeType()) {
-				throw new RuntimeException("Image file content does not match declared type");
+				return "Image file content does not match declared type";
 			}
+			
+			return null;
 		}
 		
 		/**
 		 * Validates image dimensions
 		 * @param UploadedFile $file The uploaded file
-		 * @throws RuntimeException If image dimensions exceed limits
+		 * @return string|null Error message, or null if valid
 		 */
-		private function validateImageDimensions(UploadedFile $file): void {
+		private function validateImageDimensions(UploadedFile $file): ?string {
 			// Get image information to check dimensions
 			// Using @ to suppress warnings for non-image files
 			$imageInfo = @getimagesize($file->getPathname());
@@ -375,7 +509,7 @@
 			// If getimagesize() fails, either the file is not an image
 			// or it has already failed validation in validateImageContent()
 			if ($imageInfo === false) {
-				return;
+				return null;
 			}
 			
 			// Extract width and height from the image info array
@@ -384,31 +518,38 @@
 			
 			// Check if either dimension exceeds the configured maximum limits
 			if ($width > $this->maxImageWidth || $height > $this->maxImageHeight) {
-				throw new RuntimeException("Image dimensions ({$width}x{$height}) exceed maximum allowed ({$this->maxImageWidth}x{$this->maxImageHeight})");
+				return "Image dimensions ({$width}x{$height}) exceed maximum allowed ({$this->maxImageWidth}x{$this->maxImageHeight})";
 			}
+			
+			return null;
 		}
 		
 		/**
 		 * Scans file for viruses using ClamAV
+		 *
+		 * Returns an array with two keys:
+		 * - 'error':   set when a virus is detected or scanning is critically misconfigured
+		 * - 'warning': set when the scan was requested but could not be performed (e.g. ClamAV not installed)
+		 *
 		 * @param UploadedFile $file The uploaded file
-		 * @throws RuntimeException If virus is detected
+		 * @return array{error: string|null, warning: string|null}
 		 */
-		private function scanForViruses(UploadedFile $file): void {
-			// Do nothing when virusscanning is disabled
+		private function scanForViruses(UploadedFile $file): array {
+			// Do nothing when virusscanning is disabled — not a warning, it's intentional
 			if (!$this->virusScan) {
-				return;
+				return ['error' => null, 'warning' => null];
 			}
 			
 			// Check if exec() function is available - it may be disabled for security reasons
 			if (!function_exists('exec')) {
-				return; // Cannot execute virus scan - silently skip scanning
+				return ['error' => null, 'warning' => 'Virus scan skipped: exec() is disabled'];
 			}
 			
 			// Locate the ClamAV scanner executable on the system
 			$clamScanPath = $this->findClamScan();
 			
 			if (!$clamScanPath) {
-				return;
+				return ['error' => null, 'warning' => 'Virus scan skipped: ClamAV not found'];
 			}
 			
 			// Initialize variables to capture command execution results
@@ -428,12 +569,16 @@
 			// Check if a virus was detected
 			// ClamAV returns exit code 1 when malware is found
 			if ($returnCode === 1) {
-				throw new RuntimeException("Virus detected in uploaded file");
+				return ['error' => 'Virus detected in uploaded file', 'warning' => null];
 			}
 			
 			// Note: Exit code 0 means file is clean
-			// Exit code 2 would indicate an error (not handled here)
-			// Method returns void on success (clean file)
+			// Exit code 2 would indicate a ClamAV internal error — warn rather than fail
+			if ($returnCode === 2) {
+				return ['error' => null, 'warning' => 'Virus scan skipped: ClamAV returned an error'];
+			}
+			
+			return ['error' => null, 'warning' => null];
 		}
 		
 		/**
@@ -442,28 +587,28 @@
 		 * @return string Full target path
 		 */
 		private function generateTargetPath(UploadedFile $file): string {
-			$baseDir = getcwd() . '/' . $this->uploadPath;
+			$baseDir = ComposerUtils::getProjectRoot() . '/' . $this->uploadPath;
 			
 			// Generate directory structure
-			if ($this->directoryStructure) {
-				$subDir = date($this->directoryStructure);
-				$targetDir = $baseDir . '/' . $subDir;
-			} else {
-				$targetDir = $baseDir;
-			}
+			$targetDir = $this->directoryStructure
+				? $baseDir . '/' . date($this->directoryStructure)
+				: $baseDir;
 			
 			// Create directories if needed
-			if ($this->createDirectories && !is_dir($targetDir)) {
-				mkdir($targetDir, 0755, true);
+			// The !is_dir() check after mkdir() handles the race condition where another process
+			// creates the directory between our check and our mkdir() call
+			if ($this->createDirectories && !is_dir($targetDir) && !mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
+				throw new RuntimeException("Failed to create upload directory: {$targetDir}");
 			}
 			
 			// Generate filename
-			if ($this->randomizeFilenames) {
-				$extension = $file->getClientOriginalExtension();
-				$filename = $this->generateRandomFilename() . '.' . $extension;
-			} else {
-				$filename = $this->sanitizeFilename($file->getClientOriginalName());
-			}
+			// Extension is lowercased to ensure consistency regardless of what the client sent.
+			// Even though the extension was validated earlier, the client may have uploaded ".JPEG"
+			// while validation normalised to ".jpeg" — storage must reflect the canonical form.
+			$extension = strtolower($file->getClientOriginalExtension());
+			$filename  = $this->randomizeFilenames
+				? bin2hex(random_bytes(16)) . '.' . $extension
+				: $this->sanitizeFilename($file->getClientOriginalName());
 			
 			return $targetDir . '/' . $filename;
 		}
@@ -483,10 +628,16 @@
 				
 				// Set secure file permissions (owner: read/write, group/others: read only)
 				// 0644 = rw-r--r-- prevents execution while allowing read access
-				chmod($targetPath, 0644);
+				// Failure is non-fatal but noted: the file is stored, but permissions may be too permissive
+				if (!chmod($targetPath, 0644)) {
+					// chmod can legitimately fail on some filesystems (e.g. FAT, network mounts, object storage)
+					// Treat as a warning rather than a hard failure — the upload itself succeeded
+					trigger_error("SecureUploadAspect: chmod failed on {$targetPath}", E_USER_WARNING);
+				}
 				
-				// Create security protection in the target directory to prevent
-				// accidental execution of uploaded files if they end up in web-accessible areas
+				// Write Apache-specific .htaccess protection to the upload directory.
+				// This is a secondary defence — uploads should ideally live outside the web root.
+				// Has no effect on Nginx, Caddy, Swoole, or any non-Apache server.
 				$this->createHtaccessProtection(dirname($targetPath));
 				
 				// Return the full path to the successfully moved file
@@ -508,83 +659,65 @@
 			$htaccessPath = $directory . '/.htaccess';
 			
 			// Only create the file if it doesn't already exist to avoid overwriting existing rules
-			if (!file_exists($htaccessPath)) {
-				// Start building the Apache configuration content
-				$content = "# Prevent script execution\n";
-				
-				// Remove handler associations for common script file extensions
-				// This tells Apache to stop treating these files as executable scripts
-				$content .= "RemoveHandler .php .phtml .php3 .php4 .php5 .pl .py .jsp .asp .sh .cgi\n";
-				
-				// Remove MIME type associations for the same extensions
-				// Double protection by also removing the content-type mappings
-				$content .= "RemoveType .php .phtml .php3 .php4 .php5 .pl .py .jsp .asp .sh .cgi\n";
-				
-				// Create a FilesMatch directive to explicitly deny access to script files
-				// This is a third layer of protection using pattern matching
-				$content .= "<FilesMatch \"\.(php|phtml|php3|php4|php5|pl|py|jsp|asp|sh|cgi)$\">\n";
-				
-				// Deny all access to files matching the above pattern
-				// This ensures even if handlers/types are somehow restored, access is still blocked
-				$content .= "    Deny from all\n";
-				$content .= "</FilesMatch>\n";
-				
-				// Write the protection rules to the .htaccess file
-				// Using @ to suppress potential file write warnings (errors still thrown as exceptions)
-				@file_put_contents($htaccessPath, $content);
-			}
-		}
-		
-		/**
-		 * Counts total number of files in upload array
-		 * @param array<string, UploadedFile|array<int, UploadedFile>> $files File array
-		 * @return int Total file count
-		 */
-		private function countFiles(array $files): int {
-			// Initialize counter for total files
-			$count = 0;
-			
-			// Iterate through each item in the files array
-			foreach ($files as $file) {
-				// Check if current item is an array (multiple files for single input)
-				// If so, add count of files in this sub-array
-				if (is_array($file)) {
-					$count += count($file);
-				} else {
-					$count++;
-				}
+			if (file_exists($htaccessPath)) {
+				return;
 			}
 			
-			// Return total count of all files
-			return $count;
+			// Start building the Apache configuration content
+			$content = "# Prevent script execution\n";
+			
+			// Remove handler associations for common script file extensions
+			// This tells Apache to stop treating these files as executable scripts
+			$content .= "RemoveHandler .php .phtml .php3 .php4 .php5 .pl .py .jsp .asp .sh .cgi\n";
+			
+			// Remove MIME type associations for the same extensions
+			// Double protection by also removing the content-type mappings
+			$content .= "RemoveType .php .phtml .php3 .php4 .php5 .pl .py .jsp .asp .sh .cgi\n";
+			
+			// Create a FilesMatch directive to explicitly deny access to script files
+			// This is a third layer of protection using pattern matching
+			$content .= "<FilesMatch \"\.(php|phtml|php3|php4|php5|pl|py|jsp|asp|sh|cgi)$\">\n";
+			
+			// Deny all access to files matching the above pattern
+			// This ensures even if handlers/types are somehow restored, access is still blocked
+			$content .= "    Deny from all\n";
+			$content .= "</FilesMatch>\n";
+			
+			// Write the protection rules to the .htaccess file
+			// Failure here is not silently ignored: if the file cannot be written, uploaded files in
+			// this directory may become executable on Apache, which is a security risk
+			if (file_put_contents($htaccessPath, $content) === false) {
+				throw new RuntimeException("Failed to write .htaccess protection to: {$htaccessPath}");
+			}
 		}
 		
 		/**
 		 * Checks if file extension matches MIME type
+		 *
+		 * Each extension maps to an array of accepted MIME types rather than a single value because
+		 * MIME detection varies across platforms, OS versions, and server configurations. For example,
+		 * JPEG files may be reported as image/jpeg or image/pjpeg depending on the environment.
+		 * Using a strict single-value match causes false positives on legitimate uploads.
+		 *
 		 * @param string $extension File extension
 		 * @param string $mimeType MIME type
-		 * @return bool True if they match
+		 * @return bool True if the MIME type is an accepted match for the extension
 		 */
 		private function extensionMatchesMimeType(string $extension, string $mimeType): bool {
+			// Each extension lists all MIME types that are legitimately produced for that format
+			// across different platforms, browsers, and server configurations
 			$mimeMap = [
-				'jpg'  => 'image/jpeg',
-				'jpeg' => 'image/jpeg',
-				'png'  => 'image/png',
-				'gif'  => 'image/gif',
-				'pdf'  => 'application/pdf',
-				'doc'  => 'application/msword',
-				'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+				'jpg'  => ['image/jpeg', 'image/pjpeg'],
+				'jpeg' => ['image/jpeg', 'image/pjpeg'],
+				'png'  => ['image/png'],
+				'gif'  => ['image/gif'],
+				'pdf'  => ['application/pdf', 'application/x-pdf'],
+				'doc'  => ['application/msword', 'application/vnd.ms-word'],
+				'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+					'application/zip'], // DOCX is a ZIP container; some detectors report it as such
 			];
 			
-			return isset($mimeMap[$extension]) && $mimeMap[$extension] === $mimeType;
-		}
-		
-		/**
-		 * Generates a random filename
-		 * @return string Random filename without extension
-		 */
-		private function generateRandomFilename(): string {
-			return bin2hex(random_bytes(16));
+			return isset($mimeMap[$extension]) && in_array($mimeType, $mimeMap[$extension], true);
 		}
 		
 		/**
@@ -600,7 +733,15 @@
 			$filename = preg_replace('/\.+/', '.', $filename) ?? $filename;
 			
 			// Ensure it doesn't start with a dot
-			return ltrim($filename, '.');
+			$filename = ltrim($filename, '.');
+			
+			// Guard against edge cases where sanitization produces an empty string
+			// (e.g. a filename consisting entirely of dots or special characters)
+			if ($filename === '') {
+				$filename = bin2hex(random_bytes(8));
+			}
+			
+			return $filename;
 		}
 		
 		/**
@@ -608,6 +749,11 @@
 		 * @return string|null Path to clamscan or null if not found
 		 */
 		private function findClamScan(): ?string {
+			// shell_exec() may be disabled on hardened servers — cannot resolve PATH-based binaries without it
+			if (!function_exists('shell_exec')) {
+				return null;
+			}
+			
 			// Define common paths where ClamAV's clamscan executable might be installed
 			$paths = ['/usr/bin/clamscan', '/usr/local/bin/clamscan', 'clamscan'];
 			
@@ -625,7 +771,7 @@
 				// shell_exec() returns string on success, false if the command could not be
 				// executed, and null if no output was produced. trim() requires a string, so
 				// any non-string result means the binary was not found — skip to the next candidate.
-				$output = shell_exec("which {$path} 2>/dev/null");
+				$output = shell_exec('which ' . escapeshellarg($path) . ' 2>/dev/null');
 				
 				if (!is_string($output)) {
 					// shell_exec() returned false or null — 'which' either failed to run or
