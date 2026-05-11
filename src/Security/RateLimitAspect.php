@@ -12,7 +12,7 @@
 	/**
 	 * Rate limiting aspect using various strategies
 	 */
-	class RateLimitAspect implements BeforeAspectInterface {
+	readonly class RateLimitAspect implements BeforeAspectInterface {
 		
 		/** @var string[] Valid rate limiting strategies */
 		private const array VALID_STRATEGIES = ['fixed_window', 'sliding_window', 'token_bucket'];
@@ -86,12 +86,12 @@
 			}
 			
 			// Validate strategy
-			if (!in_array($strategy, self::VALID_STRATEGIES)) {
+			if (!in_array($strategy, self::VALID_STRATEGIES, true)) {
 				throw new \InvalidArgumentException('Invalid strategy: ' . $strategy);
 			}
 			
 			// Validate scope
-			if (!in_array($scope, self::VALID_SCOPES)) {
+			if (!in_array($scope, self::VALID_SCOPES, true)) {
 				throw new \InvalidArgumentException("Invalid scope '{$scope}'. Valid options: " . implode(', ', self::VALID_SCOPES));
 			}
 			
@@ -113,7 +113,7 @@
 			
 			// Skip rate limiting for exempt HTTP methods (e.g., OPTIONS, HEAD)
 			// This allows certain methods to bypass rate limiting entirely
-			if (in_array($request->getMethod(), $this->exemptMethods)) {
+			if (in_array($request->getMethod(), $this->exemptMethods, true)) {
 				return null; // No rate limiting applied, continue processing
 			}
 			
@@ -125,17 +125,18 @@
 			
 			// Apply the selected rate limiting strategy using match expression
 			// Each strategy returns an array with 'count', 'exceeded', and 'reset_time'
-			/** @noinspection PhpDuplicateMatchArmBodyInspection */
 			$result = match ($this->strategy) {
 				'fixed_window' => $this->fixedWindowStrategy($key, $currentTime),
 				'sliding_window' => $this->slidingWindowStrategy($key, $currentTime),
 				'token_bucket' => $this->tokenBucketStrategy($key, $currentTime),
-				default => $this->fixedWindowStrategy($key, $currentTime)
+				default => throw new \LogicException(
+					"Unhandled rate limit strategy: {$this->strategy}"
+				)
 			};
 			
 			// Prepare rate limit headers for the response
 			// These headers inform the client about their current rate limit status
-			$request->attributes->set('rate_limit_headers', [
+			$headers = [
 				// Maximum number of requests allowed in the time window
 				"{$this->headerPrefix}-Limit"     => $this->limit,
 				
@@ -145,18 +146,30 @@
 				
 				// Timestamp when the rate limit resets (Unix timestamp)
 				"{$this->headerPrefix}-Reset"     => $result['reset_time'],
-				
-				// Which rate limiting strategy is being used
-				"{$this->headerPrefix}-Strategy"  => $this->strategy
-			]);
+			];
+			
+			// Inform the user when a retry may be attempted when limit was exceeded
+			if ($result['exceeded']) {
+				$headers['Retry-After'] = $result['retry_after'];
+			}
 			
 			// Set result
+			$request->attributes->set('rate_limit_headers', $headers);
 			$request->attributes->set('rate_limit_result', $result);
+			$request->attributes->set('rate_limit_strategy', $this->strategy);
 			$request->attributes->set('rate_limit_exceeded', $result['exceeded']);
 			
 			// Throw exception if exceeded
 			if ($result['exceeded'] && $this->throwOnFailure) {
-				throw new RateLimitException("Rate limit exceeded");
+				throw new RateLimitException(
+					limit: $this->limit,
+					remaining: max(0, $this->limit - $result['count']),
+					retryAfter: $result['retry_after'],
+					resetTime: $result['reset_time'],
+					strategy: $this->strategy,
+					scope: $this->scope,
+					headers: $headers
+				);
 			}
 			
 			// Continue to controller
@@ -179,7 +192,7 @@
 		private function fixedWindowStrategy(string $key, int $currentTime): array {
 			// Calculate the start of the current window by rounding down to nearest window boundary
 			// Example: if window=60 and currentTime=1625097123, windowStart=1625097120
-			$windowStart = floor($currentTime / $this->window) * $this->window;
+			$windowStart = intdiv($currentTime, $this->window) * $this->window;
 			
 			// Create a unique cache key that includes the window start time
 			// This ensures each window has its own counter
@@ -237,7 +250,10 @@
 			
 			// Remove expired timestamps that fall outside the current sliding window
 			// This cleanup ensures we only count requests within the time window
-			$timestamps = array_filter($timestamps, fn($ts) => $ts > $cutoff);
+			$timestamps = array_values(array_filter(
+				$timestamps,
+				fn($ts) => $ts > $cutoff
+			));
 			
 			// Add the current request timestamp to the window
 			$timestamps[] = $currentTime;
@@ -376,7 +392,7 @@
 				'custom' => $this->identifier,
 				
 				// Default value (will never occur, but to keep phpstan happy)
-				default => new \Exception("Invalid scope")
+				default => throw new \LogicException("Unhandled rate limit scope: {$this->scope}")
 			};
 			
 			// Sanitize each component to prevent special character conflicts and cache key collisions
