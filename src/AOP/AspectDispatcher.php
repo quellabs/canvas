@@ -165,7 +165,7 @@
 		 * @return void
 		 */
 		private function handleAfterAspects(array $aspects, MethodContextInterface $context, Response $response): void {
-			foreach ($aspects as $aspect) {
+			foreach (array_reverse($aspects) as $aspect) {
 				if ($aspect instanceof AfterAspectInterface) {
 					// After aspects modify the response object directly.
 					// No return value expected - modifications happen in-place
