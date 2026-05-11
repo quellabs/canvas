@@ -2,6 +2,7 @@
 	
 	namespace Quellabs\Canvas\Security;
 	
+	use Quellabs\Canvas\AOP\Contracts\AfterAspectInterface;
 	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Quellabs\Canvas\Exceptions\RateLimitException;
@@ -12,7 +13,7 @@
 	/**
 	 * Rate limiting aspect using various strategies
 	 */
-	readonly class RateLimitAspect implements BeforeAspectInterface {
+	readonly class RateLimitAspect implements BeforeAspectInterface, AfterAspectInterface {
 		
 		/** @var string[] Valid rate limiting strategies */
 		private const array VALID_STRATEGIES = ['fixed_window', 'sliding_window', 'token_bucket'];
@@ -174,6 +175,34 @@
 			
 			// Continue to controller
 			return null;
+		}
+		
+		/**
+		 * Apply rate limit headers to the outgoing HTTP response.
+		 * @param MethodContextInterface $context Current method execution context.
+		 * @param Response $response HTTP response being returned to the client.
+		 * @return void
+		 */
+		public function after(MethodContextInterface $context, Response $response): void {
+			// Retrieve rate limit headers prepared during the before() phase.
+			// These are stored on the request attributes to share state between
+			// the before and after aspect lifecycle stages.
+			$headers = $context
+				->getRequest()
+				->attributes
+				->get('rate_limit_headers');
+			
+			// If no headers are present, there is nothing to apply.
+			if ($headers === null) {
+				return;
+			}
+			
+			// Apply each prepared rate limit header to the outgoing response.
+			// Values are cast to string to ensure compatibility with the
+			// Symfony response header bag implementation.
+			foreach ($headers as $name => $value) {
+				$response->headers->set($name, (string)$value);
+			}
 		}
 		
 		/**
