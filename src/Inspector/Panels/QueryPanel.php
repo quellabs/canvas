@@ -5,6 +5,7 @@
 	use Quellabs\Canvas\Inspector\EventCollector;
 	use Quellabs\Contracts\Inspector\EventCollectorInterface;
 	use Quellabs\Contracts\Inspector\InspectorPanelInterface;
+	use Quellabs\ObjectQuel\Planner\QueryPlan\QueryPlan;
 	use Symfony\Component\HttpFoundation\Request;
 	
 	/**
@@ -94,7 +95,7 @@
 		public function getJsTemplate(): string {
 			return <<<'JS'
 const queries = data.queries.map((query, qi) => {
-    const sqlStatements = query.sql || [];
+    const sqlStatements = query.query_plan.sql || [];
     const uid = `sql-${qi}`;
 
     const stepButtons = sqlStatements.length > 1
