@@ -95,8 +95,8 @@
 		public function getJsTemplate(): string {
 			return <<<'JS'
 const queries = data.queries.map((query, qi) => {
-    const sqlStatements = query.sql || [];
-    const planNotes = query.query_plan || [];
+    const sqlStatements = query.query_plan?.sql || [];
+    const planNotes = query.query_plan?.notes || [];
     const uid = `sql-${qi}`;
 
     const stepButtons = sqlStatements.length > 1
@@ -116,6 +116,7 @@ const queries = data.queries.map((query, qi) => {
     const params = Object.entries(query.bound_parameters || {});
     const paramsHtml = params.length > 0
         ? `<div class="canvas-params-table-wrap">
+               <div class="canvas-plan-caption">Bound parameters</div>
                <table class="canvas-params-table">
                    <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
                    <tbody>
@@ -132,6 +133,7 @@ const queries = data.queries.map((query, qi) => {
 
     const notesHtml = planNotes.length > 0
         ? `<div class="canvas-plan-table-wrap">
+               <div class="canvas-plan-caption">Query plan</div>
                <table class="canvas-plan-table">
                    <thead>
                        <tr>
@@ -147,9 +149,9 @@ const queries = data.queries.map((query, qi) => {
                            <tr>
                                <td>${escapeHtml(n.source || '')}</td>
                                <td>${escapeHtml(n.category || '')}</td>
-                               <td><code>${escapeHtml(n.decision || '')}</code></td>
+                               <td>${escapeHtml(n.decision || '')}</td>
                                <td>${escapeHtml(n.reason || '')}</td>
-                               <td>${n.subject ? `<code>${escapeHtml(n.subject)}</code>` : ''}</td>
+                               <td>${escapeHtml(n.subject || '')}</td>
                            </tr>
                        `).join('')}
                    </tbody>
@@ -172,8 +174,8 @@ const queries = data.queries.map((query, qi) => {
                 </div>
                 <div class="canvas-query-body-right">${sqlBlocks}</div>
             </div>
-            ${paramsHtml}
             ${notesHtml}
+            ${paramsHtml}
         </div>
     `;
 }).join('');
@@ -290,10 +292,16 @@ JS;
     tab-size: 2;
 }
 
-#panel-queries .canvas-params-table-wrap {
+#panel-queries .canvas-params-table-wrap,
+#panel-queries .canvas-plan-table-wrap {
     border: 1px solid #e2e4e9;
     border-radius: 6px;
     overflow: hidden;
+}
+
+#panel-queries .canvas-params-table-wrap + .canvas-plan-table-wrap,
+#panel-queries .canvas-plan-table-wrap + .canvas-params-table-wrap {
+    margin-top: 8px;
 }
 
 #panel-queries .canvas-params-table {
@@ -334,7 +342,6 @@ JS;
     border: 1px solid #e2e4e9;
     border-radius: 6px;
     overflow: hidden;
-    margin-top: 12px;
 }
 
 #panel-queries .canvas-plan-table {
@@ -371,12 +378,15 @@ JS;
     border-top: 1px solid #e2e4e9;
 }
 
-#panel-queries .canvas-plan-table code {
-    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+#panel-queries .canvas-plan-caption {
+    padding: 6px 10px;
     font-size: 11px;
-    background: #f3f4f6;
-    padding: 1px 4px;
-    border-radius: 3px;
+    font-weight: 500;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid #e2e4e9;
+    background: #f9fafb;
 }
 CSS;
 		}
