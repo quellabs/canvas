@@ -95,7 +95,8 @@
 		public function getJsTemplate(): string {
 			return <<<'JS'
 const queries = data.queries.map((query, qi) => {
-    const sqlStatements = query.query_plan.sql || [];
+    const sqlStatements = query.sql || [];
+    const planNotes = query.query_plan || [];
     const uid = `sql-${qi}`;
 
     const stepButtons = sqlStatements.length > 1
@@ -129,6 +130,33 @@ const queries = data.queries.map((query, qi) => {
            </div>`
         : '';
 
+    const notesHtml = planNotes.length > 0
+        ? `<div class="canvas-plan-table-wrap">
+               <table class="canvas-plan-table">
+                   <thead>
+                       <tr>
+                           <th>Source</th>
+                           <th>Category</th>
+                           <th>Decision</th>
+                           <th>Reason</th>
+                           <th>Subject</th>
+                       </tr>
+                   </thead>
+                   <tbody>
+                       ${planNotes.map(n => `
+                           <tr>
+                               <td>${escapeHtml(n.source || '')}</td>
+                               <td>${escapeHtml(n.category || '')}</td>
+                               <td><code>${escapeHtml(n.decision || '')}</code></td>
+                               <td>${escapeHtml(n.reason || '')}</td>
+                               <td>${n.subject ? `<code>${escapeHtml(n.subject)}</code>` : ''}</td>
+                           </tr>
+                       `).join('')}
+                   </tbody>
+               </table>
+           </div>`
+        : '';
+
     return `
         <div style="width:100%">
             <div class="canvas-query-header">
@@ -145,6 +173,7 @@ const queries = data.queries.map((query, qi) => {
                 <div class="canvas-query-body-right">${sqlBlocks}</div>
             </div>
             ${paramsHtml}
+            ${notesHtml}
         </div>
     `;
 }).join('');
@@ -299,6 +328,55 @@ JS;
 
 #panel-queries .canvas-params-table tr + tr td {
     border-top: 1px solid #e2e4e9;
+}
+
+#panel-queries .canvas-plan-table-wrap {
+    border: 1px solid #e2e4e9;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-top: 12px;
+}
+
+#panel-queries .canvas-plan-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+#panel-queries .canvas-plan-table thead tr {
+    background: #f9fafb;
+}
+
+#panel-queries .canvas-plan-table th {
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #6b7280;
+    text-align: left;
+    border-bottom: 1px solid #e2e4e9;
+}
+
+#panel-queries .canvas-plan-table th:not(:last-child),
+#panel-queries .canvas-plan-table td:not(:last-child) {
+    border-right: 1px solid #e2e4e9;
+}
+
+#panel-queries .canvas-plan-table td {
+    padding: 4px 10px;
+    color: #111827;
+    vertical-align: top;
+}
+
+#panel-queries .canvas-plan-table tr + tr td {
+    border-top: 1px solid #e2e4e9;
+}
+
+#panel-queries .canvas-plan-table code {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 11px;
+    background: #f3f4f6;
+    padding: 1px 4px;
+    border-radius: 3px;
 }
 CSS;
 		}
