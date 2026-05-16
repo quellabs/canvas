@@ -56,7 +56,7 @@
 		
 		/**
 		 * Determines if this provider can handle the requested class.
-		 * @param string $className The fully qualified class name being requested
+		 * @param class-string $className The fully qualified class name being requested
 		 * @param array<string, mixed> $metadata Additional metadata (unused in this implementation)
 		 * @return bool True if this provider supports the requested class, false otherwise
 		 */
@@ -66,8 +66,8 @@
 		
 		/**
 		 * Creates and returns the cache interface instance.
-		 * @param string $className The class name being requested (should be CacheInterface::class)
-		 * @param array<string, mixed> $dependencies Dependencies for the class (unused since we return existing instance)
+		 * @param class-string $className The class name being requested (should be CacheInterface::class)
+		 * @param array<int|string, mixed> $dependencies Dependencies for the class (unused since we return existing instance)
 		 * @param array<string, mixed> $metadata Metadata as passed by Discover - may contain 'provider' key
 		 * @param MethodContextInterface|null $methodContext Context about the method requesting the cache
 		 * @return CacheInterface The cache interface implementation
@@ -79,7 +79,6 @@
 			array $metadata,
 			?MethodContextInterface $methodContext = null
 		): CacheInterface {
-			// Resolve the cache context from method annotations
 			$context = $this->resolveContext($methodContext, $dependencies);
 			
 			// Determine which cache provider to use based on metadata or annotations
@@ -127,8 +126,8 @@
 		/**
 		 * Resolves cache context from method annotations.
 		 * @param MethodContextInterface|null $methodContext The method context to analyze
-		 * @param array<string, mixed> $dependencies Dependencies passed to createInstance
-		 * @return array{namespace: string, params: array<string, mixed>, driver: string|null, hash: string} Contains namespace, params, and hash for caching
+		 * @param array<int|string, mixed> $dependencies Dependencies passed to createInstance
+		 * @return array{namespace: mixed, params: array<int|string, mixed>, driver: mixed, hash: string} Contains namespace, params, and hash for caching
 		 * @throws AnnotationReaderException
 		 */
 		private function resolveContext(?MethodContextInterface $methodContext, array $dependencies): array {

@@ -6,7 +6,7 @@
 	use Quellabs\DependencyInjection\Autowiring\Autowirer;
 	use Quellabs\Contracts\DependencyInjection\ContainerInterface;
 	use Quellabs\Canvas\Annotations\WithContext;
-	use Quellabs\DependencyInjection\Autowiring\MethodContext;
+	use Quellabs\Contracts\Context\MethodContextInterface;
 	
 	/**
 	 * Canvas-aware autowirer that extends the base autowirer with annotation-driven
@@ -61,7 +61,7 @@
 		 * Annotation parsing failures are silently swallowed so that methods without
 		 * docblocks, or with unrelated parse errors, fall through to normal resolution.
 		 *
-		 * @param string $className The fully qualified class name containing the method
+		 * @param class-string $className The fully qualified class name containing the method
 		 * @param string $methodName The name of the method to reflect
 		 * @return array<int, array<string, mixed>> Parameter metadata array, each entry optionally containing 'for_context'
 		 */
@@ -110,7 +110,7 @@
 		 * so that resolveType() can pick it up and use the correct container clone.
 		 * @param array<string, mixed> $param Parameter metadata, optionally containing 'context' from @WithContext
 		 * @param array<string, mixed> $parameters User-provided parameter values
-		 * @param MethodContext|null $methodContext Context object for dependency injection
+		 * @param MethodContextInterface|null $methodContext Context object for dependency injection
 		 * @param string $className Class name for error reporting
 		 * @param string $methodName Method name for error reporting
 		 * @return mixed The resolved parameter value
@@ -118,7 +118,7 @@
 		protected function resolveParameter(
 			array          $param,
 			array          $parameters,
-			?MethodContext $methodContext,
+			?MethodContextInterface $methodContext,
 			string         $className,
 			string         $methodName
 		): mixed {
@@ -139,13 +139,12 @@
 		/**
 		 * Overrides base type resolution to use a contextual container clone when
 		 * a @WithContext annotation has been declared for the current parameter.
-		 * @phpstan-param class-string $type
 		 * @param class-string $type The fully qualified class or interface name to resolve
 		 * @param array<string, mixed> $parameters Additional parameters for resolution
-		 * @param MethodContext|null $methodContext
+		 * @param MethodContextInterface|null $methodContext
 		 * @return object|null The resolved instance or null
 		 */
-		protected function resolveType(string $type, array $parameters, ?MethodContext $methodContext): ?object {
+		protected function resolveType(string $type, array $parameters, ?MethodContextInterface $methodContext): ?object {
 			// When @WithContext declared a context for this parameter, resolve through
 			// a cloned container scoped to that context. Otherwise, use the default container.
 			if ($this->currentParamContext) {
