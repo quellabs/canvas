@@ -137,6 +137,11 @@
 			$controllerClass = $urlData["controller"];
 			$controller = $dependencyInjector->get($controllerClass);
 			
+			// A null result means the provider found no instance — this is always a routing error
+			if ($controller === null) {
+				throw new \RuntimeException("Could not instantiate controller '{$controllerClass}'");
+			}
+			
 			// Register controller signals with the hub
 			$hub = $this->kernel->getSignalHub();
 			$signals = $hub->discoverSignals($controller);

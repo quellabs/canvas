@@ -54,9 +54,16 @@
 		 * @template T of object
 		 * @param class-string<T> $service The service identifier/name to retrieve
 		 * @return T The requested service instance
+		 * @throws \RuntimeException When the service is not found
 		 */
 		public static function get(string $service): object {
-			return self::$container->get($service);
+			$instance = self::$container->get($service);
+			
+			if ($instance === null) {
+				throw new \RuntimeException("Service '{$service}' is not available. Ensure a matching service provider is registered.");
+			}
+			
+			return $instance;
 		}
 		
 		/**

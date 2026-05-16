@@ -33,20 +33,32 @@
 		 * Convenience method to retrieve the ObjectQuel EntityManager service.
 		 * The EntityManager handles database connections, query building,
 		 * and entity persistence operations.
-		 * @return EntityManager The entity manager instance, or null if not available
+		 * @return EntityManager The entity manager instance
 		 */
 		protected function em(): EntityManager {
-			return $this->container->get(EntityManager::class);
+			$em = $this->container->get(EntityManager::class);
+			
+			if ($em === null) {
+				throw new \RuntimeException('EntityManager is not available. Ensure an EntityManager service provider is registered.');
+			}
+			
+			return $em;
 		}
 		
 		/**
 		 * Convenience method to retrieve the template engine service used for
 		 * rendering views and generating HTML responses. The specific implementation
 		 * depends on what template engine is registered (Twig, Smarty, etc.).
-		 * @return TemplateEngineInterface The template engine instance, or null if not available
+		 * @return TemplateEngineInterface The template engine instance
 		 */
 		protected function view(): TemplateEngineInterface {
-			return $this->container->get(TemplateEngineInterface::class);
+			$view = $this->container->get(TemplateEngineInterface::class);
+			
+			if ($view === null) {
+				throw new \RuntimeException('Template engine is not available. Ensure a TemplateEngineInterface service provider is registered.');
+			}
+			
+			return $view;
 		}
 		
 		/**

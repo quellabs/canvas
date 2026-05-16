@@ -141,6 +141,13 @@
 					'config'    => $this->allParameters
 				]);
 				
+				// A null result means no cache provider is registered for this driver
+				if ($cache === null) {
+					throw new \RuntimeException(
+						'CacheAspect: No cache provider found for driver "' . ($this->driver ?? 'default') . '"'
+					);
+				}
+				
 				// Resolve a dynamic cache key
 				// Combines method signature with serialized arguments
 				$cacheKey = $this->resolveCacheKey($context);
