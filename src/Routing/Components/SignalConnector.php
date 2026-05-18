@@ -13,6 +13,7 @@
 	use Quellabs\Discover\Scanner\ComposerScanner;
 	use Quellabs\Discover\Scanner\DirectoryScanner;
 	use Quellabs\SignalHub\Signal;
+	use Quellabs\SignalHub\Slot;
 	use Quellabs\Support\ComposerUtils;
 	use ReflectionClass;
 	
@@ -22,6 +23,11 @@
 	 * Signal providers are discovered via Composer's extra.signal-hub.providers key.
 	 * Each provider method annotated with @ListenTo("signal.name") is automatically
 	 * connected to the matching signal — no manual connect() implementation needed.
+	 *
+	 * Slot lifetime:
+	 * Signal owns its Slots via a plain array of strong references. Slots created
+	 * here do not need to be stored anywhere else — they stay alive for as long as
+	 * the Signal does, and are released automatically when the Signal goes out of scope.
 	 */
 	class SignalConnector {
 		
@@ -36,70 +42,88 @@
 		private Container $di;
 		
 		/**
-		 * @var string $signalProviderPath
+		 * Map of signal name → listener definitions, built once in the constructor.
+		 * Keyed by signal name; each entry is a list of className/method/priority tuples.
+		 * @var array<string, array<array{className: class-string<SignalProviderInterface>, method: non-empty-string, priority: mixed}>>
 		 */
-		private string $signalProviderPath;
+		private array $listenerMap;
 		
 		/**
-		 * Discovers signal providers and pre-builds the listener map from @ListenTo annotations.
+		 * Discovers signal providers and builds the listener map from @ListenTo annotations.
+		 * The filesystem scan and reflection happen here, once, at a known point during
+		 * bootstrap — not on the first connect() call.
 		 * @param Kernel $kernel
 		 */
 		public function __construct(Kernel $kernel) {
-			// Store annotation reader
 			$this->annotationReader = $kernel->getAnnotationsReader();
 			$this->di = $kernel->getDependencyInjector();
-			$this->signalProviderPath = $kernel->getConfiguration()->get(
+			
+			$signalProviderPath = $kernel->getConfiguration()->get(
 				"signal_listeners_path",
 				ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "Listeners"
 			);
+			
+			// Scan the filesystem and reflect all provider classes once at construction
+			// time. connect() then only does lookups into this pre-built map.
+			$this->listenerMap = $this->buildListenerMap($this->discoverSlots($signalProviderPath));
 		}
 		
 		/**
-		 * Wire a set of signals to their slots using the pre-built listener map.
-		 * Each signal is matched by name; unmatched signals are silently skipped.
+		 * Wire a set of signals to their slots using @ListenTo annotations.
+		 *
+		 * Each signal is matched by name against the pre-built listener map;
+		 * unmatched signals are silently skipped.
+		 *
+		 * Slots are created inline — no external reference is needed. Signal holds
+		 * strong references to all connected Slots internally.
+		 *
 		 * @param Signal[] $signals Signals to wire, typically freshly discovered on a controller
 		 * @return void
 		 */
 		public function connect(array $signals): void {
-			// Discover providers and build a signal-name-keyed map of listeners
-			$slots = $this->discoverSlots();
-			$listenerMap = $this->buildListenerMap($slots);
-			
 			foreach ($signals as $signal) {
 				// Look up listeners for this signal by name; skip if none are registered
-				$listeners = $listenerMap[$signal->getName()] ?? [];
+				$listeners = $this->listenerMap[$signal->getName()] ?? [];
 				
 				foreach ($listeners as $listener) {
 					// Resolve the provider instance from the container
 					$instance = $this->di->get($listener['className']);
 					
-					// Create the callable
-					$callable = [$instance, $listener['method']];
-					
-					// Validate that the callable is actually callable
-					if (!is_callable($callable)) {
+					// Class could not be resolved — skip silently
+					if ($instance === null) {
 						continue;
 					}
 					
-					// Wire the signal to the method
-					$signal->connect($callable, $listener['priority']);
+					// Build the callable and verify it at runtime. is_callable() also
+					// narrows the type to callable for PHPStan, avoiding a spurious error
+					// on the dynamic method name that static analysis cannot verify.
+					$callable = [$instance, $listener['method']];
+
+					if (!is_callable($callable)) {
+						continue;
+					}
+
+					// Signal owns the Slot strongly via its internal array, so no
+					// external reference is needed to keep it alive
+					$signal->connect(new Slot($callable), $listener['priority']);
 				}
 			}
 		}
 		
 		/**
 		 * Discovers all signal providers registered under the "signal-hub" Composer family,
-		 * plus any providers found in the configured local SignalProviders directory.
+		 * plus any providers found in the configured local listeners directory.
+		 * @param string $signalProviderPath Path to scan for local listener classes
 		 * @return Discover
 		 */
-		private function discoverSlots(): Discover {
+		private function discoverSlots(string $signalProviderPath): Discover {
 			// Discover all packages that register themselves under the "signal-hub" family
 			$discover = new DependencyAwareDiscover($this->di);
 			$discover->addScanner(new ComposerScanner("signal-hub"));
 			
-			// If a local SignalProviders directory exists, scan that too
-			if (is_dir($this->signalProviderPath)) {
-				$discover->addScanner(new DirectoryScanner([$this->signalProviderPath]));
+			// If a local listeners directory exists, scan that too
+			if (is_dir($signalProviderPath)) {
+				$discover->addScanner(new DirectoryScanner([$signalProviderPath]));
 			}
 			
 			$discover->discover();
@@ -108,7 +132,13 @@
 		
 		/**
 		 * Scans all discovered providers for @ListenTo annotations and builds a
-		 * signal-name-keyed map of callables and their priorities.
+		 * signal-name-keyed map of listener definitions.
+		 *
+		 * Instantiation is deliberately deferred — only class names and method names
+		 * are stored here. The provider instance is resolved from the container in
+		 * connect() once we know a matching signal actually exists.
+		 *
+		 * @param Discover $discover
 		 * @return array<string, array<array{className: class-string<SignalProviderInterface>, method: non-empty-string, priority: mixed}>>
 		 */
 		private function buildListenerMap(Discover $discover): array {
