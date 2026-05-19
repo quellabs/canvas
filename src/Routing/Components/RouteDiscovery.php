@@ -83,10 +83,12 @@
 			// Fetch all controller class names from local directory and registered packages
 			$controllers = $this->controllersDiscovery->fetch();
 			
+			// Early abort when no controllers were found
 			if (empty($controllers)) {
 				return [];
 			}
 			
+			// Build the patterns
 			$result = [];
 			
 			foreach ($controllers as $controller) {
