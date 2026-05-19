@@ -146,8 +146,8 @@
 				// Validate class exists
 				if (!class_exists($className)) {
 					throw new \RuntimeException('Class does not exist');
+					
 				}
-				
 				// Read CacheContext annotations from the method
 				$annotations = $this->annotationReader->getMethodAnnotations(
 					$className,
