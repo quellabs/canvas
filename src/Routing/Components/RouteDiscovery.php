@@ -104,7 +104,7 @@
 		
 		/**
 		 * Get route prefix from controller class annotation
-		 * @param string $controller Fully qualified controller class name
+		 * @param class-string $controller Fully qualified controller class name
 		 * @return string Route prefix (without leading slash)
 		 * @throws AnnotationReaderException
 		 */

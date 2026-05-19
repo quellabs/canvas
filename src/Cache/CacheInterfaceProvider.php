@@ -141,9 +141,16 @@
 			
 			// Check if we have method context to read annotations from
 			if ($methodContext !== null) {
+				$className = $methodContext->getClassName();
+				
+				// Validate class exists
+				if (!class_exists($className)) {
+					throw new \RuntimeException('Class does not exist');
+					
+				}
 				// Read CacheContext annotations from the method
 				$annotations = $this->annotationReader->getMethodAnnotations(
-					$methodContext->getClassName(),
+					$className,
 					$methodContext->getMethodName(),
 					CacheContext::class
 				);
@@ -153,9 +160,7 @@
 					$annotation = $annotations[0];
 					
 					if (!$annotation instanceof CacheContext) {
-						throw new \RuntimeException(
-							'Expected CacheContext annotation'
-						);
+						throw new \RuntimeException('Expected CacheContext annotation');
 					}
 					
 					$params = $annotation->getParameters();

@@ -89,7 +89,7 @@
 		/**
 		 * Get the full inheritance chain for a class (from parent to child)
 		 * @param class-string|object $class
-		 * @return array<int, string> Array of class names from parent to child
+		 * @return array<int, class-string> Array of class names from parent to child
 		 */
 		protected function getInheritanceChain(string|object $class): array {
 			try {
