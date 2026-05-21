@@ -207,8 +207,8 @@
 		private function initializeConfiguration(): void {
 			$config = $this->kernel->getConfiguration();
 			
-			$this->debugMode = $config->getAs('debug_mode', 'bool', false);
-			$this->matchTrailingSlashes = $config->getAs('match_trailing_slashes', 'bool', false);
+			$this->debugMode = $config->get('debug_mode',  false);
+			$this->matchTrailingSlashes = $config->get('match_trailing_slashes', false);
 			$this->cacheDirectory = $config->get('cache_dir', ComposerUtils::getProjectRoot() . "/storage/cache");
 		}
 		

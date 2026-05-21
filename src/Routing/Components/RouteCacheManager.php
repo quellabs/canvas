@@ -75,10 +75,10 @@
 		 * @param int $defaultTtl
 		 */
 		public function __construct(
-			FileCache $cache,
+			FileCache            $cache,
 			ControllersDiscovery $controllersDiscovery,
-			bool      $debugMode,
-			int       $defaultTtl = 86400 // 24 hours default
+			bool                 $debugMode,
+			int                  $defaultTtl = 86400 // 24 hours default
 		) {
 			$this->cache = $cache;
 			$this->controllersDiscovery = $controllersDiscovery;
@@ -99,14 +99,10 @@
 			}
 			
 			$currentMtime = $this->getLastControllerModification();
-			$cached = $this->cache->get(self::ROUTES_CACHE_KEY);
+			$cached = $this->getCachedBundle();
 			
 			// Cache hit: entry exists and mtime still matches
-			if (
-				$cached !== null &&
-				isset($cached['mtime'], $cached['routes']) &&
-				$cached['mtime'] === $currentMtime
-			) {
+			if ($cached !== null && $cached['mtime'] === $currentMtime) {
 				return $cached['routes'];
 			}
 			
@@ -133,9 +129,9 @@
 				return false;
 			}
 			
-			$cached = $this->cache->get(self::ROUTES_CACHE_KEY);
+			$cached = $this->getCachedBundle();
 			
-			if ($cached === null || !isset($cached['mtime'], $cached['routes'])) {
+			if ($cached === null) {
 				return false;
 			}
 			
@@ -148,6 +144,26 @@
 		 */
 		public function clearCache(): bool {
 			return $this->cache->forget(self::ROUTES_CACHE_KEY);
+		}
+		
+		/**
+		 * Fetch the compiled-routes bundle from cache and narrow its type.
+		 * Returns null on miss, expiry, or any structural mismatch.
+		 * @return array{mtime: int, routes: mixed}|null
+		 */
+		private function getCachedBundle(): ?array {
+			$cached = $this->cache->get(self::ROUTES_CACHE_KEY);
+			
+			if (
+				!is_array($cached) ||
+				!array_key_exists('mtime', $cached) ||
+				!array_key_exists('routes', $cached) ||
+				!is_int($cached['mtime'])
+			) {
+				return null;
+			}
+			
+			return ['mtime' => $cached['mtime'], 'routes' => $cached['routes']];
 		}
 		
 		/**
