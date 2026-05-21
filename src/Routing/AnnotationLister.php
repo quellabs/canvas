@@ -157,13 +157,16 @@
 		 */
 		protected function filterRoutes(array $routes, ConfigurationManager $config): array {
 			// Get the controller filter option from configuration
-			$controllerFilter = $config->get("controller");
+			$controllerFilter = $config->get("controller", '');
 			
 			// Apply controller filter if specified
-			if ($controllerFilter) {
+			if (is_string($controllerFilter)) {
+				// Turn into lower case
+				$controllerFilterLower = strtolower($controllerFilter);
+				
 				// Filter routes by controller name
-				$routes = array_values(array_filter($routes, function ($route) use ($controllerFilter) {
-					return str_contains(strtolower($route['controller']), strtolower($controllerFilter));
+				$routes = array_values(array_filter($routes, function ($route) use ($controllerFilterLower) {
+					return str_contains(strtolower($route['controller']), $controllerFilterLower);
 				}));
 			}
 			
