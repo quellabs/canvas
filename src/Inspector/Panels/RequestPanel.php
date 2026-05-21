@@ -86,8 +86,14 @@
 		 * @return array<string, string> Statistics to display in the debug bar (e.g., execution time)
 		 */
 		public function getStats(): array {
+			if (is_numeric($this->routeData['execution_time_ms'] ?? 0)) {
+				$executionTime = (float)($this->routeData['execution_time_ms'] ?? 0);
+			} else {
+				$executionTime = 0.0;
+			}
+			
 			return [
-				'time' => round($this->routeData['execution_time_ms'] ?? 0, 2) . 'ms'
+				'time' => round($executionTime, 2) . 'ms'
 			];
 		}
 		
