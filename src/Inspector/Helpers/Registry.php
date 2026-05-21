@@ -47,10 +47,13 @@
 			
 			// Merge default panels with user-defined panels, ensuring defaults appear first
 			// in tab order and duplicates are removed
-			$panels = array_unique(array_merge(self::DEFAULT_PANELS, $config->get('panels', [])));
+			$configPanels = $config->get('panels', []);
+			$configPanels = is_array($configPanels) ? $configPanels : [];
 			
 			// Validate panels
-			foreach ($panels as $panel) {
+			$validatedPanels = [];
+			
+			foreach (array_merge(self::DEFAULT_PANELS, $configPanels) as $panel) {
 				if (!is_string($panel) || !class_exists($panel)) {
 					throw new \InvalidArgumentException("Invalid panel class");
 				}
@@ -58,10 +61,12 @@
 				if (!is_subclass_of($panel, InspectorPanelInterface::class)) {
 					throw new \InvalidArgumentException("Must implement InspectorPanelInterface");
 				}
+				
+				$validatedPanels[] = $panel;
 			}
 			
 			// Instantiate the requested panels
-			$this->initializePanels($panels);
+			$this->initializePanels(array_unique($validatedPanels));
 		}
 		/**
 		 * Register a new debug panel
