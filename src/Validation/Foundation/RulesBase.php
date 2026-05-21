@@ -44,10 +44,12 @@
 					}
 					
 					// Only scalar values can be safely converted to string
-					// (string, int, float, bool). Otherwise keep the placeholder.
-					return is_scalar($variables[$key])
-						? (string)$variables[$key]
-						: $matches[0];
+					// (string, int, float, bool). Otherwise, keep the placeholder.
+					if (is_scalar($variables[$key])) {
+						return (string)$variables[$key];
+					} else {
+						return $matches[0];
+					}
 				},
 				$string
 			) ?? $string;
