@@ -22,6 +22,7 @@
 	namespace Quellabs\Canvas;
 	
 	use Quellabs\AnnotationReader\AnnotationReader;
+	use Quellabs\Canvas\Annotations\Route;
 	use Quellabs\Canvas\Configuration\ConfigLoader;
 	use Quellabs\Canvas\Configuration\Configuration;
 	use Quellabs\Canvas\DependencyInjection\CanvasContainer;
@@ -209,8 +210,11 @@
 			
 			// Initialize debug data collection system for development environments
 			// This collector will gather performance metrics, query logs, and debugging info
-			$debugBarEnabled = $this->getInspectorConfiguration()->get('enabled', false);
-			$debugCollector = $debugBarEnabled ? new EventCollector(SignalHubLocator::getInstance()) : null;
+			if ($this->getInspectorConfiguration()->get('enabled', false)) {
+				$debugCollector = new EventCollector(SignalHubLocator::getInstance());
+			} else {
+				$debugCollector = null;
+			}
 			
 			// Run the request through the routing system
 			$urlData = null;
@@ -223,20 +227,21 @@
 			}
 			
 			// Publish request telemetry — belongs here, not inside the renderer
+			$route = $urlData !== null && $urlData['route'] instanceof Route ? $urlData['route'] : null;
+			
 			$this->canvasQuerySignal->emit([
 				'request'           => $request,
 				'http_methods'      => $urlData['http_methods'] ?? null,
 				'controller'        => $urlData['controller'] ?? null,
 				'method'            => $urlData['method'] ?? null,
-				'pattern'           => $urlData !== null ? $urlData['route']?->getRoute() : '',
+				'pattern'           => $route?->getRoute() ?? '',
 				'parameters'        => $urlData['variables'] ?? null,
 				'execution_time_ms' => (microtime(true) - $start) * 1000,
 				'memory_used_bytes' => memory_get_usage(true) - $memoryStart
 			]);
 			
 			// Inject debugging information into the response for development
-			if ($debugBarEnabled) {
-				/** @var EventCollector $debugCollector */
+			if ($debugCollector !== null) {
 				$this->injectDebugBar($debugCollector, $request, $response);
 			}
 			
@@ -282,7 +287,7 @@
 			}
 			
 			// No custom handler found. Show a generic message
-			$isDevelopment = $this->configuration->getAs('debug_mode', 'bool', false);
+			$isDevelopment = $this->configuration->get('debug_mode', false);
 			$defaultHandler = new DefaultErrorHandler();
 			return $defaultHandler->handle($exception, $request, $isDevelopment);
 		}
@@ -297,7 +302,7 @@
 			
 			// Get debug mode from configuration with fallback to production mode
 			// Uses type-safe configuration retrieval with default value
-			$debugMode = $this->configuration->getAs('debug_mode', 'bool', false) ? 'debug' : 'production';
+			$debugMode = $this->configuration->get('debug_mode', false) ? 'debug' : 'production';
 			
 			// Return formatted kernel information string
 			// Format: Canvas\Kernel[mode=debug/production, legacy=enabled/disabled, root=/path/to/project]
@@ -319,7 +324,7 @@
 				'project_root'   => ComposerUtils::getProjectRoot(),
 				
 				// Current debug mode setting (boolean from configuration)
-				'debug_mode'     => $this->configuration->getAs('debug_mode', 'bool', false),
+				'debug_mode'     => $this->configuration->get('debug_mode', false),
 				
 				// Whether legacy features are enabled
 				'legacy_enabled' => $this->isLegacyEnabled(),
@@ -338,7 +343,7 @@
 			$config = new \Quellabs\AnnotationReader\Configuration();
 			
 			// Check if we're NOT in debug mode (i.e., in production or staging)
-			if (!$this->configuration->getAs('debug_mode', 'bool', false)) {
+			if (!$this->configuration->get('debug_mode', false)) {
 				// Get the project root directory path for cache storage
 				$rootPath = ComposerUtils::getProjectRoot();
 				
@@ -358,7 +363,7 @@
 		 * @return void
 		 */
 		private function initializeLegacySupport(): void {
-			$legacyEnabled = $this->configuration->getAs('legacy_enabled', 'bool', false);
+			$legacyEnabled = $this->configuration->get('legacy_enabled', false);
 			
 			if ($legacyEnabled) {
 				// Only initialize bridge when legacy support is enabled
@@ -367,7 +372,7 @@
 				// Fetch the legacy path
 				$legacyPath = $this->configuration->get('legacy_path', ComposerUtils::getProjectRoot() . '/legacy/');
 				
-				// Fetch the legacy path
+				// Fetch whether preprocessing is enabled
 				$preprocessingEnabled = $this->configuration->get('legacy_preprocessing', true);
 				
 				// Fetch exclusion directories

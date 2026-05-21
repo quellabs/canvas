@@ -52,9 +52,10 @@
 		
 		/**
 		 * Get a specific configuration value
+		 * @template T
 		 * @param string $key The configuration key to retrieve
-		 * @param mixed $default Default value if key doesn't exist (default: null)
-		 * @return mixed The configuration value or default if not found
+		 * @param T $default Default value if key doesn't exist (default: null)
+		 * @return T The configuration value or default if not found
 		 */
 		public function get(string $key, mixed $default = null): mixed {
 			return $this->config[$key] ?? $default;
