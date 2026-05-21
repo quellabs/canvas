@@ -17,7 +17,7 @@
 		 * @param list<mixed> $values
 		 * @param string|null $message
 		 */
-		public function __construct(array $values, ?string $message=null) {
+		public function __construct(array $values, ?string $message = null) {
 			parent::__construct($message);
 			$this->values = $values;
 		}
@@ -41,9 +41,15 @@
 		 */
 		public function getError(): string {
 			if (is_null($this->message)) {
-				return "Value should be any of these: " . implode(",", array_map(function($e) { return "'{$e}'"; }, $this->values));
+				// Extract types
+				$ofThese = array_map(
+					fn(mixed $e): string => "'" . var_export($e, true) . "'",
+					$this->values
+				);
+				
+				return "Value should be any of these: " . implode(",", $ofThese);
 			}
-
+			
 			return $this->message;
 		}
 	}
