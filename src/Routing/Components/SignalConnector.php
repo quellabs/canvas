@@ -28,6 +28,14 @@
 	 * Signal owns its Slots via a plain array of strong references. Slots created
 	 * here do not need to be stored anywhere else — they stay alive for as long as
 	 * the Signal does, and are released automatically when the Signal goes out of scope.
+	 *
+	 * @phpstan-type ListenerDefinition array{
+	 *     className: class-string<SignalProviderInterface>,
+	 *     method: non-empty-string,
+	 *     priority: int
+	 * }
+	 *
+	 * @phpstan-type ListenerMap array<string, array<ListenerDefinition>>
 	 */
 	class SignalConnector {
 		
@@ -44,7 +52,7 @@
 		/**
 		 * Map of signal name → listener definitions, built once in the constructor.
 		 * Keyed by signal name; each entry is a list of className/method/priority tuples.
-		 * @var array<string, array<array{className: class-string<SignalProviderInterface>, method: non-empty-string, priority: mixed}>>
+		 * @var ListenerMap
 		 */
 		private array $listenerMap;
 		
@@ -139,7 +147,7 @@
 		 * connect() once we know a matching signal actually exists.
 		 *
 		 * @param Discover $discover
-		 * @return array<string, array<array{className: class-string<SignalProviderInterface>, method: non-empty-string, priority: mixed}>>
+		 * @return ListenerMap
 		 */
 		private function buildListenerMap(Discover $discover): array {
 			$map = [];
