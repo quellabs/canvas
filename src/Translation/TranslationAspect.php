@@ -86,7 +86,7 @@
 				unset(self::$availableLocalesByDomain[$domain]);
 			}
 		}
-
+		
 		/**
 		 * Determine the locale from request with fallback chain
 		 *
@@ -122,9 +122,11 @@
 			foreach ($sources as $source) {
 				$locale = $source();
 				
-				if ($locale && $this->isValidLocale($locale) && $this->hasTranslationFile($domain, $locale)) {
-					return $locale;
+				if (!is_string($locale) || !$this->isValidLocale($locale) || !$this->hasTranslationFile($domain, $locale)) {
+					continue;
 				}
+				
+				return $locale;
 			}
 			
 			// Check if default locale has translations
@@ -237,6 +239,7 @@
 				);
 			}
 			
+			/** @var array<string, string> $translations */
 			return $translations;
 		}
 		
@@ -259,6 +262,7 @@
 			// Must be non-empty and contain only safe characters (alphanumeric + _ -)
 			return $locale !== '' && preg_match('/^[a-z0-9_-]+$/i', $locale) === 1;
 		}
+		
 		/**
 		 * Get all available locales for a given domain
 		 *
