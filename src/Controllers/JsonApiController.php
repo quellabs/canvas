@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Controllers;
 	
 	use Quellabs\DependencyInjection\Container;
+	use Quellabs\ObjectQuel\Exception\EntityResolutionException;
 	use Quellabs\ObjectQuel\Exception\QuelException;
 	use Quellabs\ObjectQuel\OrmException;
 	use Quellabs\ObjectQuel\ReflectionManagement\PropertyHandler;
@@ -59,11 +60,16 @@
 		 * @return string The base URL (e.g., "https://api.example.com")
 		 */
 		protected function getBaseUrl(): string {
-			$scheme = $_SERVER['REQUEST_SCHEME'];
-			$host = $_SERVER['HTTP_HOST'];
+			// Use ?? null to avoid E_WARNING when the key is absent; $_SERVER values are mixed
+			$rawScheme = $_SERVER['REQUEST_SCHEME'] ?? null;
+			$rawHost = $_SERVER['HTTP_HOST'] ?? null;
+			
+			// is_string() narrows mixed to string for PHPStan; fall back if key is absent or non-string
+			$scheme = is_string($rawScheme) ? $rawScheme : 'https';
+			$host = is_string($rawHost) ? $rawHost : 'localhost';
 			return "{$scheme}://{$host}/api";
 		}
-
+		
 		/**
 		 * Generic GET method for retrieving a single resource by ID
 		 * @param int $id The unique identifier of the resource to retrieve
@@ -73,7 +79,7 @@
 		protected function getResource(int $id): JsonResponse {
 			// Fetch entity manager
 			$em = $this->em();
-
+			
 			// Attempt to find the entity by ID using the entity manager
 			$entity = $em->find($this->getEntityClass(), $id);
 			
@@ -91,13 +97,29 @@
 		 * @param Request $request The HTTP request containing JSON:API formatted data
 		 * @return JsonResponse JSON:API formatted response with created resource or errors
 		 * @throws OrmException
+		 * @throws QuelException
+		 * @throws EntityResolutionException
 		 */
 		protected function createResource(Request $request): JsonResponse {
 			// Fetch entity manager
 			$em = $this->em();
 			
 			// Parse the JSON request body
-			$data = json_decode($request->getContent(), true);
+			$decoded = json_decode($request->getContent(), true);
+			
+			// Validate that json_decode produced a usable array
+			if (!is_array($decoded)) {
+				return $this->json([
+					"errors" => [[
+						"status" => "400",
+						"title"  => "Invalid request body",
+						"detail" => "Request body must be valid JSON"
+					]]
+				], 400);
+			}
+			
+			/** @var array<string, mixed> $data */
+			$data = $decoded;
 			
 			// Validate that the request follows JSON:API structure requirements
 			$validationResponse = $this->validateJsonApiStructure($data);
@@ -111,7 +133,7 @@
 			$entity = new $entityClass();
 			
 			// Extract attributes from the JSON:API request structure
-			$attributes = $data["data"]["attributes"] ?? [];
+			$attributes = $this->extractAttributes($data);
 			
 			// Validate attributes before creating/updating
 			$validationResponse = $this->validateAttributes($entity, $attributes);
@@ -142,7 +164,7 @@
 		protected function updateResource(int $id, Request $request): JsonResponse {
 			// Fetch entity manager
 			$em = $this->em();
-
+			
 			// Find the existing entity by ID
 			$entity = $em->find($this->getEntityClass(), $id);
 			
@@ -152,7 +174,21 @@
 			}
 			
 			// Parse the JSON request body
-			$data = json_decode($request->getContent(), true);
+			$decoded = json_decode($request->getContent(), true);
+			
+			// Validate that json_decode produced a usable array
+			if (!is_array($decoded)) {
+				return $this->json([
+					"errors" => [[
+						"status" => "400",
+						"title"  => "Invalid request body",
+						"detail" => "Request body must be valid JSON"
+					]]
+				], 400);
+			}
+			
+			/** @var array<string, mixed> $data */
+			$data = $decoded;
 			
 			// Validate that the request follows JSON:API structure requirements
 			$validationResponse = $this->validateJsonApiStructure($data);
@@ -162,13 +198,15 @@
 			}
 			
 			// Ensure the ID in the request body matches the URL parameter (if provided)
-			if (isset($data["data"]["id"]) && (string)$data["data"]["id"] !== (string)$id) {
+			$requestId = $this->extractId($data);
+			
+			if ($requestId !== null && $requestId !== (string)$id) {
 				return $this->createIdMismatchResponse();
 			}
 			
 			// Extract attributes from the JSON:API request structure
-			$attributes = $data["data"]["attributes"] ?? [];
-
+			$attributes = $this->extractAttributes($data);
+			
 			// Validate attributes before creating/updating
 			$validationResponse = $this->validateAttributes($entity, $attributes);
 			
@@ -196,7 +234,7 @@
 		protected function deleteResource(int $id): JsonResponse {
 			// Fetch entity manager
 			$em = $this->em();
-
+			
 			// Find the entity to delete
 			$entity = $em->find($this->getEntityClass(), $id);
 			
@@ -214,13 +252,56 @@
 		}
 		
 		/**
+		 * Extract attributes from a validated JSON:API data block
+		 * @param array<string, mixed> $data The parsed and validated JSON:API request data
+		 * @return array<string, mixed>
+		 */
+		private function extractAttributes(array $data): array {
+			$dataBlock = $data["data"];
+			
+			if (!is_array($dataBlock)) {
+				return [];
+			}
+			
+			$attributes = $dataBlock["attributes"] ?? [];
+			return is_array($attributes) ? $attributes : [];
+		}
+		
+		/**
+		 * Extract the resource ID from a validated JSON:API data block, or null if absent
+		 * @param array<string, mixed> $data The parsed and validated JSON:API request data
+		 * @return string|null
+		 */
+		private function extractId(array $data): ?string {
+			$dataBlock = $data["data"];
+			
+			if (!is_array($dataBlock) || !isset($dataBlock["id"])) {
+				return null;
+			}
+			
+			$id = $dataBlock["id"];
+			
+			if (is_string($id)) {
+				return $id;
+			}
+			
+			if (is_int($id) || is_float($id)) {
+				return (string)$id;
+			}
+			
+			return null;
+		}
+		
+		/**
 		 * Validate that the request data follows JSON:API specification structure
 		 * @param array<string, mixed> $data The parsed JSON request data
 		 * @return JsonResponse|null Error response if validation fails, null if valid
 		 */
 		protected function validateJsonApiStructure(array $data): ?JsonResponse {
 			// Check for required JSON:API structure: data.type must be present
-			if (!isset($data["data"]) || !isset($data["data"]["type"])) {
+			$dataBlock = $data["data"] ?? null;
+			
+			if (!is_array($dataBlock) || !isset($dataBlock["type"]) || !is_string($dataBlock["type"])) {
 				return $this->json([
 					"errors" => [[
 						"status" => "400",
@@ -230,13 +311,15 @@
 				], 400);
 			}
 			
+			$receivedType = $dataBlock["type"];
+			
 			// Verify the resource type matches what this controller handles
-			if ($data["data"]["type"] !== $this->getResourceType()) {
+			if ($receivedType !== $this->getResourceType()) {
 				return $this->json([
 					"errors" => [[
 						"status" => "409",
 						"title"  => "Resource type mismatch",
-						"detail" => "Expected type '{$this->getResourceType()}' but received '{$data["data"]["type"]}'"
+						"detail" => "Expected type '{$this->getResourceType()}' but received '{$receivedType}'"
 					]]
 				], 409);
 			}
