@@ -6,8 +6,7 @@
 	use Quellabs\Canvas\Validation\Contracts\ValidationRuleInterface;
 	
 	/**
-	 * Standalone validator that validates data arrays against validation rules.
-	 * Can be used independently without the AOP aspect.
+	 * @phpstan-import-type ValidationNode from \Quellabs\Canvas\Validation\Contracts\ValidationInterface
 	 */
 	class Validator {
 		
@@ -25,21 +24,22 @@
 		
 		/**
 		 * Recursively validates fields, handling nested field structures
-		 * @param array<string, mixed> $rules The validation rules (can be nested)
+		 * @param array<mixed> $rules The validation rules (can be nested)
 		 * @param array<string, mixed> $data The data to validate (can be nested)
-		 * @param array<string, list<string>> &$errors Reference to the errors array to populate (uses flattened keys with dot notation)
+		 * @param array<string, list<string>> $errors Reference to the errors array to populate (uses flattened keys with dot notation)
+		 * @param-out array<string, list<string>> $errors
 		 * @param string $prefix Current field path prefix for building dot notation keys
 		 */
 		private function validateFields(array $rules, array $data, array &$errors, string $prefix = ''): void {
 			foreach ($rules as $fieldName => $validators) {
 				// Build the full field name using dot notation
-				$fullFieldName = $prefix ? "{$prefix}.{$fieldName}" : $fieldName;
+				$fullFieldName = $prefix ? "{$prefix}.{$fieldName}" : (string)$fieldName;
 				
 				// Get the field value from the current data level
 				$fieldValue = $data[$fieldName] ?? null;
 				
 				// Check if this is a nested field structure vs a field with actual validators
-				if (!$this->isNestedFieldStructure($validators)) {
+				if (!is_array($validators) || !$this->isNestedFieldStructure($validators)) {
 					// This is a field with actual validators, validate it directly
 					$fieldErrors = $this->validateSingleField($fullFieldName, $fieldValue, $validators);
 					
@@ -59,7 +59,7 @@
 		
 		/**
 		 * Determines if an array represents a nested field structure or a list of validators
-		 * @param array<string, mixed> $validators The array to check
+		 * @param array<mixed> $validators The array to check
 		 * @return bool True if it's a nested field structure, false if it's validators
 		 */
 		private function isNestedFieldStructure(array $validators): bool {
@@ -144,7 +144,17 @@
 		 */
 		private function replaceVariablesInErrorString(string $string, array $variables): string {
 			return preg_replace_callback('/{{\s*([a-zA-Z_]\w*)\s*}}/', function ($matches) use ($variables) {
-				return $variables[$matches[1]] ?? $matches[0];
+				$value = $variables[$matches[1]] ?? $matches[0];
+				
+				if (is_string($value)) {
+					return $value;
+				}
+				
+				if (is_scalar($value)) {
+					return strval($value);
+				}
+				
+				return $matches[0];
 			}, $string) ?? $string;
 		}
 	}

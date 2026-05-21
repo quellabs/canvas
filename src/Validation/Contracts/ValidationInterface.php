@@ -3,13 +3,13 @@
 	namespace Quellabs\Canvas\Validation\Contracts;
 	
 	/**
-	 * Interface for validation rule providers
+	 * @phpstan-type ValidationNode ValidationRuleInterface|list<ValidationRuleInterface>
 	 */
 	interface ValidationInterface {
 		
 		/**
 		 * Returns an array of validation rules.
-		 * @return array<string, mixed> An array of validation rules
+		 * @return array<string, ValidationNode|array<mixed>>
 		 */
 		public function getRules(): array;
 	}
