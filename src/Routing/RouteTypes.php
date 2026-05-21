@@ -13,6 +13,7 @@
 	 *
 	 *   `@phpstan-import-type CompiledSegment from RouteTypes`
 	 *   `@phpstan-import-type RouteDefinition from RouteTypes`
+	 *   `@phpstan-import-type TrieNode from RouteTypes`
 	 *   `@phpstan-import-type RouteIndex from RouteTypes`
 	 *   `@phpstan-import-type MatchedRoute from RouteTypes`
 	 *   `@phpstan-import-type IntermediateRoute from RouteTypes`
@@ -45,11 +46,16 @@
 	 *     route: \Quellabs\Canvas\Annotations\Route
 	 * }
 	 *
+	 * @phpstan-type TrieNode array{
+	 *     routes: list<RouteDefinition>,
+	 *     children: array<string, mixed>
+	 * }
+	 *
 	 * @phpstan-type RouteIndex array{
 	 *     multi_level: array<int, array<string, list<RouteDefinition>>>,
 	 *     segment_count: array<int, list<RouteDefinition>>,
 	 *     http_methods: array<string, list<RouteDefinition>>,
-	 *     prefix_tree: array<string, mixed>
+	 *     prefix_tree: array<string, TrieNode>
 	 * }
 	 *
 	 * @phpstan-type MatchedRoute array{

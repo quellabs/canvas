@@ -36,9 +36,10 @@
 	 * n = total routes and k = 3-5 remaining candidates, achieving 95%+ reduction
 	 * in computational work for typical applications.
 	 *
-	 * @phpstan-import-type CompiledSegment from RouteTypes
-	 * @phpstan-import-type RouteDefinition from RouteTypes
-	 * @phpstan-import-type RouteIndex from RouteTypes
+	 * @phpstan-import-type CompiledSegment from \Quellabs\Canvas\Routing\RouteTypes
+	 * @phpstan-import-type RouteDefinition from \Quellabs\Canvas\Routing\RouteTypes
+	 * @phpstan-import-type TrieNode from \Quellabs\Canvas\Routing\RouteTypes
+	 * @phpstan-import-type RouteIndex from \Quellabs\Canvas\Routing\RouteTypes
 	 */
 	class RouteCandidateFilter {
 		
@@ -323,6 +324,7 @@
 		private function addToTrieIndex(array $route, string $routePath, array &$index): void {
 			// Parse route path into segments
 			$segments = $this->parseRoutePath($routePath);
+			/** @var array<string, TrieNode> $current */
 			$current = &$index['prefix_tree'];
 			
 			// Navigate/create the trie path
@@ -331,16 +333,20 @@
 					$current[$segment] = ['routes' => [], 'children' => []];
 				}
 				
+				/** @var array<string, TrieNode> $current */
 				$current = &$current[$segment]['children'];
 			}
 			
 			// Store route at the final node
+			/** @var array<string, TrieNode> $finalNode */
 			$finalNode = &$index['prefix_tree'];
 			
 			foreach ($segments as $segment) {
+				/** @var array<string, TrieNode> $finalNode */
 				$finalNode = &$finalNode[$segment];
 			}
 			
+			/** @var TrieNode $finalNode */
 			$finalNode['routes'][] = $route;
 		}
 		
@@ -389,7 +395,7 @@
 		
 		/**
 		 * Recursively sort routes in trie structure
-		 * @param array<string, mixed> &$trieNode Reference to trie node to sort
+		 * @param array<string, TrieNode> &$trieNode Reference to trie node to sort
 		 */
 		private function sortTrieRoutes(array &$trieNode): void {
 			// Define sorting function for descending priority order (highest priority first)
@@ -399,6 +405,7 @@
 			// Iterate through each node in the current trie level
 			// Each node represents a URL segment and may contain routes and/or children
 			foreach ($trieNode as &$node) {
+				/** @var TrieNode $node */
 				// Sort routes stored at this trie node (if any exist)
 				// 'routes' array contains all route definitions that terminate at this path
 				// Example: for path '/users/profile', routes are stored at the 'profile' node
@@ -412,7 +419,10 @@
 				// This traverses the entire trie depth-first to sort all route collections
 				if (isset($node['children'])) {
 					// Recursive call to sort routes in all descendant nodes
-					$this->sortTrieRoutes($node['children']);
+					/** @var array<string, TrieNode> $children */
+					$children = $node['children'];
+					$this->sortTrieRoutes($children);
+					$node['children'] = $children;
 				}
 			}
 		}
@@ -508,6 +518,7 @@
 			
 			// Iterate through each child node in the current trie node
 			foreach ($trieNode as $node) {
+				/** @var TrieNode $node */
 				// Check if the current node has children (indicating it's not a leaf node)
 				if (isset($node['children'])) {
 					// Recursively calculate depth of the child subtree
@@ -540,6 +551,7 @@
 			
 			// Iterate through each child node to count their descendants
 			foreach ($trieNode as $node) {
+				/** @var TrieNode $node */
 				// Check if the current node has children (sub-nodes to traverse)
 				if (isset($node['children'])) {
 					// Recursively count all nodes in the child subtree
@@ -663,7 +675,7 @@
 		/**
 		 * Search trie index for exact static route match
 		 * @param list<string> $requestUrl URL segments
-		 * @param array<string, mixed> $trieIndex Trie structure
+		 * @param array<string, TrieNode> $trieIndex Trie structure
 		 * @return list<RouteDefinition> Routes found in trie
 		 */
 		private function searchTrieIndex(array $requestUrl, array $trieIndex): array {
@@ -682,21 +694,25 @@
 				
 				// Move to the child node for this segment
 				// Access 'children' array or empty array if node has no children
+				/** @var array<string, TrieNode> $current */
 				$current = $current[$segment]['children'] ?? [];
 			}
 			
 			// Second pass: Navigate back to the final node to retrieve routes
 			// We need to traverse again because $current now points to children array
 			// We need the actual node that contains the 'routes' data
+			/** @var array<string, TrieNode> $finalNode */
 			$finalNode = $trieIndex;
 			foreach ($requestUrl as $segment) {
 				// Navigate to each segment's node (not its children)
+				/** @var TrieNode $finalNode */
 				$finalNode = $finalNode[$segment] ?? [];
 			}
 			
 			// Extract routes from the final node
 			// 'routes' key contains array of route definitions that match this exact path
 			// Returns empty array if no routes are stored at this trie node
+			/** @var TrieNode $finalNode */
 			return $finalNode['routes'] ?? [];
 		}
 		
