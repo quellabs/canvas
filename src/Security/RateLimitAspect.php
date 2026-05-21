@@ -197,11 +197,20 @@
 				return;
 			}
 			
+			// Assert the type stored in the before() phase. Malformed cache entries are skipped.
+			if (!is_array($headers)) {
+				return;
+			}
+			
 			// Apply each prepared rate limit header to the outgoing response.
 			// Values are cast to string to ensure compatibility with the
 			// Symfony response header bag implementation.
-			foreach ($headers as $name => $value) {
-				$response->headers->set($name, (string)$value);
+			// array_keys() yields string|int (not mixed), making (string) cast on $name valid.
+			// The value is read into a local and guarded with is_scalar() before casting,
+			// because $headers is array (not array<string, scalar>) so offsets return mixed.
+			foreach (array_keys($headers) as $name) {
+				$value = $headers[$name];
+				$response->headers->set((string)$name, is_scalar($value) ? (string)$value : '');
 			}
 		}
 		
@@ -229,6 +238,11 @@
 			
 			// Get current count for this window (defaults to 0 if not found)
 			$count = $this->cache->get($cacheKey, 0);
+			
+			// Cache always stores int here; assert to satisfy static analysis.
+			if (!is_int($count)) {
+				$count = 0;
+			}
 			
 			// Increment the counter for this request
 			$count++;
@@ -277,6 +291,11 @@
 			// Retrieve existing timestamps array from cache (empty array if not found)
 			$timestamps = $this->cache->get($cacheKey, []);
 			
+			// Cache always stores int[] here; assert to satisfy static analysis.
+			if (!is_array($timestamps)) {
+				$timestamps = [];
+			}
+			
 			// Remove expired timestamps that fall outside the current sliding window
 			// This cleanup ensures we only count requests within the time window
 			$timestamps = array_values(array_filter(
@@ -294,14 +313,16 @@
 			// Count total requests in the current sliding window
 			$count = count($timestamps);
 			
+			// Calculate retry_after: if exceeded, wait until oldest request expires.
+			// $timestamps contains only int values (added as $currentTime above and in prior
+			// requests), but array element access returns mixed; extract with a type guard.
+			$oldestTimestamp = isset($timestamps[0]) && is_int($timestamps[0]) ? $timestamps[0] : $currentTime;
+			
 			return [
 				'count'       => $count,                         // Current request count in sliding window
 				'exceeded'    => $count > $this->limit,          // Whether limit is exceeded
 				'reset_time'  => $currentTime + $this->window,   // When current window fully expires
-				
-				// Calculate retry_after: if exceeded, wait until oldest request expires
-				// If not exceeded, no wait time needed
-				'retry_after' => $count > $this->limit ? ($timestamps[0] + $this->window) - $currentTime : 0
+				'retry_after' => $count > $this->limit ? ($oldestTimestamp + $this->window) - $currentTime : 0
 			];
 		}
 		
@@ -337,43 +358,63 @@
 				'last_refill' => $currentTime    // Track when bucket was last refilled
 			]);
 			
+			// Cache always stores the bucket array; assert the shape for static analysis.
+			if (
+				!is_array($bucket) ||
+				!isset($bucket['tokens'], $bucket['last_refill']) ||
+				!is_int($bucket['last_refill']) ||
+				(
+					!is_int($bucket['tokens']) && !is_float($bucket['tokens'])
+				)
+			) {
+				$bucket = [
+					'tokens'      => $this->limit,
+					'last_refill' => $currentTime,
+				];
+			}
+			
+			// PHPStan does not narrow array offset types through compound guards, so extract
+			// to typed locals here. Each branch uses an is_* check: PHPStan narrows the true
+			// branch but not the false branch of a ternary, so both branches must type-guard.
+			$rawTokens        = $bucket['tokens'];
+			$bucketTokens     = is_float($rawTokens) ? $rawTokens : (is_int($rawTokens) ? (float)$rawTokens : (float)$this->limit);
+			$rawLastRefill    = $bucket['last_refill'];
+			$bucketLastRefill = is_int($rawLastRefill) ? $rawLastRefill : $currentTime;
+			
 			// Calculate how many tokens to add based on time elapsed since last refill
-			$timePassed = $currentTime - $bucket['last_refill'];
+			$timePassed = $currentTime - $bucketLastRefill;
 			$tokensToAdd = $timePassed * $refillRate;
 			
 			// Refill the bucket, but don't exceed the maximum capacity
 			// min() ensures we never have more tokens than the bucket size
-			$bucket['tokens'] = min($this->limit, $bucket['tokens'] + $tokensToAdd);
-			
-			// Update the last refill time to current time
-			$bucket['last_refill'] = $currentTime;
+			$bucketTokens = min((float)$this->limit, $bucketTokens + $tokensToAdd);
 			
 			// Check if request can be processed (need at least 1 token)
-			$exceeded = $bucket['tokens'] < 1;
+			$exceeded = $bucketTokens < 1;
 			
 			// If not exceeded, consume one token for this request
 			if (!$exceeded) {
-				$bucket['tokens']--;
+				$bucketTokens--;
 			}
 			
 			// Store updated bucket state with extended TTL
 			// TTL is 2x window duration to handle clock skew and ensure persistence
-			$this->cache->set($cacheKey, $bucket, $this->window * 2);
+			$this->cache->set($cacheKey, ['tokens' => $bucketTokens, 'last_refill' => $currentTime], $this->window * 2);
 			
 			return [
 				// Calculate count as number of tokens consumed (limit - remaining tokens)
-				'count'       => (int)($this->limit - floor($bucket['tokens'])),
+				'count'       => (int)($this->limit - floor($bucketTokens)),
 				
 				// Whether the request exceeded the rate limit
 				'exceeded'    => $exceeded,
 				
 				// When the bucket will have at least 1 token again
 				// If not exceeded, reset time is immediate (0 seconds from now)
-				'reset_time'  => (int)($currentTime + ($exceeded ? ceil((1 - $bucket['tokens']) / $refillRate) : 0)),
+				'reset_time'  => (int)($currentTime + ($exceeded ? ceil((1 - $bucketTokens) / $refillRate) : 0)),
 				
 				// How long client should wait before retrying
 				// Calculate time needed to accumulate 1 token based on refill rate
-				'retry_after' => $exceeded ? (int)ceil((1 - $bucket['tokens']) / $refillRate) : 0
+				'retry_after' => $exceeded ? (int)ceil((1 - $bucketTokens) / $refillRate) : 0
 			];
 		}
 		
@@ -466,7 +507,11 @@
 		protected function getUserIdentifier(Request $request): string {
 			// Try to get user from session, JWT, or other auth mechanism
 			if ($request->hasSession() && $request->getSession()->has('user_id')) {
-				return 'user_' . $request->getSession()->get('user_id');
+				// Fetch user id from session
+				$userId = $request->getSession()->get('user_id');
+				
+				// getSession()->get() returns mixed; guard the type before concatenation.
+				return 'user_' . (is_string($userId) || is_int($userId) ? (string)$userId : 'unknown');
 			}
 			
 			// Fallback to IP if no user found

@@ -137,7 +137,8 @@
 			$request = $context->getRequest();
 			
 			// Get all uploaded files from the request
-			// This includes files from all form fields (e.g., $_FILES array contents)
+			// FileBag::all() is typed as array<string, mixed>; narrow to the expected shape before use.
+			/** @var array<string, UploadedFile|array<int, UploadedFile>> $files */
 			$files = $request->files->all();
 			
 			// Check if any files were actually uploaded
@@ -283,8 +284,19 @@
 			// Aggregate all warnings into a batch-level list:
 			// - validation warnings (e.g. virus scan skipped) come from pass 1
 			// - move warnings (e.g. chmod failed) come from pass 2
-			$flatValidations = array_merge(...array_values($validationResults));
-			$allWarnings = array_values(array_unique(array_merge(array_merge(...array_column($flatValidations, 'warnings')), $allMoveWarnings)));
+			// Built with an explicit loop: array_column()/spread loses the string[] type
+			// through PHPStan's inference and @var assertions do not reliably recover it.
+			$allWarnings = $allMoveWarnings;
+			
+			foreach ($validationResults as $fieldValidations) {
+				foreach ($fieldValidations as $validation) {
+					foreach ($validation['warnings'] as $warning) {
+						$allWarnings[] = $warning;
+					}
+				}
+			}
+			
+			$allWarnings = array_values(array_unique($allWarnings));
 			
 			// Return the array of all processed file information
 			return [
@@ -300,7 +312,8 @@
 		 * @return bool True if the file is an image
 		 */
 		private function isImage(UploadedFile $file): bool {
-			return str_starts_with((string)$file->getMimeType(), 'image/');
+			$mimeType = $file->getMimeType();
+			return $mimeType !== null && str_starts_with($mimeType, 'image/');
 		}
 		
 		/**
@@ -351,7 +364,7 @@
 		 * first and only invoke this method when that returns an empty errors array.
 		 * This method never throws; move and post-move failures are returned in 'errors'.
 		 * @param UploadedFile $file The uploaded file to store (must already be validated)
-		 * @return array<string, mixed> File metadata with 'success' flag and 'errors' array
+		 * @return array{success: bool, errors: array<int, string>, warnings: array<int, string>, original_name: string, filename?: string, path?: string, relative_path?: string, size?: int|false, mime_type?: string|null, extension?: string, uploaded_at?: string}
 		 */
 		private function processSingleFile(UploadedFile $file): array {
 			try {
