@@ -277,13 +277,13 @@
 			return [
 				'type'              => 'static',
 				'original'          => $segment,
-				'variable_name'     => null,
-				'pattern'           => null,
+				'variable_name'     => null,  // No capture — static segments match literally
+				'pattern'           => null,  // No regex needed — equality check suffices
 				'is_multi_wildcard' => false,
-				'compiled_regex'    => null,
-				'variable_names'    => [],
-				'literal_prefix'    => null,
-				'literal_suffix'    => null,
+				'compiled_regex'    => null,  // Partial-variable field; unused here
+				'variable_names'    => [],    // Partial-variable field; unused here
+				'literal_prefix'    => null,  // Partial-variable field; unused here
+				'literal_suffix'    => null,  // Partial-variable field; unused here
 			];
 		}
 		
@@ -299,7 +299,7 @@
 			if (str_contains($segment, ':')) {
 				$parts = explode(':', trim($segment, '{}'), 2);
 				$pattern = $this->resolveTypeToRegex($parts[1]);
-				$isMultiWildcard = in_array($parts[1], ['**', '.*'], true);
+				$isMultiWildcard = in_array($parts[1], ['**', '.*'], true); // {path:**} behaves like a multi-wildcard
 			} else {
 				// Untyped variable: matches any single segment
 				$pattern = '[^\\/]+';
@@ -310,12 +310,12 @@
 				'type'              => 'variable',
 				'original'          => $segment,
 				'variable_name'     => $variableName,
-				'pattern'           => $pattern,
+				'pattern'           => $pattern,           // Validated against this regex at match time
 				'is_multi_wildcard' => $isMultiWildcard,
-				'compiled_regex'    => null,
-				'variable_names'    => [],
-				'literal_prefix'    => null,
-				'literal_suffix'    => null,
+				'compiled_regex'    => null,               // Partial-variable field; unused here
+				'variable_names'    => [],                 // Partial-variable field; unused here
+				'literal_prefix'    => null,               // Partial-variable field; unused here
+				'literal_suffix'    => null,               // Partial-variable field; unused here
 			];
 		}
 		
@@ -328,13 +328,13 @@
 			return [
 				'type'              => 'single_wildcard',
 				'original'          => $segment,
-				'variable_name'     => '*',
-				'pattern'           => null,
+				'variable_name'     => '*',    // Sentinel; strategy discards anonymous wildcards
+				'pattern'           => null,   // Strategy uses a hardcoded [^/]+ — no stored pattern needed
 				'is_multi_wildcard' => false,
-				'compiled_regex'    => null,
-				'variable_names'    => [],
-				'literal_prefix'    => null,
-				'literal_suffix'    => null,
+				'compiled_regex'    => null,   // Partial-variable field; unused here
+				'variable_names'    => [],     // Partial-variable field; unused here
+				'literal_prefix'    => null,   // Partial-variable field; unused here
+				'literal_suffix'    => null,   // Partial-variable field; unused here
 			];
 		}
 		
@@ -344,6 +344,7 @@
 		 * @return CompiledSegment
 		 */
 		private function buildMultiWildcardSegment(string $segment): array {
+			// Anonymous multi-wildcard: strategy discards the capture
 			if (($segment === '**' || $segment === '{**}')) {
 				$variableName = '**';
 			} else {
@@ -354,12 +355,12 @@
 				'type'              => 'multi_wildcard',
 				'original'          => $segment,
 				'variable_name'     => $variableName,
-				'pattern'           => null,
+				'pattern'           => null,   // Strategy matches .* unconditionally — no stored pattern needed
 				'is_multi_wildcard' => true,
-				'compiled_regex'    => null,
-				'variable_names'    => [],
-				'literal_prefix'    => null,
-				'literal_suffix'    => null,
+				'compiled_regex'    => null,   // Partial-variable field; unused here
+				'variable_names'    => [],     // Partial-variable field; unused here
+				'literal_prefix'    => null,   // Partial-variable field; unused here
+				'literal_suffix'    => null,   // Partial-variable field; unused here
 			];
 		}
 		
@@ -369,14 +370,14 @@
 		 * @return CompiledSegment
 		 */
 		private function buildPartialVariableSegment(string $segment): array {
-			// Start with safe defaults; overwrite fields if pattern compilation succeeds.
-			$compiledRegex = null;
-			$variableNames = [];
-			$literalPrefix = null;
-			$literalSuffix = null;
-			$patternMetadata = null;
+			// Defaults used when compilePartialSegmentPattern() returns null (malformed segment).
+			$compiledRegex = null;  // Full regex for matching the mixed segment (e.g. /^v(\d+)$/)
+			$variableNames = [];    // Ordered list of variable names for capture extraction
+			$literalPrefix = null;  // Static text before the first variable (e.g. "v" in "v{ver}")
+			$literalSuffix = null;  // Static text after the last variable (e.g. ".json" in "{name}.json")
+			$patternMetadata = null;  // Pre-computed lengths and name for single-variable fast path
 			$isMultiWildcard = false;
-			$variableName = null;
+			$variableName = null;  // Set only when a wildcard variable is present in the segment
 			
 			$result = $this->compilePartialSegmentPattern($segment);
 			
@@ -385,9 +386,10 @@
 				$variableNames = $result['variables'];
 				$literalPrefix = $result['literal_prefix'];
 				$literalSuffix = $result['literal_suffix'];
-				$patternMetadata = $this->compilePatternMetadata($segment);
+				$patternMetadata = $this->compilePatternMetadata($segment); // Null for multi-variable segments
 				
-				// Promote wildcard flags from the first wildcard variable found, if any
+				// Promote wildcard flags from the first wildcard variable found, if any.
+				// Partial wildcard segments are unusual but valid (e.g. "prefix{path:**}").
 				foreach ($result['variable_info'] as $varInfo) {
 					if ($varInfo['is_wildcard']) {
 						$isMultiWildcard = $varInfo['is_multi_wildcard'];
@@ -401,7 +403,7 @@
 				'type'              => 'partial_variable',
 				'original'          => $segment,
 				'variable_name'     => $variableName,
-				'pattern'           => null,
+				'pattern'           => null,              // Unused: matching uses compiled_regex instead
 				'is_multi_wildcard' => $isMultiWildcard,
 				'compiled_regex'    => $compiledRegex,
 				'variable_names'    => $variableNames,
@@ -409,6 +411,8 @@
 				'literal_suffix'    => $literalSuffix,
 			];
 			
+			// pattern_metadata is omitted entirely when null rather than stored as null,
+			// because its presence signals to the strategy that the fast path is available.
 			if ($patternMetadata !== null) {
 				$compiled['pattern_metadata'] = $patternMetadata;
 			}
