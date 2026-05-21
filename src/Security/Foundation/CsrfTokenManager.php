@@ -93,6 +93,36 @@
 		}
 		
 		/**
+		 * Retrieves all CSRF tokens from the session, keyed by intention.
+		 * Returns an empty array if the session value is missing or corrupted.
+		 * @return array<string, array<int, string>>
+		 */
+		private function getAllTokens(): array {
+			$value = $this->session->get(self::SESSION_KEY, []);
+			
+			// If the session value is not an array, it's corrupted or missing
+			if (!is_array($value)) {
+				return [];
+			}
+			
+			// Normalize session data
+			$result = [];
+			
+			foreach ($value as $intention => $tokens) {
+				// Skip entries where the intention is not a string or tokens is not an array
+				if (!is_string($intention) || !is_array($tokens)) {
+					continue;
+				}
+				
+				// Filter out any non-string tokens and re-index the array
+				$filtered = array_filter($tokens, fn($t) => is_string($t));
+				$result[$intention] = array_values($filtered);
+			}
+			
+			return $result;
+		}
+		
+		/**
 		 * Adds the token to the session storage and enforces the maximum
 		 * token limit to prevent session bloat.
 		 * @param string $intention The intention/purpose of the token
@@ -100,7 +130,7 @@
 		 */
 		private function storeToken(string $intention, string $token): void {
 			// Get all tokens from session (organized by intention)
-			$allTokens = $this->session->get(self::SESSION_KEY, []);
+			$allTokens = $this->getAllTokens();
 			
 			// Get tokens for this specific intention
 			$tokens = $allTokens[$intention] ?? [];
@@ -126,7 +156,7 @@
 		 */
 		private function getStoredTokens(string $intention): array {
 			// Get all tokens from session
-			$allTokens = $this->session->get(self::SESSION_KEY, []);
+			$allTokens = $this->getAllTokens();
 			
 			// Return tokens for this intention, or empty array if none exist
 			return $allTokens[$intention] ?? [];
@@ -140,7 +170,7 @@
 		 */
 		private function removeToken(string $intention, string $token): void {
 			// Get all tokens from session
-			$allTokens = $this->session->get(self::SESSION_KEY, []);
+			$allTokens = $this->getAllTokens();
 			
 			// Check if this intention has any tokens
 			if (isset($allTokens[$intention])) {
