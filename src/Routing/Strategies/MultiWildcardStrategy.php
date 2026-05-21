@@ -4,6 +4,7 @@
 	
 	use Quellabs\Canvas\Routing\MatchingContext;
 	use Quellabs\Canvas\Routing\MatchResult;
+	use Quellabs\Canvas\Routing\RouteTypes;
 	
 	/**
 	 * Multi-wildcard routing strategy that matches multiple URL segments.
@@ -11,6 +12,8 @@
 	 * This strategy handles route segments that can match multiple path segments
 	 * (e.g., "**" wildcards). It calculates how many segments to consume based on
 	 * the remaining route structure and captures the matched segments as a path string.
+	 *
+	 * @phpstan-import-type CompiledSegment from RouteTypes
 	 */
 	class MultiWildcardStrategy implements SegmentMatchingStrategyInterface {
 		
@@ -20,7 +23,7 @@
 		 * This method determines how many URL segments should be consumed by the wildcard
 		 * based on the remaining route segments that need to be matched after this wildcard.
 		 *
-		 * @param array<string, mixed> $segment The route segment containing wildcard information
+		 * @param CompiledSegment $segment The route segment containing wildcard information
 		 * @param MatchingContext $context The current matching context with URL and route state
 		 * @return MatchResult The result of the matching attempt
 		 */
@@ -56,7 +59,7 @@
 			if ($segment['variable_name'] === '**') {
 				// Special handling for the generic "**" wildcard - store in the array
 				$context->addToVariableArray('**', $capturedPath);
-			} else {
+			} elseif ($segment['variable_name'] !== null) {
 				// Named wildcard - store as a regular variable
 				$context->setVariable($segment['variable_name'], $capturedPath);
 			}

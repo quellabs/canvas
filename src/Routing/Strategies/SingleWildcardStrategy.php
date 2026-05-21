@@ -4,12 +4,15 @@
 	
 	use Quellabs\Canvas\Routing\MatchingContext;
 	use Quellabs\Canvas\Routing\MatchResult;
+	use Quellabs\Canvas\Routing\RouteTypes;
 	
 	/**
 	 * Single wildcard strategy for route segment matching.
 	 *
 	 * This strategy handles single wildcard segments in route patterns,
 	 * capturing URL segments and storing them as variables in the matching context.
+	 *
+	 * @phpstan-import-type CompiledSegment from RouteTypes
 	 */
 	class SingleWildcardStrategy implements SegmentMatchingStrategyInterface {
 		
@@ -20,7 +23,7 @@
 		 * variable array (for '*' wildcards) or as a named variable based on the
 		 * segment configuration.
 		 *
-		 * @param array<string, mixed> $segment The route segment configuration containing variable_name
+		 * @param CompiledSegment $segment The route segment configuration containing variable_name
 		 * @param MatchingContext $context The matching context with current URL state
 		 * @return MatchResult Always returns CONTINUE_MATCHING to proceed with next segment
 		 */
@@ -32,7 +35,7 @@
 			if ($segment['variable_name'] === '*') {
 				// Store in variable array for catch-all wildcards
 				$context->addToVariableArray('*', $urlSegment);
-			} else {
+			} elseif ($segment['variable_name'] !== null) {
 				// Store as named variable for specific wildcards
 				$context->setVariable($segment['variable_name'], $urlSegment);
 			}

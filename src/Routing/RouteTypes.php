@@ -40,7 +40,8 @@
 	 *     variable_names: list<string>,
 	 *     literal_prefix: string|null,
 	 *     literal_suffix: string|null,
-	 *     pattern_metadata?: PatternMetadata
+	 *     pattern_metadata?: PatternMetadata,
+	 *     remaining_segments_count?: int
 	 * }
 	 *
 	 * @phpstan-type RouteDefinition array{

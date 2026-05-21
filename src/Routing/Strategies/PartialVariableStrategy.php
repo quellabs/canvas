@@ -4,6 +4,7 @@
 	
 	use Quellabs\Canvas\Routing\MatchingContext;
 	use Quellabs\Canvas\Routing\MatchResult;
+	use Quellabs\Canvas\Routing\RouteTypes;
 	
 	/**
 	 * Strategy for matching URL segments containing partial variables.
@@ -13,12 +14,15 @@
 	 * It uses pre-compiled regular expressions to extract variable values
 	 * from the URL segment.
 	 * Updated PartialVariableStrategy that works with the enhanced compiler.
+	 *
+	 * @phpstan-import-type CompiledSegment from RouteTypes
+	 * @phpstan-import-type PatternMetadata from RouteTypes
 	 */
 	class PartialVariableStrategy implements SegmentMatchingStrategyInterface {
 		
 		/**
 		 * Matches a segment that contains both literal text and variables.
-		 * @param array<string, mixed> $segment
+		 * @param CompiledSegment $segment
 		 * @param MatchingContext $context
 		 * @return MatchResult
 		 */
@@ -40,7 +44,7 @@
 		/**
 		 * Handle partial variables with multi-wildcard components
 		 * Examples: "api-{**}", "file-{path:**}"
-		 * @param array<string, mixed> $segment The segment configuration containing literal_prefix and variable_name
+		 * @param CompiledSegment $segment The segment configuration containing literal_prefix and variable_name
 		 * @param MatchingContext $context The current matching context with URL segments and variables
 		 * @return MatchResult The result of the matching attempt (NO_MATCH or COMPLETE_MATCH)
 		 */
@@ -90,7 +94,7 @@
 			if ($variableName === '**') {
 				// Double-wildcard variables are stored as arrays to support multiple matches
 				$context->addToVariableArray('**', $capturedPath);
-			} else {
+			} elseif ($variableName !== null) {
 				// Regular named variables are stored as single values
 				$context->setVariable($variableName, $capturedPath);
 			}
@@ -103,13 +107,19 @@
 		/**
 		 * Match using pre-compiled regex pattern
 		 * Examples: "user-{id:\d+}", "file-{name}-{ext}"
-		 * @param array<string, mixed> $segment The segment configuration containing compiled_regex and variable_names
+		 * @param CompiledSegment $segment The segment configuration containing compiled_regex and variable_names
 		 * @param MatchingContext $context The current matching context with URL segments and variables
 		 * @return MatchResult The result of the matching attempt (NO_MATCH or CONTINUE_MATCHING)
 		 */
 		private function matchWithRegex(array $segment, MatchingContext $context): MatchResult {
 			// Get the current URL segment we're attempting to match against
 			$currentUrlSegment = $context->getCurrentUrlSegment();
+			
+			// compiled_regex is string|null in CompiledSegment; null here means the caller
+			// branched incorrectly, so treat it as no match
+			if ($segment['compiled_regex'] === null) {
+				return MatchResult::NO_MATCH;
+			}
 			
 			// Attempt to match the current URL segment against the compiled regex
 			if (!preg_match($segment['compiled_regex'], $currentUrlSegment, $matches)) {
@@ -131,7 +141,7 @@
 		
 		/**
 		 * Match using pattern metadata or legacy algorithm
-		 * @param array<string, mixed> $segment The route segment configuration containing pattern data
+		 * @param CompiledSegment $segment The route segment configuration containing pattern data
 		 * @param MatchingContext $context The current matching context with URL information
 		 * @return MatchResult The result of the matching operation
 		 */
@@ -213,7 +223,7 @@
 		
 		/**
 		 * Legacy matching algorithm for backward compatibility
-		 * @param array<string, mixed> $segment
+		 * @param CompiledSegment $segment
 		 * @param string $currentUrlSegment
 		 * @param MatchingContext $context
 		 * @return MatchResult

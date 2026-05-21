@@ -4,6 +4,7 @@
 	
 	use Quellabs\Canvas\Routing\MatchingContext;
 	use Quellabs\Canvas\Routing\MatchResult;
+	use Quellabs\Canvas\Routing\RouteTypes;
 	
 	/**
 	 * Strategy for matching variable segments in URL routing.
@@ -11,13 +12,15 @@
 	 * This strategy handles dynamic URL segments that capture values into variables.
 	 * It supports both single-segment variables (e.g., {id}) and multi-wildcard
 	 * variables (e.g., {path*}) that can match multiple segments.
+	 *
+	 * @phpstan-import-type CompiledSegment from RouteTypes
 	 */
 	class VariableSegmentStrategy implements SegmentMatchingStrategyInterface {
 		
 		/**
 		 * Matches a variable segment against the current URL segment(s).
 		 *
-		 * @param array<string, mixed> $segment The segment configuration containing:
+		 * @param CompiledSegment $segment The segment configuration containing:
 		 *  - 'variable_name': The name of the variable to store the captured value
 		 *  - 'pattern': Optional regex pattern to validate the segment
 		 *  - 'is_multi_wildcard': Boolean indicating if this captures multiple segments
@@ -27,7 +30,7 @@
 		public function match(array $segment, MatchingContext $context): MatchResult {
 			// Extract configuration from the segment definition
 			$variableName = $segment['variable_name'];
-			$pattern = $segment['pattern'] ?? null;
+			$pattern = $segment['pattern'];
 			
 			// Handle multi-wildcard variables that capture remaining URL segments
 			if ($segment['is_multi_wildcard'] ?? false) {
@@ -36,7 +39,10 @@
 				
 				// Join all remaining segments with '/' and store as variable value
 				$capturedValue = implode('/', $remainingSegments);
-				$context->setVariable($variableName, $capturedValue);
+				
+				if ($variableName !== null) {
+					$context->setVariable($variableName, $capturedValue);
+				}
 				
 				// Multi-wildcard consumes all remaining segments, so matching is complete
 				return MatchResult::COMPLETE_MATCH;
@@ -59,7 +65,9 @@
 			}
 			
 			// Store the captured URL segment value in the variable
-			$context->setVariable($variableName, $urlSegment);
+			if ($variableName !== null) {
+				$context->setVariable($variableName, $urlSegment);
+			}
 			
 			// Single segment matched successfully, continue with next segment
 			return MatchResult::CONTINUE_MATCHING;
