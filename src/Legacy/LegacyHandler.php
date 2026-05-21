@@ -242,7 +242,7 @@
 		
 		/**
 		 * Determine HTTP status code from parsed headers and exit code.
-		 * @param array<string, mixed> $parsedHeaders Associative array of parsed headers
+		 * @param array<string, string|int> $parsedHeaders Associative array of parsed headers
 		 * @param int $exitCode Exit code from the legacy script
 		 * @return int HTTP status code
 		 */
@@ -272,7 +272,7 @@
 		/**
 		 * Parse raw header strings into an associative array.
 		 * @param array<string> $rawHeaders Array of raw header strings
-		 * @return array<string, mixed> Associative array of headers
+		 * @return array<string, string|int> Associative array of headers
 		 */
 		private function parseHeaders(array $rawHeaders): array {
 			$headers = [];
@@ -310,7 +310,7 @@
 			$statusCode = $this->determineStatusCode($parsedHeaders, $exitCode);
 
 			// Create redirect response if needed
-			if (isset($parsedHeaders['Location']) && in_array($statusCode, [301, 302, 303, 307, 308])) {
+			if (isset($parsedHeaders['Location']) && is_string($parsedHeaders['Location']) && in_array($statusCode, [301, 302, 303, 307, 308])) {
 				return new RedirectResponse($parsedHeaders['Location'], $statusCode, $rawHeaders);
 			}
 			
