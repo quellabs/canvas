@@ -141,7 +141,7 @@
 				}
 				
 				// Execute the set operation with retry logic for resilience against transient failures
-				return $this->executeWithRetry(function () use ($memcachedKey, $value, $ttl) {
+				return $this->executeBoolWithRetry(function () use ($memcachedKey, $value, $ttl) {
 					// Use set() for standard caching behavior (overwrites existing keys)
 					$result = $this->memcached->set($memcachedKey, $value, $ttl);
 					
@@ -214,7 +214,7 @@
 				$memcachedKey = $this->buildKey($key);
 				
 				// Execute delete operation with retry logic for resilience
-				return $this->executeWithRetry(function () use ($memcachedKey) {
+				return $this->executeBoolWithRetry(function () use ($memcachedKey) {
 					// Attempt to delete the key from memcached
 					$result = $this->memcached->delete($memcachedKey);
 					
@@ -244,7 +244,7 @@
 		public function flush(): bool {
 			try {
 				// Execute flush operation with retry logic for resilience against transient failures
-				return $this->executeWithRetry(function () {
+				return $this->executeBoolWithRetry(function () {
 					// Flush all items from all memcached servers in the pool
 					// WARNING: This affects ALL applications using the same memcached instance
 					// Consider using key prefixes and versioning for safer cache invalidation
@@ -278,7 +278,7 @@
 				$memcachedKey = $this->buildKey($key);
 				
 				// Execute existence check with retry logic for resilience
-				return $this->executeWithRetry(function () use ($memcachedKey) {
+				return $this->executeBoolWithRetry(function () use ($memcachedKey) {
 					// Use get() and check result code rather than touch() method
 					// This approach is more reliable as touch() can have side effects
 					// (it updates the expiration time) and may not be available on all servers
@@ -307,7 +307,11 @@
 					return $this->memcached->getStats();
 				});
 				
-				if (!$stats) {
+				if (!is_array($stats)) {
+					return ['error' => 'Failed to retrieve Memcached stats'];
+				}
+				
+				if (empty($stats)) {
 					return ['error' => 'Failed to retrieve Memcached stats'];
 				}
 				
@@ -329,21 +333,31 @@
 				
 				foreach ($stats as $server => $serverStats) {
 					if (is_array($serverStats)) {
-						$aggregatedStats['total_connections'] += $serverStats['curr_connections'] ?? 0;
-						$aggregatedStats['total_items'] += $serverStats['curr_items'] ?? 0;
-						$aggregatedStats['total_gets'] += $serverStats['cmd_get'] ?? 0;
-						$aggregatedStats['total_sets'] += $serverStats['cmd_set'] ?? 0;
-						$aggregatedStats['total_hits'] += $serverStats['get_hits'] ?? 0;
-						$aggregatedStats['total_misses'] += $serverStats['get_misses'] ?? 0;
-						$aggregatedStats['total_memory'] += $serverStats['limit_maxbytes'] ?? 0;
-						$aggregatedStats['total_memory_used'] += $serverStats['bytes'] ?? 0;
+						// Narrow each stat field from mixed to int before arithmetic
+						$currConnections = is_int($serverStats['curr_connections'] ?? null) ? $serverStats['curr_connections'] : 0;
+						$currItems = is_int($serverStats['curr_items'] ?? null) ? $serverStats['curr_items'] : 0;
+						$cmdGet = is_int($serverStats['cmd_get'] ?? null) ? $serverStats['cmd_get'] : 0;
+						$cmdSet = is_int($serverStats['cmd_set'] ?? null) ? $serverStats['cmd_set'] : 0;
+						$getHits = is_int($serverStats['get_hits'] ?? null) ? $serverStats['get_hits'] : 0;
+						$getMisses = is_int($serverStats['get_misses'] ?? null) ? $serverStats['get_misses'] : 0;
+						$limitMaxbytes = is_int($serverStats['limit_maxbytes'] ?? null) ? $serverStats['limit_maxbytes'] : 0;
+						$bytes = is_int($serverStats['bytes'] ?? null) ? $serverStats['bytes'] : 0;
 						
-						$aggregatedStats['servers_detail'][$server] = [
+						$aggregatedStats['total_connections'] += $currConnections;
+						$aggregatedStats['total_items'] += $currItems;
+						$aggregatedStats['total_gets'] += $cmdGet;
+						$aggregatedStats['total_sets'] += $cmdSet;
+						$aggregatedStats['total_hits'] += $getHits;
+						$aggregatedStats['total_misses'] += $getMisses;
+						$aggregatedStats['total_memory'] += $limitMaxbytes;
+						$aggregatedStats['total_memory_used'] += $bytes;
+						
+						$aggregatedStats['servers_detail'][(string)$server] = [
 							'uptime'         => $serverStats['uptime'] ?? 0,
 							'version'        => $serverStats['version'] ?? 'unknown',
-							'curr_items'     => $serverStats['curr_items'] ?? 0,
-							'bytes'          => $serverStats['bytes'] ?? 0,
-							'limit_maxbytes' => $serverStats['limit_maxbytes'] ?? 0,
+							'curr_items'     => $currItems,
+							'bytes'          => $bytes,
+							'limit_maxbytes' => $limitMaxbytes,
 						];
 					}
 				}
@@ -401,16 +415,30 @@
 		 * @throws \RuntimeException If connection fails
 		 */
 		private function initializeMemcachedConnection(array $config): void {
-			// Use persistent connection if persistent_id is provided
-			$this->memcached = new Memcached($config['persistent_id'] ?? null);
+			// Narrow persistent_id from mixed to string|null before passing to constructor
+			$persistentId = is_string($config['persistent_id']) ? $config['persistent_id'] : null;
+			
+			// Memcached constructor accepts string, not string|null — only pass when set
+			if ($persistentId !== null) {
+				$this->memcached = new Memcached($persistentId);
+			} else {
+				$this->memcached = new Memcached();
+			}
 			
 			// Only add servers if this is a new persistent connection or non-persistent
 			if (empty($this->memcached->getServerList())) {
 				// Add servers
-				foreach ($config['servers'] as $server) {
-					$host = $server[0];
-					$port = $server[1] ?? 11211;
-					$weight = $server[2] ?? 100;
+				$servers = is_array($config['servers']) ? $config['servers'] : [];
+				
+				foreach ($servers as $server) {
+					if (!is_array($server)) {
+						continue;
+					}
+					
+					// Narrow each server field from mixed to its expected type
+					$host = is_string($server[0]) ? $server[0] : '127.0.0.1';
+					$port = is_int($server[1]) ? $server[1] : 11211;
+					$weight = is_int($server[2]) ? $server[2] : 100;
 					
 					if (!$this->memcached->addServer($host, $port, $weight)) {
 						throw new \RuntimeException("Failed to add Memcached server: {$host}:{$port}");
@@ -468,12 +496,51 @@
 		}
 		
 		/**
-		 * Execute Memcached operation with retry logic
+		 * Execute a Memcached operation with retry logic, returning mixed
+		 * Use this for operations whose return value is consumed (get, getStats)
 		 * @param callable $operation Memcached operation to execute
 		 * @return mixed Operation result
 		 * @throws \Exception If all retries fail
 		 */
 		private function executeWithRetry(callable $operation): mixed {
+			for ($attempts = 0; $attempts < $this->maxRetries; $attempts++) {
+				try {
+					$result = $operation();
+					$resultCode = $this->memcached->getResultCode();
+					
+					if ($resultCode === Memcached::RES_SUCCESS ||
+						$resultCode === Memcached::RES_NOTFOUND ||
+						$resultCode === Memcached::RES_NOTSTORED) {
+						return $result;
+					}
+					
+					if ($this->isRecoverableError($resultCode)) {
+						throw new \Exception("Memcached error: " . $this->memcached->getResultMessage());
+					}
+					
+					return $result;
+					
+				} catch (\Exception $e) {
+					if ($attempts + 1 < $this->maxRetries) {
+						usleep(100000 * pow(2, $attempts));
+					} else {
+						throw new \Exception($e->getMessage(), $e->getCode(), $e);
+					}
+				}
+			}
+			
+			// Unreachable, but satisfies static analysers
+			throw new \Exception('Memcached operation failed: ' . $this->memcached->getResultMessage());
+		}
+		
+		/**
+		 * Execute a Memcached operation with retry logic, returning bool
+		 * Use this for operations that signal success/failure (set, forget, flush, has)
+		 * @param callable(): bool $operation Memcached operation to execute
+		 * @return bool Operation result
+		 * @throws \Exception If all retries fail
+		 */
+		private function executeBoolWithRetry(callable $operation): bool {
 			for ($attempts = 0; $attempts < $this->maxRetries; $attempts++) {
 				try {
 					$result = $operation();

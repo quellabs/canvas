@@ -35,7 +35,7 @@
 			$this->namespace = $namespace;
 			
 			// Store lock timeout
-			if (!empty($config['lockTimeout'])) {
+			if (!empty($config['lockTimeout']) && is_int($config['lockTimeout'])) {
 				$this->lockTimeout = max(1, $config['lockTimeout']);
 			} else {
 				$this->lockTimeout = 5;
@@ -336,12 +336,22 @@
 				// Attempt to unserialize the data
 				$data = @unserialize($contents);
 				
-				// Validate data structure
-				if (!is_array($data) || !isset($data['value'], $data['expires_at'], $data['created_at'])) {
+				// Validate data structure and extract each field with an explicit type check
+				// This lets PHPStan prove the return type is array<string, mixed> without a @var cast
+				if (
+					!is_array($data) ||
+					!array_key_exists('value', $data) ||
+					!array_key_exists('expires_at', $data) ||
+					!array_key_exists('created_at', $data)
+				) {
 					return null;
 				}
 				
-				return $data;
+				return [
+					'value'      => $data['value'],
+					'expires_at' => $data['expires_at'],
+					'created_at' => $data['created_at'],
+				];
 			} finally {
 				// Always release lock and close file handle
 				flock($handle, LOCK_UN);

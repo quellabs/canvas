@@ -82,7 +82,8 @@
 			$context = $this->resolveContext($methodContext, $dependencies);
 			
 			// Determine which cache provider to use based on metadata or annotations
-			$providerName = $metadata['provider'] ?? $context['driver'] ?? null;
+			$rawProvider = $metadata['provider'] ?? $context['driver'] ?? null;
+			$providerName = is_string($rawProvider) ? $rawProvider : null;
 			$providerClass = $this->getProviderClass($providerName);
 			
 			// Create a unique cache key for this provider and context combination
@@ -94,7 +95,8 @@
 			}
 
 			// Gather parameters from all sources: MethodContext, InterceptWith and config/cache.php
-			$userConfig = $dependencies['config'] ?? [];
+			$rawUserConfig = $dependencies['config'] ?? [];
+			$userConfig = is_array($rawUserConfig) ? $rawUserConfig : [];
 			
 			$totalConfig = array_merge(
 				$this->getConnectionConfig($providerName),
@@ -168,11 +170,14 @@
 				}
 			}
 			
+				// Resolve namespace to a definite string for the hash
+			$namespaceString = is_string($namespace) ? $namespace : self::DEFAULT_NAMESPACE;
+			
 			return [
 				'namespace' => $namespace,
 				'params'    => $params,
 				'driver'    => $params['driver'] ?? null,
-				'hash'      => $namespace . ':' . md5(serialize($params))
+				'hash'      => $namespaceString . ':' . md5(serialize($params))
 			];
 		}
 		
@@ -212,16 +217,36 @@
 			// Fetch the list of drivers
 			$drivers = $this->cacheConfig['drivers'] ?? [];
 			
+			// Ensure $drivers is an array (cacheConfig is mixed-valued)
+			if (!is_array($drivers)) {
+				$drivers = [];
+			}
+			
 			// Use specific provider if requested, otherwise fall back to default
-			$targetProvider = $provider ?? $this->cacheConfig['default'] ?? null;
+			$default = $this->cacheConfig['default'] ?? null;
+			$targetProvider = $provider ?? (is_string($default) ? $default : null);
 			
 			// Return the provider class if it exists in drivers
-			if ($targetProvider && isset($drivers[$targetProvider]['class'])) {
-				return $drivers[$targetProvider]['class'];
+			if ($targetProvider !== null && isset($drivers[$targetProvider]) && is_array($drivers[$targetProvider])) {
+				$class = $drivers[$targetProvider]['class'] ?? null;
+				
+				if (!is_string($class)) {
+					throw new \InvalidArgumentException(
+						"Cache provider '{$targetProvider}' is missing a valid 'class' entry"
+					);
+				}
+				
+				if (!class_exists($class)) {
+					throw new \InvalidArgumentException(
+						"Cache provider class '{$class}' does not exist"
+					);
+				}
+				
+				return $class;
 			}
 			
 			// Throw error if a specific provider was requested but not found
-			if ($targetProvider) {
+			if ($targetProvider !== null) {
 				$available = implode(', ', array_keys($drivers));
 				$type = $provider ? 'Cache provider' : 'Default cache provider';
 				
@@ -242,13 +267,24 @@
 		private function getConnectionConfig(?string $providerName): array {
 			// If no provider name, try to get config for the default provider
 			if ($providerName === null) {
-				$providerName = $this->cacheConfig['default'] ?? null;
+				$default = $this->cacheConfig['default'] ?? null;
+				$providerName = is_string($default) ? $default : null;
 			}
 			
 			// Get connection configuration from the connections section
 			$connections = $this->cacheConfig['drivers'] ?? [];
 			
+			// Ensure $connections is an array (cacheConfig is mixed-valued)
+			if (!is_array($connections)) {
+				return [];
+			}
+			
 			// Return the connection
-			return $connections[$providerName] ?? [];
+			if ($providerName === null) {
+				return [];
+			}
+			
+			$entry = $connections[$providerName] ?? [];
+			return is_array($entry) ? $entry : [];
 		}
 	}

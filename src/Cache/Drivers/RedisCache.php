@@ -97,6 +97,11 @@
 				}
 				
 				// Unserialize the data
+				if (!is_string($data)) {
+					$this->forget($key);
+					return $default;
+				}
+				
 				$value = @unserialize($data);
 				
 				// Invalid data, clean up
@@ -126,7 +131,7 @@
 				$redisKey = $this->buildKey($key);
 				$serializedData = serialize($value);
 				
-				return $this->executeWithRetry(function () use ($redisKey, $serializedData, $ttl) {
+				return $this->executeBoolWithRetry(function () use ($redisKey, $serializedData, $ttl) {
 					// SET without expiration
 					if ($ttl == 0) {
 						return $this->redis->set($redisKey, $serializedData);
@@ -192,7 +197,7 @@
 				// This ensures we're targeting the correct key in our namespace
 				$redisKey = $this->buildKey($key);
 				
-				return $this->executeWithRetry(function () use ($redisKey) {
+				return $this->executeBoolWithRetry(function () use ($redisKey) {
 					// Execute Redis DEL command
 					$this->redis->del($redisKey);
 					return true;
@@ -217,7 +222,7 @@
 			try {
 				// Use SCAN for memory efficiency with large keysets
 				// This is safer than KEYS * on production systems
-				return $this->executeWithRetry(function () {
+				return $this->executeBoolWithRetry(function () {
 					$iterator = null;
 					$pattern = $this->keyPrefix . "*";
 					
@@ -247,7 +252,7 @@
 			try {
 				$redisKey = $this->buildKey($key);
 				
-				return $this->executeWithRetry(function () use ($redisKey) {
+				return $this->executeBoolWithRetry(function () use ($redisKey) {
 					return $this->redis->exists($redisKey) > 0;
 				});
 				
@@ -267,6 +272,11 @@
 				$info = $this->executeWithRetry(function () {
 					return $this->redis->info();
 				});
+				
+				// Ensure info is a usable array before accessing fields
+				if (!is_array($info)) {
+					$info = [];
+				}
 				
 				// Count keys in this specific namespace using SCAN
 				// This is more efficient than KEYS * for large datasets
@@ -346,30 +356,31 @@
 			$this->redis = new Redis();
 			
 			try {
+				// Narrow config values from mixed to their expected types before use
+				$host = is_string($config['host']) ? $config['host'] : '127.0.0.1';
+				$port = is_int($config['port']) ? $config['port'] : 6379;
+				$timeout = is_float($config['timeout']) || is_int($config['timeout']) ? (float)$config['timeout'] : 2.5;
+				$readTimeout = is_float($config['read_timeout']) || is_int($config['read_timeout']) ? (float)$config['read_timeout'] : 2.5;
+				$database = is_int($config['database']) ? $config['database'] : 0;
+				$password = is_string($config['password']) ? $config['password'] : null;
+				
 				// Connect to Redis
-				$connected = $this->redis->connect(
-					$config['host'],
-					$config['port'],
-					$config['timeout'],
-					null,
-					0,
-					$config['read_timeout']
-				);
+				$connected = $this->redis->connect($host, $port, $timeout, null, 0, $readTimeout);
 				
 				if (!$connected) {
 					throw new \RuntimeException("Failed to connect to Redis server");
 				}
 				
 				// Authenticate if password is provided
-				if (!empty($config['password'])) {
-					if (!$this->redis->auth($config['password'])) {
+				if ($password !== null && $password !== '') {
+					if (!$this->redis->auth($password)) {
 						throw new \RuntimeException("Redis authentication failed");
 					}
 				}
 				
 				// Select database
-				if ($config['database'] > 0) {
-					if (!$this->redis->select($config['database'])) {
+				if ($database > 0) {
+					if (!$this->redis->select($database)) {
 						throw new \RuntimeException("Failed to select Redis database");
 					}
 				}
@@ -392,7 +403,8 @@
 		}
 		
 		/**
-		 * Execute Redis operation with retry logic
+		 * Execute a Redis operation with retry logic, returning mixed
+		 * Use this for operations whose return value is consumed (get, info, scan counts)
 		 * @param callable $operation Redis operation to execute
 		 * @return mixed Operation result
 		 * @throws \Exception
@@ -433,13 +445,47 @@
 		}
 		
 		/**
+		 * Execute a Redis operation with retry logic, returning bool
+		 * Use this for operations that signal success/failure (set, forget, flush, has)
+		 * @param callable(): bool $operation Redis operation to execute
+		 * @return bool Operation result
+		 * @throws \Exception
+		 */
+		private function executeBoolWithRetry(callable $operation): bool {
+			$attempts = 0;
+			
+			while ($attempts < $this->maxRetries) {
+				try {
+					return $operation();
+				} catch (RedisException $e) {
+					$attempts++;
+					
+					if ($attempts >= $this->maxRetries) {
+						throw new \Exception($e->getMessage(), $e->getCode(), $e);
+					}
+					
+					usleep(100000 * pow(2, $attempts - 1));
+					
+					try {
+						$this->redis->ping();
+					} catch (RedisException $reconnectException) {
+						// The connection is still broken, but we'll try the operation again
+					}
+				}
+			}
+			
+			// Unreachable: loop always returns or throws on final attempt
+			throw new \RuntimeException('Retry loop exhausted without result');
+		}
+		
+		/**
 		 * Calculate the cache hit ratio from Redis stats
 		 * @param array<string, mixed> $info Redis info array
 		 * @return float Hit ratio as percentage
 		 */
 		private function calculateHitRatio(array $info): float {
-			$hits = $info['keyspace_hits'] ?? 0;
-			$misses = $info['keyspace_misses'] ?? 0;
+			$hits = is_int($info['keyspace_hits']) ? $info['keyspace_hits'] : 0;
+			$misses = is_int($info['keyspace_misses']) ? $info['keyspace_misses'] : 0;
 			$total = $hits + $misses;
 			
 			return $total > 0 ? round(($hits / $total) * 100, 2) : 0.0;
