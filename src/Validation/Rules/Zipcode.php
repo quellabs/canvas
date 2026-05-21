@@ -342,6 +342,11 @@
             if (($value === "") || is_null($value)) {
                 return true;
             }
+			
+			// Value must be a string
+			if (!is_string($value)) {
+				return false;
+			}
 
 			// Check zipcode format
 			return $this->isZipcodeValid($this->countryIso2, $value);

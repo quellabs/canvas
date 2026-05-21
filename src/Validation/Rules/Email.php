@@ -21,6 +21,11 @@
 				return true;
 			}
 			
+			// Value must be a string
+			if (!is_string($value)) {
+				return false;
+			}
+			
 			// Check if the value is a valid email address
 			return filter_var($value, FILTER_VALIDATE_EMAIL) !== false;
 		}

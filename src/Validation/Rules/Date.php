@@ -17,6 +17,11 @@
 				return true;
 			}
 			
+			// Value must be a string
+			if (!is_string($value)) {
+				return false;
+			}
+			
 			return $this->dateExtractFormat($value) !== false;
 		}
 		

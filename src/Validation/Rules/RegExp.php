@@ -49,6 +49,11 @@
 				return true;
 			}
 			
+			// Value must be a string
+			if (!is_string($value)) {
+				return false;
+			}
+			
 			// Use preg_match to test the value against the regular expression
 			// Returns true if the pattern matches, false if it doesn't match or if there's an error
 			return preg_match($this->pattern, $value) !== false;

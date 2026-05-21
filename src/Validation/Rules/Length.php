@@ -51,8 +51,13 @@
 			// Allow empty values and null to pass validation
 			// This follows the principle that length validation should only
 			// apply to non-empty values
-			if (($value === "") || is_null($value)) {
+			if ($value === "" || $value === null) {
 				return true;
+			}
+			
+			// Value must be a string
+			if (!is_string($value)) {
+				return false;
 			}
 			
 			// Check the minimum length requirement if specified

@@ -82,6 +82,11 @@
 				return true;
 			}
 			
+			// Value must be a string
+			if (!is_string($value)) {
+				return false;
+			}
+			
 			// Handle types that use PHP's is_* functions (e.g., is_string, is_int)
 			if (in_array($this->type, self::IS_A_TYPES, true)) {
 				if (!$this->getIsTypeValidator($this->type)($value)) {

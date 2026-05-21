@@ -34,6 +34,11 @@
 				return true;
 			}
 			
+			// Value must be a string
+			if (!is_string($value)) {
+				return false;
+			}
+			
 			// check all words and return false if any of them exceeds the length
 			$words = explode(' ', $value);
 			

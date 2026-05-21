@@ -22,6 +22,11 @@
 				return false;
 			}
 			
+			// Value must be a string
+			if (!is_string($value)) {
+				return false;
+			}
+			
 			// Trim whitespace and check if the resulting string has content
 			return strlen(trim($value)) > 0;
 		}

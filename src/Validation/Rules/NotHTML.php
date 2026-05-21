@@ -16,6 +16,11 @@
 				return true;
 			}
 			
+			// Value must be a string
+			if (!is_string($value)) {
+				return false;
+			}
+			
 			// Normaliseer de invoer door extra spaties te verwijderen
 			$normalizedValue = trim(preg_replace('/\s+/', ' ', $value));
 			
