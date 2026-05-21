@@ -23,12 +23,34 @@
 		 */
 		private array $parameters;
 		
+		/** @var string The parameter to add context for */
+		private string $contextParameter;
+		
+		/** @var string The context */
+		private string $context;
+		
 		/**
 		 * WithContext constructor
 		 * @param array<string, mixed> $parameters
 		 */
 		public function __construct(array $parameters) {
+			if (
+				!isset($parameters['parameter']) ||
+				!is_string($parameters['parameter'])
+			) {
+				throw new \InvalidArgumentException("WithContext needs a parameter to add context to");
+			}
+			
+			if (
+				!isset($parameters['context']) ||
+				!is_string($parameters['context'])
+			) {
+				throw new \InvalidArgumentException("WithContext needs context");
+			}
+			
 			$this->parameters = $parameters;
+			$this->contextParameter = $parameters['parameter'];
+			$this->context = $parameters['context'];
 		}
 		
 		/**
@@ -44,7 +66,7 @@
 		 * @return string
 		 */
 		public function getParameter(): string {
-			return $this->parameters['parameter'] ?? '';
+			return $this->contextParameter;
 		}
 		
 		/**
@@ -52,6 +74,6 @@
 		 * @return string
 		 */
 		public function getContext(): string {
-			return $this->parameters['context'] ?? '';
+			return $this->context;
 		}
 	}

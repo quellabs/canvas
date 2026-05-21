@@ -534,12 +534,16 @@
 		
 		/**
 		 * Sanitize a value for use in cache keys
-		 * @param mixed $value Value to sanitize
+		 * @param scalar|\Stringable $value Value to sanitize
 		 * @return string Sanitized value (safe for cache keys)
 		 */
 		private function sanitizeValue(mixed $value): string {
 			// Convert to string and limit length
-			$stringValue = substr((string)$value, 0, 100);
+ 			if (is_scalar($value) || $value instanceof \Stringable) {
+				$stringValue = substr((string)$value, 0, 100);
+			} else {
+				$stringValue = '';
+			}
 			
 			// Replace problematic characters with safe alternatives
 			// Only allow alphanumeric, dash, underscore, and period
