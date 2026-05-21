@@ -376,9 +376,9 @@
 			// PHPStan does not narrow array offset types through compound guards, so extract
 			// to typed locals here. Each branch uses an is_* check: PHPStan narrows the true
 			// branch but not the false branch of a ternary, so both branches must type-guard.
-			$rawTokens        = $bucket['tokens'];
-			$bucketTokens     = is_float($rawTokens) ? $rawTokens : (is_int($rawTokens) ? (float)$rawTokens : (float)$this->limit);
-			$rawLastRefill    = $bucket['last_refill'];
+			$rawTokens = $bucket['tokens'];
+			$bucketTokens = is_float($rawTokens) ? $rawTokens : (is_int($rawTokens) ? (float)$rawTokens : (float)$this->limit);
+			$rawLastRefill = $bucket['last_refill'];
 			$bucketLastRefill = is_int($rawLastRefill) ? $rawLastRefill : $currentTime;
 			
 			// Calculate how many tokens to add based on time elapsed since last refill

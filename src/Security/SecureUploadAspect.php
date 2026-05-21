@@ -182,7 +182,7 @@
 			
 			// Expose aggregated warnings so controllers can surface skipped-check notices to users
 			$request->attributes->set('upload_warnings', $warnings);
-
+			
 			// Throw on failure
 			if (!$allSuccessful && $this->throwOnFailure) {
 				$message = $batchError ?? 'One or more uploaded files failed validation';
