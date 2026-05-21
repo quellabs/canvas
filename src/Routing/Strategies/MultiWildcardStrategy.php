@@ -29,7 +29,7 @@
 		 */
 		public function match(array $segment, MatchingContext $context): MatchResult {
 			// Get the remaining segments in both the route definition and the URL
-			$remainingRouteSegments = $segment['remaining_segments_count'] ?? 0;
+			$remainingRouteSegments = $segment['remaining_segments_count'];
 			$remainingUrlSegments = $context->getRemainingUrlSegments();
 			
 			// Calculate how many segments this wildcard should consume

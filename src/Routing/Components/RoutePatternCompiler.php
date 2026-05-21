@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Routing\Components;
 	
 	use Quellabs\Canvas\Routing\RouteTypes;
+	use Quellabs\Canvas\Routing\SegmentTypes;
 	
 	/**
 	 * RoutePatternCompiler
@@ -148,6 +149,32 @@
 				};
 			}
 			
+			// Post-processing pass: fill in remaining_segments_count for every multi-wildcard
+			// segment. This tells the strategy how many URL segments must be left unconsumed
+			// so that the route segments that follow the wildcard can still be satisfied.
+			// Example: for /files/**/README.md the ** segment gets remaining_segments_count = 1.
+			$total = count($compiledSegments);
+			
+			for ($i = 0; $i < $total; $i++) {
+				if (!SegmentTypes::isMultiWildcard($compiledSegments[$i])) {
+					continue;
+				}
+				
+				// Count non-multi-wildcard segments that follow this one. Each of those
+				// consumes exactly one URL segment, so the wildcard must leave that many behind.
+				$remaining = 0;
+				
+				for ($j = $i + 1; $j < $total; $j++) {
+					if (!SegmentTypes::isMultiWildcard($compiledSegments[$j])) {
+						$remaining++;
+					}
+				}
+				
+				/** @var CompiledSegment $updated */
+				$updated = [...$compiledSegments[$i], 'remaining_segments_count' => $remaining];
+				$compiledSegments[$i] = $updated;
+			}
+			
 			return $compiledSegments;
 		}
 		
@@ -275,15 +302,16 @@
 		 */
 		private function buildStaticSegment(string $segment): array {
 			return [
-				'type'              => 'static',
-				'original'          => $segment,
-				'variable_name'     => null,  // No capture — static segments match literally
-				'pattern'           => null,  // No regex needed — equality check suffices
-				'is_multi_wildcard' => false,
-				'compiled_regex'    => null,  // Partial-variable field; unused here
-				'variable_names'    => [],    // Partial-variable field; unused here
-				'literal_prefix'    => null,  // Partial-variable field; unused here
-				'literal_suffix'    => null,  // Partial-variable field; unused here
+				'type'                     => 'static',
+				'original'                 => $segment,
+				'variable_name'            => null,  // No capture — static segments match literally
+				'pattern'                  => null,  // No regex needed — equality check suffices
+				'is_multi_wildcard'        => false,
+				'compiled_regex'           => null,  // Partial-variable field; unused here
+				'variable_names'           => [],    // Partial-variable field; unused here
+				'literal_prefix'           => null,  // Partial-variable field; unused here
+				'literal_suffix'           => null,  // Partial-variable field; unused here
+				'remaining_segments_count' => 0,
 			];
 		}
 		
@@ -307,15 +335,16 @@
 			}
 			
 			return [
-				'type'              => 'variable',
-				'original'          => $segment,
-				'variable_name'     => $variableName,
-				'pattern'           => $pattern,           // Validated against this regex at match time
-				'is_multi_wildcard' => $isMultiWildcard,
-				'compiled_regex'    => null,               // Partial-variable field; unused here
-				'variable_names'    => [],                 // Partial-variable field; unused here
-				'literal_prefix'    => null,               // Partial-variable field; unused here
-				'literal_suffix'    => null,               // Partial-variable field; unused here
+				'type'                     => 'variable',
+				'original'                 => $segment,
+				'variable_name'            => $variableName,
+				'pattern'                  => $pattern,           // Validated against this regex at match time
+				'is_multi_wildcard'        => $isMultiWildcard,
+				'compiled_regex'           => null,               // Partial-variable field; unused here
+				'variable_names'           => [],                 // Partial-variable field; unused here
+				'literal_prefix'           => null,               // Partial-variable field; unused here
+				'literal_suffix'           => null,               // Partial-variable field; unused here
+				'remaining_segments_count' => 0,
 			];
 		}
 		
@@ -326,15 +355,16 @@
 		 */
 		private function buildSingleWildcardSegment(string $segment): array {
 			return [
-				'type'              => 'single_wildcard',
-				'original'          => $segment,
-				'variable_name'     => '*',    // Sentinel; strategy discards anonymous wildcards
-				'pattern'           => null,   // Strategy uses a hardcoded [^/]+ — no stored pattern needed
-				'is_multi_wildcard' => false,
-				'compiled_regex'    => null,   // Partial-variable field; unused here
-				'variable_names'    => [],     // Partial-variable field; unused here
-				'literal_prefix'    => null,   // Partial-variable field; unused here
-				'literal_suffix'    => null,   // Partial-variable field; unused here
+				'type'                     => 'single_wildcard',
+				'original'                 => $segment,
+				'variable_name'            => '*',    // Sentinel; strategy discards anonymous wildcards
+				'pattern'                  => null,   // Strategy uses a hardcoded [^/]+ — no stored pattern needed
+				'is_multi_wildcard'        => false,
+				'compiled_regex'           => null,   // Partial-variable field; unused here
+				'variable_names'           => [],     // Partial-variable field; unused here
+				'literal_prefix'           => null,   // Partial-variable field; unused here
+				'literal_suffix'           => null,   // Partial-variable field; unused here
+				'remaining_segments_count' => 0,
 			];
 		}
 		
@@ -352,15 +382,16 @@
 			}
 			
 			return [
-				'type'              => 'multi_wildcard',
-				'original'          => $segment,
-				'variable_name'     => $variableName,
-				'pattern'           => null,   // Strategy matches .* unconditionally — no stored pattern needed
-				'is_multi_wildcard' => true,
-				'compiled_regex'    => null,   // Partial-variable field; unused here
-				'variable_names'    => [],     // Partial-variable field; unused here
-				'literal_prefix'    => null,   // Partial-variable field; unused here
-				'literal_suffix'    => null,   // Partial-variable field; unused here
+				'type'                     => 'multi_wildcard',
+				'original'                 => $segment,
+				'variable_name'            => $variableName,
+				'pattern'                  => null,   // Strategy matches .* unconditionally — no stored pattern needed
+				'is_multi_wildcard'        => true,
+				'compiled_regex'           => null,   // Partial-variable field; unused here
+				'variable_names'           => [],     // Partial-variable field; unused here
+				'literal_prefix'           => null,   // Partial-variable field; unused here
+				'literal_suffix'           => null,   // Partial-variable field; unused here
+				'remaining_segments_count' => 0,  // Filled in by compileRoute() post-processing pass
 			];
 		}
 		
@@ -400,15 +431,16 @@
 			}
 			
 			$compiled = [
-				'type'              => 'partial_variable',
-				'original'          => $segment,
-				'variable_name'     => $variableName,
-				'pattern'           => null,              // Unused: matching uses compiled_regex instead
-				'is_multi_wildcard' => $isMultiWildcard,
-				'compiled_regex'    => $compiledRegex,
-				'variable_names'    => $variableNames,
-				'literal_prefix'    => $literalPrefix,
-				'literal_suffix'    => $literalSuffix,
+				'type'                     => 'partial_variable',
+				'original'                 => $segment,
+				'variable_name'            => $variableName,
+				'pattern'                  => null,              // Unused: matching uses compiled_regex instead
+				'is_multi_wildcard'        => $isMultiWildcard,
+				'compiled_regex'           => $compiledRegex,
+				'variable_names'           => $variableNames,
+				'literal_prefix'           => $literalPrefix,
+				'literal_suffix'           => $literalSuffix,
+				'remaining_segments_count' => 0,
 			];
 			
 			// pattern_metadata is omitted entirely when null rather than stored as null,
