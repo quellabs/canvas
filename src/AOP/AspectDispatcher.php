@@ -179,17 +179,16 @@
 		 * Around aspects can intercept, modify, or completely replace method execution
 		 * @param array<int, RequestAspectInterface|BeforeAspectInterface|AroundAspectInterface|AfterAspectInterface> $aspects All resolved aspects for this method
 		 * @param MethodContextInterface $context Context information about the method call
-		 * @return mixed The result from the method or final around aspect
+		 * @return Response The result from the method or final around aspect
 		 */
-		private function handleAroundAspects(array $aspects, MethodContextInterface $context): mixed {
+		private function handleAroundAspects(array $aspects, MethodContextInterface $context): Response {
 			// Filter to get only around aspects from all resolved aspects
 			$aroundAspects = array_filter($aspects, fn($aspect) => $aspect instanceof AroundAspectInterface);
 			
 			// If no around aspects exist, execute the method directly without interception
 			if (empty($aroundAspects)) {
-				return $this->di->invoke($context->getClass(), $context->getMethodName(), $context->getArguments());
-			}
-			
+				$result = $this->di->invoke($context->getClass(), $context->getMethodName(), $context->getArguments());
+			} else {
 			// Create the base "proceed" function that calls the actual controller method
 			// This is the innermost function in the chain
 			$proceed = fn() => $this->di->invoke($context->getClass(), $context->getMethodName(), $context->getArguments());
@@ -201,6 +200,21 @@
 			}
 			
 			// Execute the complete chain starting from the outermost aspect
-			return $proceed();
+				$result = $proceed();
+			}
+			
+			// Controller methods and around aspects must return a Response.
+			// A non-Response return is a programming error, not a runtime condition.
+			if (!$result instanceof Response) {
+				throw new \RuntimeException(sprintf(
+					'Controller method %s::%s must return a %s instance, got %s.',
+					get_class($context->getClass()),
+					$context->getMethodName(),
+					Response::class,
+					get_debug_type($result)
+				));
+			}
+			
+			return $result;
 		}
 	}
