@@ -68,6 +68,7 @@
 		 * @return mixed The type-cast configuration value or default
 		 */
 		public function getAs(string $key, string $type, mixed $default = null): mixed {
+			// Fetch the value
 			$value = $this->get($key, $default);
 			
 			// Return default immediately if value is null
@@ -77,12 +78,12 @@
 			
 			// Use match expression for type casting based on requested type
 			return match (strtolower($type)) {
-				'string' => (string)$value,
-				'int', 'integer' => (int)$value,
-				'float', 'double' => (float)$value,
+				'string'          => is_scalar($value) ? (string)$value : $default,
+				'int', 'integer'  => is_scalar($value) ? (int)$value    : $default,
+				'float', 'double' => is_scalar($value) ? (float)$value  : $default,
 				'bool', 'boolean' => $this->castToBoolean($value),
-				'array' => $this->castToArray($value),
-				default => $value, // Return original value if type not recognized
+				'array'           => $this->castToArray($value),
+				default           => $value, // Return original value if type not recognized
 			};
 		}
 		
