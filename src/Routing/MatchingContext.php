@@ -8,6 +8,8 @@
 	 * This class encapsulates all the state needed during route matching,
 	 * providing a clean interface for strategies to interact with the
 	 * matching process without exposing internal implementation details.
+	 *
+	 * @phpstan-import-type CompiledSegment from RouteTypes
 	 */
 	class MatchingContext {
 		/** @var string[] */
@@ -42,7 +44,7 @@
 		
 		/**
 		 * Get the current route segment being processed
-		 * @return array<string, mixed>
+		 * @return CompiledSegment
 		 */
 		public function getCurrentRouteSegment(): array {
 			return $this->compiledPattern[$this->routeIndex];

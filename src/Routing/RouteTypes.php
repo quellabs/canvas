@@ -9,15 +9,6 @@
 	 * It exists solely as a PHPStan import target so all routing
 	 * components share one authoritative set of type definitions.
 	 *
-	 * Import pattern (use only the types your file actually references):
-	 *
-	 *   `@phpstan-import-type CompiledSegment from RouteTypes`
-	 *   `@phpstan-import-type RouteDefinition from RouteTypes`
-	 *   `@phpstan-import-type TrieNode from RouteTypes`
-	 *   `@phpstan-import-type RouteIndex from RouteTypes`
-	 *   `@phpstan-import-type MatchedRoute from RouteTypes`
-	 *   `@phpstan-import-type IntermediateRoute from RouteTypes`
-	 *
 	 * Data flow through the pipeline:
 	 *
 	 *   RouteDiscovery        → list<IntermediateRoute>  (no compiled_pattern yet)
@@ -30,10 +21,26 @@
 	 * It is produced by RouteMatcher during pattern matching and only exists
 	 * in the MatchedRoute that is returned to the caller.
 	 *
+	 * @phpstan-type PatternMetadata array{
+	 *     literal_prefix: string,
+	 *     literal_suffix: string,
+	 *     prefix_length: int,
+	 *     suffix_length: int,
+	 *     variable_name: string,
+	 *     min_length: int
+	 * }
+	 *
 	 * @phpstan-type CompiledSegment array{
 	 *     type: string,
-	 *     original?: string,
-	 *     is_multi_wildcard?: bool
+	 *     original: string,
+	 *     variable_name: string|null,
+	 *     pattern: string|null,
+	 *     is_multi_wildcard: bool,
+	 *     compiled_regex: string|null,
+	 *     variable_names: list<string>,
+	 *     literal_prefix: string|null,
+	 *     literal_suffix: string|null,
+	 *     pattern_metadata?: PatternMetadata
 	 * }
 	 *
 	 * @phpstan-type RouteDefinition array{

@@ -55,6 +55,7 @@
 	 * routing scenarios including nested wildcards and type validation.
 	 *
 	 * @phpstan-import-type CompiledSegment from RouteTypes
+	 * @phpstan-import-type PatternMetadata from RouteTypes
 	 * @phpstan-type VarInfo array{
 	 *     name: string,
 	 *     clean_name: string,
@@ -136,32 +137,15 @@
 			
 			// Process each segment and compile it for optimal matching
 			$compiledSegments = [];
-			$totalSegments = count($segments);
 			
-			foreach ($segments as $index => $segment) {
-				// Determine the type of this segment (static, variable, wildcard, etc.)
-				$type = $this->segmentAnalyzer->getSegmentType($segment);
-				
-				// Initialize the compiled segment structure with default values
-				$compiledSegment = $this->initializeCompiledSegment($type, $segment);
-				
-				// Add remaining segments count for optimization
-				$compiledSegment['remaining_segments_count'] = $totalSegments - $index - 1;
-				
-				// Get type-specific modifications and merge them with the base structure
-				$modifications = match ($type) {
-					'variable' => $this->compileVariableSegment($segment),
-					'single_wildcard' => $this->compileSingleWildcardSegment($segment),
-					'multi_wildcard', 'multi_wildcard_var' => $this->compileMultiWildcardSegment($segment),
-					'partial_variable' => $this->compilePartialVariableSegment($segment),
-					default => [] // Static segments don't need modifications
+			foreach ($segments as $segment) {
+				$compiledSegments[] = match ($this->segmentAnalyzer->getSegmentType($segment)) {
+					'variable' => $this->buildVariableSegment($segment),
+					'single_wildcard' => $this->buildSingleWildcardSegment($segment),
+					'multi_wildcard', 'multi_wildcard_var' => $this->buildMultiWildcardSegment($segment),
+					'partial_variable' => $this->buildPartialVariableSegment($segment),
+					default => $this->buildStaticSegment($segment),
 				};
-				
-				// Merge the modifications into the compiled segment
-				$compiledSegment = array_merge($compiledSegment, $modifications);
-				
-				// Add the compiled segment to the result array
-				$compiledSegments[] = $compiledSegment;
 			}
 			
 			return $compiledSegments;
@@ -285,134 +269,158 @@
 		
 		
 		/**
-		 * Initialize a compiled segment structure with default values
-		 * @param string $type The segment type
+		 * Build a CompiledSegment for a static (literal) path segment.
 		 * @param string $segment The original segment text
-		 * @return CompiledSegment Initialized compiled segment array
+		 * @return CompiledSegment
 		 */
-		private function initializeCompiledSegment(string $type, string $segment): array {
+		private function buildStaticSegment(string $segment): array {
 			return [
-				'type'              => $type,       // Segment type for routing logic
-				'original'          => $segment,    // Original segment text for reference
-				'variable_name'     => null,        // Variable name if this captures a value
-				'pattern'           => null,        // Regex pattern for validation
-				'is_multi_wildcard' => false,       // Whether this consumes multiple segments
-				'compiled_regex'    => null,        // Pre-compiled regex for partial variables
-				'variable_names'    => [],          // Array of variable names for partial segments
-				'literal_prefix'    => null,        // For partial variables
-				'literal_suffix'    => null         // For partial variables
+				'type'              => 'static',
+				'original'          => $segment,
+				'variable_name'     => null,
+				'pattern'           => null,
+				'is_multi_wildcard' => false,
+				'compiled_regex'    => null,
+				'variable_names'    => [],
+				'literal_prefix'    => null,
+				'literal_suffix'    => null,
 			];
 		}
 		
 		/**
-		 * Compile variable segments like {id}, {slug}, {id:int}, {path:**}
-		 * Returns only the modifications needed for variable segments
+		 * Build a CompiledSegment for a variable segment like {id}, {slug:alpha}, {path:**}
 		 * @param string $segment The original segment text
-		 * @return array<string, mixed> Array of modifications to apply to the compiled segment
+		 * @return CompiledSegment
 		 */
-		private function compileVariableSegment(string $segment): array {
-			$modifications = [
-				'variable_name' => $this->segmentAnalyzer->extractVariableName($segment)
-			];
+		private function buildVariableSegment(string $segment): array {
+			$variableName = $this->segmentAnalyzer->extractVariableName($segment);
 			
-			// Check if the variable has a type constraint (e.g., {id:int})
+			// Typed variable (e.g. {id:int}, {path:**})
 			if (str_contains($segment, ':')) {
-				// Split variable name and type constraint
 				$parts = explode(':', trim($segment, '{}'), 2);
-				
-				// Convert type constraint to regex pattern
-				$modifications['pattern'] = $this->resolveTypeToRegex($parts[1]);
-				
-				// Check if this is a multi-wildcard type (** or .*)
-				$modifications['is_multi_wildcard'] = in_array($parts[1], ['**', '.*']);
+				$pattern = $this->resolveTypeToRegex($parts[1]);
+				$isMultiWildcard = in_array($parts[1], ['**', '.*'], true);
 			} else {
-				// Default pattern for variables without type constraints
-				// Matches any characters except forward slash
-				$modifications['pattern'] = '[^\/]+';
+				// Untyped variable: matches any single segment
+				$pattern = '[^\\/]+';
+				$isMultiWildcard = false;
 			}
 			
-			return $modifications;
-		}
-		
-		/**
-		 * Compile single wildcard segments (*)
-		 * Returns only the modifications needed for single wildcard segments
-		 * @param string $segment The original segment text
-		 * @return array<string, mixed> Array of modifications to apply to the compiled segment
-		 */
-		private function compileSingleWildcardSegment(string $segment): array {
 			return [
-				'variable_name' => '*'
+				'type'              => 'variable',
+				'original'          => $segment,
+				'variable_name'     => $variableName,
+				'pattern'           => $pattern,
+				'is_multi_wildcard' => $isMultiWildcard,
+				'compiled_regex'    => null,
+				'variable_names'    => [],
+				'literal_prefix'    => null,
+				'literal_suffix'    => null,
 			];
 		}
 		
 		/**
-		 * Compile multi-wildcard segments (**) or named multi-wildcards ({**})
-		 * Returns only the modifications needed for multi-wildcard segments
+		 * Build a CompiledSegment for a single-wildcard segment (*)
 		 * @param string $segment The original segment text
-		 * @return array<string, mixed> Array of modifications to apply to the compiled segment
+		 * @return CompiledSegment
 		 */
-		private function compileMultiWildcardSegment(string $segment): array {
-			$modifications = [
-				'is_multi_wildcard' => true
+		private function buildSingleWildcardSegment(string $segment): array {
+			return [
+				'type'              => 'single_wildcard',
+				'original'          => $segment,
+				'variable_name'     => '*',
+				'pattern'           => null,
+				'is_multi_wildcard' => false,
+				'compiled_regex'    => null,
+				'variable_names'    => [],
+				'literal_prefix'    => null,
+				'literal_suffix'    => null,
 			];
-			
-			if ($segment === '**' || $segment === '{**}') {
-				// Anonymous multi-wildcard
-				$modifications['variable_name'] = '**';
+		}
+		
+		/**
+		 * Build a CompiledSegment for a multi-wildcard segment (** or named {path:**})
+		 * @param string $segment The original segment text
+		 * @return CompiledSegment
+		 */
+		private function buildMultiWildcardSegment(string $segment): array {
+			if (($segment === '**' || $segment === '{**}')) {
+				$variableName = '**';
 			} else {
-				// Named multi-wildcard variable
-				$modifications['variable_name'] = $this->segmentAnalyzer->extractVariableName($segment);
+				$variableName = $this->segmentAnalyzer->extractVariableName($segment);
 			}
 			
-			return $modifications;
+			return [
+				'type'              => 'multi_wildcard',
+				'original'          => $segment,
+				'variable_name'     => $variableName,
+				'pattern'           => null,
+				'is_multi_wildcard' => true,
+				'compiled_regex'    => null,
+				'variable_names'    => [],
+				'literal_prefix'    => null,
+				'literal_suffix'    => null,
+			];
 		}
 		
 		/**
-		 * Compile segments with mixed static text and variables
-		 * e.g., "user-{id}-profile" or "file.{name}.{ext}"
-		 * Returns only the modifications needed for partial variable segments
+		 * Build a CompiledSegment for a partial-variable segment like "user-{id}-profile"
 		 * @param string $segment The original segment text
-		 * @return array<string, mixed> Array of modifications to apply to the compiled segment
+		 * @return CompiledSegment
 		 */
-		private function compilePartialVariableSegment(string $segment): array {
-			$modifications = [];
+		private function buildPartialVariableSegment(string $segment): array {
+			// Start with safe defaults; overwrite fields if pattern compilation succeeds.
+			$compiledRegex = null;
+			$variableNames = [];
+			$literalPrefix = null;
+			$literalSuffix = null;
+			$patternMetadata = null;
+			$isMultiWildcard = false;
+			$variableName = null;
 			
-			// Handle segments with mixed static text and variables
-			// e.g., "user-{id}-profile" or "file.{name}.{ext}"
 			$result = $this->compilePartialSegmentPattern($segment);
 			
-			if ($result) {
-				$modifications['compiled_regex'] = $result['pattern'];
-				$modifications['variable_names'] = $result['variables'];
-				$modifications['literal_prefix'] = $result['literal_prefix'];
-				$modifications['literal_suffix'] = $result['literal_suffix'];
-				
-				// Pre-compile pattern metadata for performance
+			if ($result !== null) {
+				$compiledRegex = $result['pattern'];
+				$variableNames = $result['variables'];
+				$literalPrefix = $result['literal_prefix'];
+				$literalSuffix = $result['literal_suffix'];
 				$patternMetadata = $this->compilePatternMetadata($segment);
 				
-				if ($patternMetadata) {
-					$modifications['pattern_metadata'] = $patternMetadata;
-				}
-				
-				// Check if any variables are wildcards
+				// Promote wildcard flags from the first wildcard variable found, if any
 				foreach ($result['variable_info'] as $varInfo) {
 					if ($varInfo['is_wildcard']) {
-						$modifications['is_multi_wildcard'] = $varInfo['is_multi_wildcard'];
-						$modifications['variable_name'] = $varInfo['clean_name'];
+						$isMultiWildcard = $varInfo['is_multi_wildcard'];
+						$variableName = $varInfo['clean_name'];
 						break;
 					}
 				}
 			}
 			
-			return $modifications;
+			$compiled = [
+				'type'              => 'partial_variable',
+				'original'          => $segment,
+				'variable_name'     => $variableName,
+				'pattern'           => null,
+				'is_multi_wildcard' => $isMultiWildcard,
+				'compiled_regex'    => $compiledRegex,
+				'variable_names'    => $variableNames,
+				'literal_prefix'    => $literalPrefix,
+				'literal_suffix'    => $literalSuffix,
+			];
+			
+			if ($patternMetadata !== null) {
+				$compiled['pattern_metadata'] = $patternMetadata;
+			}
+			
+			return $compiled;
 		}
 		
 		/**
 		 * Parses route segments like "prefix{variable}suffix" and extracts
 		 * structural information needed for efficient matching and validation.
 		 * @param string $segment Route segment to analyze (e.g., "user{id}.json")
-		 * @return array<string, mixed>|null Metadata array or null if the segment has no variables
+		 * @return PatternMetadata|null
 		 */
 		private function compilePatternMetadata(string $segment): ?array {
 			// Match pattern: literal_prefix + {variable} + literal_suffix
