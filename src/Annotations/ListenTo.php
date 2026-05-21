@@ -32,23 +32,20 @@
 		 * @param array<string, mixed> $parameters Parsed annotation parameters, expecting at minimum "value"
 		 */
 		public function __construct(array $parameters) {
-			if (
-				!isset($parameters['value']) ||
-				!is_string($parameters['value'])
-			) {
+			$value = $parameters['value'] ?? null;
+			$priority = $parameters['priority'] ?? null;
+			
+			if (!isset($value) || !is_string($value)) {
 				throw new \InvalidArgumentException("ListenTo needs a valid signal name");
 			}
 			
-			if (
-				isset($parameters['priority']) &&
-				!is_integer($parameters['priority'])
-			) {
+			if (isset($priority) && !is_integer($priority)) {
 				throw new \InvalidArgumentException("Invalid priority for ListenTo. Needs to be an integer");
 			}
 			
 			$this->parameters = $parameters;
-			$this->signalName = $parameters['value'];
-			$this->priority = is_integer($parameters['priority']) ? $parameters['priority'] : 0;
+			$this->signalName = $value;
+			$this->priority = is_integer($priority) ? $priority : 0;
 		}
 		
 		/**

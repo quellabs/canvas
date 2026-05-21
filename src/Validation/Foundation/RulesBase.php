@@ -20,7 +20,7 @@
 		 * RulesBase constructor
 		 * @param string|null $message
 		 */
-		public function __construct(?string $message=null) {
+		public function __construct(?string $message = null) {
 			$this->message = $message;
 		}
 		
@@ -31,8 +31,25 @@
 		 * @return string The error string with variables replaced.
 		 */
 		protected function replaceVariablesInErrorString(string $string, array $variables): string {
-			return preg_replace_callback('/{{\s*([a-zA-Z_]\w*)\s*}}/', function ($matches) use ($variables) {
-				return $variables[$matches[1]] ?? $matches[0];
-			}, $string) ?? $string;
+			return preg_replace_callback(
+				// Match placeholders like {{ field_name }}
+				'/{{\s*([a-zA-Z_]\w*)\s*}}/',
+				function (array $matches) use ($variables): string {
+					// Extract the placeholder key captured by the regex
+					$key = $matches[1];
+					
+					// If no replacement value exists, keep the original placeholder
+					if (!array_key_exists($key, $variables)) {
+						return $matches[0];
+					}
+					
+					// Only scalar values can be safely converted to string
+					// (string, int, float, bool). Otherwise keep the placeholder.
+					return is_scalar($variables[$key])
+						? (string)$variables[$key]
+						: $matches[0];
+				},
+				$string
+			) ?? $string;
 		}
 	}

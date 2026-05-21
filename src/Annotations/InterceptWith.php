@@ -30,24 +30,20 @@
 		 * @param array<string, mixed> $parameters Parsed annotation parameters (value, type, priority, and aspect-specific params)
 		 */
 		public function __construct(array $parameters) {
-			if (
-				!isset($parameters['value']) ||
-				!is_string($parameters['value']) ||
-				!class_exists($parameters['value'])
-			) {
+			$value = $parameters['value'] ?? null;
+			$priority = $parameters['priority'] ?? null;
+			
+			if (!isset($value) || !is_string($value) || !class_exists($value)) {
 				throw new \InvalidArgumentException("InterceptWith needs a valid aspect class");
 			}
 			
-			if (
-				isset($parameters['priority']) &&
-				!is_integer($parameters['priority'])
-			) {
+			if (isset($priority) && !is_integer($priority)) {
 				throw new \InvalidArgumentException("Invalid priority for InterceptWith. Needs to be an integer");
 			}
 			
 			$this->parameters = $parameters;
-			$this->interceptClass = $parameters['value'];
-			$this->priority = is_integer($parameters['priority']) ? $parameters['priority'] : 0;
+			$this->interceptClass = $value;
+			$this->priority = is_integer($priority) ? $priority : 0;
 		}
 		
 		/**

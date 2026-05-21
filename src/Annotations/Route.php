@@ -36,9 +36,9 @@
 		 * @param array<string, mixed> $parameters An associative array of route configuration parameters
 		 */
 		public function __construct(array $parameters) {
-			$value = $parameters['value'];
-			$methods = $parameters['methods'];
-			$fallback = $parameters['fallback'];
+			$value = $parameters['value'] ?? null;
+			$methods = $parameters['methods'] ?? null;
+			$fallback = $parameters['fallback'] ?? null;
 			
 			if (!isset($value) || !is_string($value)) {
 				throw new \InvalidArgumentException("Route needs a valid route string");
@@ -50,7 +50,7 @@
 			
 			$this->parameters = $parameters;
 			$this->routeName = $value;
-			$this->methods = $this->parseHttpMethods($parameters['methods'] ?? null);
+			$this->methods = $this->parseHttpMethods($methods);
 			$this->fallback = $fallback ?? null;
 		}
 		

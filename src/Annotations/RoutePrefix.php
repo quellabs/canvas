@@ -31,15 +31,14 @@
 		 * @param array<string, mixed> $parameters An associative array of route configuration parameters
 		 */
 		public function __construct(array $parameters) {
-			if (
-				!isset($parameters['value']) ||
-				!is_string($parameters['value'])
-			) {
+			$value = $parameters['value'] ?? null;
+			
+			if (!isset($value) || !is_string($value)) {
 				throw new \InvalidArgumentException("RoutePrefix needs a prefix");
 			}
 			
 			$this->parameters = $parameters;
-			$this->routePrefix = $parameters['value'];
+			$this->routePrefix = $value;
 		}
 		
 		/**

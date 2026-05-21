@@ -9,7 +9,7 @@
 	 * constructor or method parameter.
 	 *
 	 * Usage:
-	 *   @WithContext(parameter="templateEngine", context="blade")
+	 * @WithContext(parameter="templateEngine", context="blade")
 	 *   public function render(TemplateEngineInterface $templateEngine): string
 	 *
 	 * This causes $templateEngine to be resolved via $container->for('blade')
@@ -34,23 +34,20 @@
 		 * @param array<string, mixed> $parameters
 		 */
 		public function __construct(array $parameters) {
-			if (
-				!isset($parameters['parameter']) ||
-				!is_string($parameters['parameter'])
-			) {
+			$parameter = $parameters['parameter'] ?? null;
+			$context = $parameters['context'] ?? null;
+			
+			if (!isset($parameter) || !is_string($parameter)) {
 				throw new \InvalidArgumentException("WithContext needs a parameter to add context to");
 			}
 			
-			if (
-				!isset($parameters['context']) ||
-				!is_string($parameters['context'])
-			) {
+			if (!isset($context) || !is_string($context)) {
 				throw new \InvalidArgumentException("WithContext needs context");
 			}
 			
 			$this->parameters = $parameters;
-			$this->contextParameter = $parameters['parameter'];
-			$this->context = $parameters['context'];
+			$this->contextParameter = $parameter;
+			$this->context = $context;
 		}
 		
 		/**
