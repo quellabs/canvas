@@ -19,12 +19,35 @@
 		 */
 		private array $parameters;
 		
+		/** @var string The aspect class to use for this interception */
+		private string $interceptClass;
+		
+		/** @var int Priority */
+		private int $priority;
+		
 		/**
 		 * Constructs the annotation with parameters parsed from the docblock
 		 * @param array<string, mixed> $parameters Parsed annotation parameters (value, type, priority, and aspect-specific params)
 		 */
 		public function __construct(array $parameters) {
+			if (
+				!isset($parameters['value']) ||
+				!is_string($parameters['value']) ||
+				!class_exists($parameters['value'])
+			) {
+				throw new \InvalidArgumentException("InterceptWith needs a valid aspect class");
+			}
+			
+			if (
+				isset($parameters['priority']) &&
+				!is_integer($parameters['priority'])
+			) {
+				throw new \InvalidArgumentException("Invalid priority for InterceptWith. Needs to be an integer");
+			}
+			
 			$this->parameters = $parameters;
+			$this->interceptClass = $parameters['value'];
+			$this->priority = is_integer($parameters['priority']) ? $parameters['priority'] : 0;
 		}
 		
 		/**
@@ -40,7 +63,7 @@
 		 * @return string The aspect class name from the 'value' parameter (e.g., "App\\Aspects\\CacheAspect")
 		 */
 		public function getInterceptClass(): string {
-			return $this->parameters['value'];
+			return $this->interceptClass;
 		}
 		
 		/**
@@ -51,10 +74,6 @@
 		 * @return int Priority value (defaults to 0 if not specified or invalid)
 		 */
 		public function getPriority(): int {
-			if (!isset($this->parameters['priority']) || !is_numeric($this->parameters['priority'])) {
-				return 0;
-			}
-			
-			return (int)$this->parameters['priority'];
+			return $this->priority;
 		}
 	}
