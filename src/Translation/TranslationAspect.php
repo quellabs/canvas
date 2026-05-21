@@ -273,40 +273,47 @@
 		 * @return list<string> Array of available locale codes
 		 */
 		private function getAvailableLocalesForDomain(string $domain): array {
-			// Check static cache first
+			// Return cached result if available - this is a static cache shared across all
+			// instances so the filesystem is only scanned once per domain per request lifecycle
 			if (isset(self::$availableLocalesByDomain[$domain])) {
 				return self::$availableLocalesByDomain[$domain];
 			}
 			
+			// Determine translations directory
 			$translationsPath = ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . 'translations';
 			
+			// No translations directory at all - cache empty result to avoid repeated stat calls
 			if (!is_dir($translationsPath)) {
 				self::$availableLocalesByDomain[$domain] = [];
 				return [];
 			}
 			
+			// Scan directory for locales and store them in array
 			$availableLocales = [];
 			$localeDirectories = scandir($translationsPath);
 			
 			foreach ($localeDirectories as $localeDir) {
+				// Skip filesystem navigation entries
 				if ($localeDir === '.' || $localeDir === '..') {
 					continue;
 				}
 				
+				// Determine complete path
 				$localePath = $translationsPath . DIRECTORY_SEPARATOR . $localeDir;
 				
 				// Skip symlinks and only process real directories
 				if (is_dir($localePath) && !is_link($localePath)) {
 					$translationFile = $localePath . DIRECTORY_SEPARATOR . $domain . '.php';
 					
+					// Only include locales that both have a translation file for this domain
+					// and pass the security check (prevents path traversal via crafted directory names)
 					if (file_exists($translationFile) && $this->isValidLocale($localeDir)) {
 						$availableLocales[] = $localeDir;
 					}
 				}
 			}
 			
-			self::$availableLocalesByDomain[$domain] = $availableLocales;
-			return $availableLocales;
+			return self::$availableLocalesByDomain[$domain] = $availableLocales;
 		}
 		
 		/**
@@ -332,13 +339,17 @@
 		 * @return string|null Locale code or null if no valid locale found
 		 */
 		private function getPreferredLocaleFromFilesystem(Request $request, string $domain): ?string {
+			// Scan filesystem to know which locales actually exist for this domain;
+			// we can only offer the browser what we have translation files for
 			$availableLocales = $this->getAvailableLocalesForDomain($domain);
 			
+			// No translations exist for this domain - nothing to match against
 			if (empty($availableLocales)) {
 				return null;
 			}
 			
-			// Use Symfony's getPreferredLanguage to match against Accept-Language header
+			// Let Symfony parse the Accept-Language header and pick the best match
+			// from the locales we actually have on disk (returns null if no match)
 			return $request->getPreferredLanguage($availableLocales);
 		}
 		
