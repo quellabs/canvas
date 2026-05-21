@@ -318,7 +318,6 @@
 		
 		/**
 		 * Check if a translation file exists for the given domain and locale
-		 *
 		 * @param string $domain Translation domain
 		 * @param string $locale Locale code
 		 * @return bool True if translation file exists, false otherwise
