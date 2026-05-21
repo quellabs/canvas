@@ -379,6 +379,8 @@
 			$rawTokens = $bucket['tokens'];
 			$bucketTokens = is_float($rawTokens) ? $rawTokens : (is_int($rawTokens) ? (float)$rawTokens : (float)$this->limit);
 			$rawLastRefill = $bucket['last_refill'];
+			
+			/** @noinspection PhpConditionAlreadyCheckedInspection */
 			$bucketLastRefill = is_int($rawLastRefill) ? $rawLastRefill : $currentTime;
 			
 			// Calculate how many tokens to add based on time elapsed since last refill
