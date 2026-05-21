@@ -9,7 +9,7 @@
 		
 		/**
 		 * Returns an array of sanitization rules.
-		 * @return array<string, mixed>
+		 * @return array<string, array<SanitizationRuleInterface>>
 		 */
 		public function getRules(): array;
 	}

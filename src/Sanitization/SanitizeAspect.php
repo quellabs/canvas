@@ -126,6 +126,7 @@
 			foreach ($data as $key => $value) {
 				// Recursively sanitize nested arrays
 				if (is_array($value)) {
+					/** @var array<string, mixed> $value */
 					$data[$key] = $this->applySanitization($value, $rules);
 					continue;
 				}
