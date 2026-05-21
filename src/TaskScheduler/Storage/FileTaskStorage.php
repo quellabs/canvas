@@ -5,6 +5,15 @@
 	use DateTime;
 	use RuntimeException;
 	
+	/**
+	 * @phpstan-type TaskData array{
+	 *      task_name: string,
+	 *      started_at: string,
+	 *      timestamp: int,
+	 *      pid: int,
+	 *      hostname: string|false
+	 *  }
+	 */
 	class FileTaskStorage implements TaskStorageInterface {
 		
 		private string $storageDirectory;
@@ -281,7 +290,7 @@
 		
 		/**
 		 * Check if task is stale based on process and time
-		 * @param array<string, mixed> $taskData
+		 * @param TaskData $taskData
 		 * @return bool
 		 */
 		private function isTaskStale(array $taskData): bool {
@@ -318,7 +327,7 @@
 		/**
 		 * Read and parse task file
 		 * @param string $taskFile
-		 * @return array<string, mixed>|null
+		 * @return TaskData|null
 		 */
 		private function readTaskFile(string $taskFile): ?array {
 			// Read the file contents, suppressing warnings if file doesn't exist or can't be read
@@ -335,11 +344,12 @@
 			
 			// Check if JSON parsing was successful
 			// If there was a JSON parsing error, the file is corrupted
-			if (json_last_error() !== JSON_ERROR_NONE) {
+			if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
 				return null;
 			}
 			
 			// Return the successfully parsed task data
+			/** @var TaskData $data */
 			return $data;
 		}
 		
@@ -355,6 +365,11 @@
 			return $this->storageDirectory . DIRECTORY_SEPARATOR . $this->sanitizeTaskName($taskName) . '.task';
 		}
 		
+		/**
+		 * Get file path for lock file
+		 * @param string $taskName
+		 * @return string
+		 */
 		private function getLockFilePath(string $taskName): string {
 			// Build the full path for the lock file
 			// Uses the same sanitization as task files to ensure consistency
