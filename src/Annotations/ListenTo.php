@@ -8,8 +8,8 @@
 	 * Declares that an annotated method should be connected to a named signal.
 	 *
 	 * Usage on a signal provider method:
-	 *   @ListenTo("user.created")
-	 *   @ListenTo("user.created", priority=10)
+	 * @ListenTo("user.created")
+	 * @ListenTo("user.created", priority=10)
 	 *
 	 * The annotation reader passes all annotation parameters as a key-value array.
 	 * "value" holds the signal name (the unnamed first argument by convention),
@@ -22,11 +22,33 @@
 		 */
 		protected array $parameters;
 		
+		/** @var string The name of the signal */
+		private string $signalName;
+		
+		/** @var int Priority */
+		private int $priority;
+		
 		/**
 		 * @param array<string, mixed> $parameters Parsed annotation parameters, expecting at minimum "value"
 		 */
 		public function __construct(array $parameters) {
+			if (
+				!isset($parameters['value']) ||
+				!is_string($parameters['value'])
+			) {
+				throw new \InvalidArgumentException("ListenTo needs a valid signal name");
+			}
+			
+			if (
+				isset($parameters['priority']) &&
+				!is_integer($parameters['priority'])
+			) {
+				throw new \InvalidArgumentException("Invalid priority for ListenTo. Needs to be an integer");
+			}
+			
 			$this->parameters = $parameters;
+			$this->signalName = $parameters['value'];
+			$this->priority = is_integer($parameters['priority']) ? $parameters['priority'] : 0;
 		}
 		
 		/**
@@ -43,7 +65,7 @@
 		 * @return string
 		 */
 		public function getName(): string {
-			return $this->parameters["value"];
+			return $this->signalName;
 		}
 		
 		/**
@@ -52,6 +74,6 @@
 		 * @return int
 		 */
 		public function getPriority(): int {
-			return $this->parameters["priority"] ?? 0;
+			return $this->priority;
 		}
 	}
