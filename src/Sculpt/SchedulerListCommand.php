@@ -35,7 +35,7 @@
 		 * Executes the scheduled task lister
 		 *
 		 * This method performs the main functionality of the command:
-		 * 1. Initializes the project discovery service
+		 * 1. Loads application configuration to resolve the tasks directory
 		 * 2. Creates a task scheduler with file-based storage
 		 * 3. Retrieves and displays all scheduled tasks in a sorted table
 		 *
@@ -43,10 +43,23 @@
 		 * @return int Exit code (0 for success, non-zero for failure)
 		 */
 		public function execute(ConfigurationManager $config): int {
+			$projectRoot = ComposerUtils::getProjectRoot();
+			
+			// Load app config to resolve the tasks directory path
+			if (file_exists($projectRoot . '/config/app.php')) {
+				$appConfig = require $projectRoot . '/config/app.php';
+			} else {
+				$appConfig = [];
+			}
+			
+			// Load path from config
+			$tasksPath = $appConfig['task_scheduler_directory'] ?? $projectRoot . '/src/Tasks';
+			
 			// Create a task scheduler instance with file-based storage
 			// The storage directory is set to {project_root}/storage/task-scheduler
 			$scheduler = new TaskScheduler(
-				new FileJobStorage(ComposerUtils::getProjectRoot() . "/storage/task-scheduler")
+				new FileJobStorage($projectRoot . "/storage/task-scheduler"),
+				$tasksPath
 			);
 			
 			// Build the task list with sorting data

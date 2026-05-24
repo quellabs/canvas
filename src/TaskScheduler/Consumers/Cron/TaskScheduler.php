@@ -5,6 +5,8 @@
 	use Cron\CronExpression;
 	use Psr\Log\LoggerInterface;
 	use Psr\Log\NullLogger;
+	use Quellabs\Support\ComposerUtils;
+	use Quellabs\Discover\Scanner\DirectoryScanner;
 	use Quellabs\Canvas\TaskScheduler\Runner\TaskRunnerFactory;
 	use Quellabs\Canvas\TaskScheduler\Storage\JobStorageInterface;
 	use Quellabs\Contracts\TaskScheduler\TaskTimeoutException;
@@ -15,6 +17,7 @@
 		
 		private JobStorageInterface $storage;
 		private LoggerInterface $logger;
+		private string $tasksPath;
 		
 		/**
 		 * @var array<TaskInterface> List of tasks to perform
@@ -24,14 +27,17 @@
 		/**
 		 * TaskScheduler constructor
 		 * @param JobStorageInterface $storage
+		 * @param string $tasksPath Path to scan for local task classes
 		 * @param LoggerInterface|null $logger
 		 */
 		public function __construct(
 			JobStorageInterface $storage,
+			string              $tasksPath,
 			?LoggerInterface    $logger = null
 		) {
-			$this->storage = $storage;
-			$this->logger  = $logger ?? new NullLogger();
+			$this->storage   = $storage;
+			$this->tasksPath = $tasksPath;
+			$this->logger    = $logger ?? new NullLogger();
 			
 			// Scan for tasks
 			$this->scanForTasks();
@@ -159,14 +165,19 @@
 		}
 		
 		/**
-		 * Scan for available tasks via Composer metadata
+		 * Scan for available tasks via Composer metadata and local directory
 		 * @return void
 		 */
 		private function scanForTasks(): void {
-			// Add a Composer-based scanner to look for task implementations
-			// This scans for classes in the "task-scheduler" section of composer.json
+			// Discover tasks registered under the "task-scheduler" Composer family
 			$discover = new Discover();
 			$discover->addScanner(new ComposerScanner("task-scheduler", "discover", $this->logger));
+			
+			// If a local tasks directory exists, scan that too
+			if (is_dir($this->tasksPath)) {
+				$discover->addScanner(new DirectoryScanner([$this->tasksPath]));
+			}
+			
 			$discover->discover();
 			
 			// Build a list of tasks; filter out everything that does not implement TaskInterface
