@@ -3,8 +3,8 @@
 	namespace Quellabs\Canvas\Sculpt;
 	
 	use Quellabs\Sculpt\ConfigurationManager;
-	use Quellabs\Canvas\TaskScheduler\TaskScheduler;
-	use Quellabs\Canvas\TaskScheduler\Storage\FileTaskStorage;
+	use Quellabs\Canvas\TaskScheduler\Consumers\Cron\TaskScheduler;
+	use Quellabs\Canvas\TaskScheduler\Storage\FileJobStorage;
 	use Quellabs\Support\ComposerUtils;
 	
 	/**
@@ -44,7 +44,7 @@
 			// Create a task scheduler instance with file-based storage
 			// The storage directory is set to {project_root}/storage/task-scheduler
 			$scheduler = new TaskScheduler(
-				new FileTaskStorage(ComposerUtils::getProjectRoot() . "/storage/task-scheduler")
+				new FileJobStorage(ComposerUtils::getProjectRoot() . "/storage/task-scheduler")
 			);
 			
 			// Execute all discovered scheduled tasks

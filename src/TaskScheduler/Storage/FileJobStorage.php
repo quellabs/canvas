@@ -6,7 +6,7 @@
 	use RuntimeException;
 	
 	/**
-	 * @phpstan-type TaskData array{
+	 * @phpstan-type JobData array{
 	 *      task_name: string,
 	 *      started_at: string,
 	 *      timestamp: int,
@@ -14,7 +14,7 @@
 	 *      hostname: string|false
 	 *  }
 	 */
-	class FileTaskStorage implements TaskStorageInterface {
+	class FileJobStorage implements JobStorageInterface {
 		
 		private string $storageDirectory;
 		private int $lockTimeout;
@@ -31,7 +31,7 @@
 		private const float JITTER_FACTOR = 0.1;       // Add ±10% jitter
 		
 		/**
-		 * FileTaskStorage constructor
+		 * FileJobStorage constructor
 		 * @param string|null $storageDirectory
 		 * @param int $lockTimeout
 		 * @param int $maxLockWaitTime
@@ -42,8 +42,8 @@
 			int     $maxLockWaitTime = 10
 		) {
 			$this->storageDirectory = $storageDirectory ?? sys_get_temp_dir() . '/task_scheduler';
-			$this->lockTimeout = $lockTimeout;
-			$this->maxLockWaitTime = $maxLockWaitTime;
+			$this->lockTimeout      = $lockTimeout;
+			$this->maxLockWaitTime  = $maxLockWaitTime;
 			
 			// Ensure the storage directory exists
 			$this->ensureStorage();
@@ -177,7 +177,7 @@
 				$filePath = $this->storageDirectory . '/' . $filename;
 				
 				// Handle task files (.task extension)
-				if (str_ends_with($filename, '.task')) {
+				if (str_ends_with($filename, '.job')) {
 					$this->cleanupTaskFileIfStale($filePath);
 					continue;
 				}
@@ -235,9 +235,9 @@
 		private function writeTaskFile(string $taskFile, string $taskName, DateTime $dateTime): void {
 			// Create a data structure with task information
 			$taskData = [
-				'task_name'  => $taskName,                                // Human-readable task name
+				'job_name'   => $taskName,                                // Human-readable task name
 				'started_at' => $dateTime->format('Y-m-d H:i:s'),  // Formatted timestamp for readability
-				'timestamp'  => $dateTime->getTimestamp(      ),          // Unix timestamp for calculations
+				'timestamp'  => $dateTime->getTimestamp(),          // Unix timestamp for calculations
 				'pid'        => $this->getCurrentPid(),                   // Process ID for debugging/identification
 				'hostname'   => gethostname()                             // Server hostname for distributed systems
 			];
@@ -290,7 +290,7 @@
 		
 		/**
 		 * Check if task is stale based on process and time
-		 * @param TaskData $taskData
+		 * @param JobData $taskData
 		 * @return bool
 		 */
 		private function isTaskStale(array $taskData): bool {
@@ -310,8 +310,8 @@
 			if (isset($taskData['timestamp'])) {
 				// Add a 5-minute buffer to the lock timeout to account for processing delays
 				// This prevents premature cleanup of tasks that are still legitimately running
-				$currentTime = time();
-				$taskStartTime = (int)$taskData['timestamp'];
+				$currentTime       = time();
+				$taskStartTime     = (int)$taskData['timestamp'];
 				$timeoutWithBuffer = $this->lockTimeout + 300; // 5 minute buffer
 				
 				// If the task has been running longer than the timeout + buffer, it's stale
@@ -349,7 +349,7 @@
 			}
 			
 			// Return the successfully parsed task data
-			/** @var TaskData $data */
+			/** @var JobData $data */
 			return $data;
 		}
 		
@@ -362,7 +362,7 @@
 			// Build the full path for the task file
 			// Uses sanitized task name to prevent directory traversal attacks
 			// and ensures valid filenames across different operating systems
-			return $this->storageDirectory . DIRECTORY_SEPARATOR . $this->sanitizeTaskName($taskName) . '.task';
+			return $this->storageDirectory . DIRECTORY_SEPARATOR . $this->sanitizeTaskName($taskName) . '.job';
 		}
 		
 		/**
@@ -410,9 +410,9 @@
 		 */
 		private function acquireLock(string $lockFile): void {
 			// Track timing and backoff state
-			$startTime = microtime(true);
+			$startTime        = microtime(true);
 			$currentBackoffMs = self::INITIAL_BACKOFF_MS;
-			$attempt = 0;
+			$attempt          = 0;
 			
 			while (true) {
 				$attempt++;
@@ -443,7 +443,7 @@
 				
 				// Apply exponential backoff with jitter to reduce thundering herd
 				$jitterRange = $currentBackoffMs * self::JITTER_FACTOR;
-				$jitter = mt_rand((int)(-$jitterRange * 1000), (int)($jitterRange * 1000)) / 1000;
+				$jitter      = mt_rand((int)(-$jitterRange * 1000), (int)($jitterRange * 1000)) / 1000;
 				$sleepTimeMs = max(1, (int)($currentBackoffMs + $jitter));
 				
 				// Sleep for the calculated backoff time (convert ms to microseconds)
@@ -607,7 +607,7 @@
 			
 			// Verify the timestamp roughly matches when we acquired it
 			$acquiredTime = $this->acquiredLocks[$lockFile]['time'];
-			$lockTime = $lockData['time'];
+			$lockTime     = $lockData['time'];
 			
 			// Allow some tolerance for clock skew (5 seconds)
 			if (abs($lockTime - $acquiredTime) > 5) {
@@ -641,8 +641,8 @@
 			
 			// Calculate if the task has exceeded its timeout
 			// Add 5-minute buffer to prevent premature cleanup of legitimate tasks
-			$currentTime = time();
-			$taskStartTime = (int)$taskData['timestamp'];
+			$currentTime       = time();
+			$taskStartTime     = (int)$taskData['timestamp'];
 			$timeoutWithBuffer = $this->lockTimeout + 300;
 			
 			// If the task has been running longer than timeout + buffer, remove it

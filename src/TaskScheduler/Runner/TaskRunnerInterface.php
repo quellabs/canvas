@@ -2,21 +2,22 @@
 	
 	namespace Quellabs\Canvas\TaskScheduler\Runner;
 	
+	use Quellabs\Canvas\TaskScheduler\JobInterface;
 	use Quellabs\Contracts\TaskScheduler\TaskException;
-	use Quellabs\Contracts\TaskScheduler\TaskInterface;
 	use Quellabs\Contracts\TaskScheduler\TaskTimeoutException;
 	
 	/**
-	 * Interface for timeout strategy implementations.
+	 * Interface for job runner strategy implementations.
+	 * Runners are responsible for executing a job with optional timeout enforcement.
 	 */
 	interface TaskRunnerInterface {
 		
 		/**
-		 * Executes a task with a specified timeout limit.
-		 * @param TaskInterface $task The task to execute
-		 * @throws TaskTimeoutException If the task exceeds the specified timeout
-		 * @throws TaskException If the task fails to execute or encounters an error
+		 * Execute a job, optionally enforcing a timeout
+		 * @param JobInterface $job The job to execute
 		 * @return void
+		 * @throws TaskException If the job fails to execute or encounters an error
+		 * @throws TaskTimeoutException If the job exceeds the specified timeout
 		 */
-		public function run(TaskInterface $task): void;
+		public function run(JobInterface $job): void;
 	}
