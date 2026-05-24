@@ -327,7 +327,7 @@
 		/**
 		 * Read and parse task file
 		 * @param string $taskFile
-		 * @return TaskData|null
+		 * @return JobData|null
 		 */
 		private function readTaskFile(string $taskFile): ?array {
 			// Read the file contents, suppressing warnings if file doesn't exist or can't be read

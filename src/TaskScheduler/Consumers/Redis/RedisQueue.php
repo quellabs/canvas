@@ -33,14 +33,14 @@
 			string $queueName = 'default',
 			string $prefix = 'canvas'
 		) {
-			$this->redis = $redis;
+			$this->redis     = $redis;
 			$this->queueName = $queueName;
-			$this->prefix = $prefix;
+			$this->prefix    = $prefix;
 		}
 		
 		/**
 		 * Push a job onto the queue
-		 * @param JobInterface $job
+		 * @param QueueableInterface $job
 		 * @return void
 		 */
 		public function push(QueueableInterface $job): void {

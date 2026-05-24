@@ -76,13 +76,13 @@
 			?string $id = null,
 			?int    $queuedAt = null
 		) {
-			$this->class = $class;
-			$this->payload = $payload;
-			$this->attempts = $attempts;
+			$this->class      = $class;
+			$this->payload    = $payload;
+			$this->attempts   = $attempts;
 			$this->maxRetries = $maxRetries;
-			$this->timeout = $timeout;
-			$this->id = $id ?? $this->generateId();
-			$this->queuedAt = $queuedAt ?? time();
+			$this->timeout    = $timeout;
+			$this->id         = $id ?? $this->generateId();
+			$this->queuedAt   = $queuedAt ?? time();
 		}
 		
 		/**
@@ -123,8 +123,15 @@
 				throw new \InvalidArgumentException("Job class '{$data['class']}' does not exist");
 			}
 			
+			if (!is_a($data['class'], JobInterface::class, true)) {
+				throw new \InvalidArgumentException("Class '{$data['class']}' does not implement JobInterface");
+			}
+			
+			/** @var class-string<JobInterface> $class */
+			$class = $data['class'];
+			
 			return new self(
-				class: $data['class'],
+				class: $class,
 				payload: $data['payload'],
 				attempts: (int)$data['attempts'],
 				maxRetries: (int)$data['max_retries'],
