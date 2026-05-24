@@ -2,6 +2,7 @@
 	
 	namespace Quellabs\Canvas\Sculpt;
 	
+	use Quellabs\Canvas\Kernel;
 	use Quellabs\Canvas\TaskScheduler\Consumers\Cron\CronConsumer;
 	use Quellabs\Contracts\TaskScheduler\ConsumerInterface;
 	use Quellabs\Sculpt\ConfigurationManager;
@@ -42,11 +43,12 @@
 		 * @return int Exit code
 		 */
 		public function execute(ConfigurationManager $config): int {
+			$kernel = new Kernel();
 			$consumerName = $config->getAsString('consumer', 'cron');
 			
 			// Cron is the built-in default — instantiate directly without discovery
 			if ($consumerName === 'cron') {
-				$consumer = new CronConsumer();
+				$consumer = new CronConsumer($kernel);
 				$consumer->run();
 				return 0;
 			}
@@ -56,16 +58,18 @@
 			$discover->addScanner(new ComposerScanner('task-scheduler'));
 			$discover->discover();
 			
-			foreach ($discover->getProviders() as $provider) {
-				if (!$provider instanceof ConsumerInterface) {
+			foreach ($discover->getDefinitions() as $definition) {
+				if (!is_a($definition->className, ConsumerInterface::class, true)) {
 					continue;
 				}
 				
-				if ($provider::getName() !== $consumerName) {
+				if ($definition->className::getName() !== $consumerName) {
 					continue;
 				}
 				
-				$provider->run();
+				/** @var ConsumerInterface $consumer */
+				$consumer = $kernel->getDependencyInjector()->make($definition->className);
+				$consumer->run();
 				return 0;
 			}
 			

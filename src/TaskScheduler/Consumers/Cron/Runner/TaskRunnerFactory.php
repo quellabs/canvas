@@ -1,6 +1,6 @@
 <?php
 	
-	namespace Quellabs\Canvas\TaskScheduler\Runner;
+	namespace Quellabs\Canvas\TaskScheduler\Consumers\Cron\Runner;
 	
 	use Psr\Log\LoggerInterface;
 	

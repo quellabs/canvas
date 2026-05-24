@@ -1,6 +1,6 @@
 <?php
 	
-	namespace Quellabs\Canvas\TaskScheduler\Runner;
+	namespace Quellabs\Canvas\TaskScheduler\Consumers\Cron\Runner;
 	
 	use Psr\Log\LoggerInterface;
 	use Quellabs\Canvas\TaskScheduler\JobInterface;
@@ -90,7 +90,7 @@
 	    exit(0); // Success exit code
 	} catch (Exception \$e) {
 	    // Write error to stderr and exit with failure code
-	    fwrite(STDERR, \$e->getMessage() . PHP_EOL);
+	    fwrite(STDERR, $e->getMessage() . PHP_EOL);
 	    exit(1);
 	}
 PHP;
@@ -110,7 +110,7 @@ PHP;
 		 */
 		private function startJobProcess(string $script, string $jobClass): array {
 			// Build the command to execute the script
-			$command = escapeshellcmd(PHP_BINARY) . ' ' . escapeshellarg($script);
+			$command = escapeshellcmd(PHP_BINARY) . ' StrategyTimeout.php' . escapeshellarg($script);
 			
 			// Define pipe descriptors for stdin, stdout, and stderr
 			$descriptors = [

@@ -13,11 +13,19 @@
 	 * by Sculpt when --consumer=cron is specified (or by default).
 	 */
 	class CronConsumer implements ConsumerInterface {
-		
+
+		/** @var Kernel Canvas kernel */
+		private Kernel $kernel;
+
 		/**
+		 * CronConsumer constructor
 		 * @var array<string, mixed>
 		 */
 		private array $config = [];
+		
+		public function __construct(Kernel $kernel) {
+			$this->kernel = $kernel;
+		}
 		
 		/**
 		 * Returns the identifier used to select this consumer via CLI
@@ -61,9 +69,8 @@
 		 * @return void
 		 */
 		public function run(): void {
-			$kernel = new Kernel();
-			$container = $kernel->getDependencyInjector();
-			$tasksPath = $kernel->getConfiguration()->get('task_scheduler_directory', ComposerUtils::getProjectRoot() . '/src/Tasks');
+			$container = $this->kernel->getDependencyInjector();
+			$tasksPath = $this->kernel->getConfiguration()->get('task_scheduler_directory', ComposerUtils::getProjectRoot() . '/src/Tasks');
 			$fileJobStorage = new FileJobStorage(ComposerUtils::getProjectRoot() . '/storage/task-scheduler');
 			
 			$scheduler = new TaskScheduler($fileJobStorage, $container, $tasksPath);

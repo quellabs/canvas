@@ -8,10 +8,10 @@
 	use Quellabs\Discover\Discover;
 	use Quellabs\DependencyInjection\Container;
 	use Quellabs\Discover\Scanner\DirectoryScanner;
-	use Quellabs\Canvas\TaskScheduler\Runner\TaskRunnerFactory;
 	use Quellabs\Contracts\TaskScheduler\TaskTimeoutException;
 	use Quellabs\Discover\Scanner\ComposerScanner;
 	use Quellabs\Canvas\TaskScheduler\Storage\JobStorageInterface;
+	use Quellabs\Canvas\TaskScheduler\Consumers\Cron\Runner\TaskRunnerFactory;
 	
 	class TaskScheduler {
 		
