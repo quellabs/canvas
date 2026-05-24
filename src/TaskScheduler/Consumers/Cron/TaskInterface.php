@@ -3,12 +3,14 @@
 	namespace Quellabs\Canvas\TaskScheduler\Consumers\Cron;
 	
 	use Quellabs\Canvas\TaskScheduler\JobInterface;
+	use Quellabs\Contracts\Discovery\ProviderInterface;
 	
 	/**
 	 * Interface for cron-scheduled tasks.
-	 * Extends JobInterface with cron-specific metadata: schedule, name, and enabled state.
+	 * Extends JobInterface with cron-specific metadata: schedule, name, description, and enabled state.
+	 * Extends ProviderInterface so tasks are discoverable by both ComposerScanner and DirectoryScanner.
 	 */
-	interface TaskInterface extends JobInterface {
+	interface TaskInterface extends JobInterface, ProviderInterface {
 		
 		/**
 		 * Returns the cron expression defining when this task runs (e.g. "0 * * * *")

@@ -63,20 +63,22 @@
 		public function run(): void {
 			$projectRoot = ComposerUtils::getProjectRoot();
 			
-			$appConfig = file_exists($projectRoot . '/config/app.php')
-				? require $projectRoot . '/config/app.php'
-				: [];
+			if (file_exists($projectRoot . '/config/app.php')) {
+				$appConfig = require $projectRoot . '/config/app.php';
+			} else {
+				$appConfig = [];
+			}
 			
-			$queueName   = $appConfig['queue_name']    ?? 'default';
+			$queueName   = $appConfig['queue_name'] ?? 'default';
 			$maxJobs     = $appConfig['queue_max_jobs'] ?? 500;
-			$timeout     = $appConfig['queue_timeout']  ?? 5;
-			$prefix      = $appConfig['queue_prefix']   ?? 'canvas';
-			$redisConfig = $appConfig['redis']          ?? [];
+			$timeout     = $appConfig['queue_timeout'] ?? 5;
+			$prefix      = $appConfig['queue_prefix'] ?? 'canvas';
+			$redisConfig = $appConfig['redis'] ?? [];
 			
 			$redis = new Client([
 				'scheme' => $redisConfig['scheme'] ?? 'tcp',
-				'host'   => $redisConfig['host']   ?? '127.0.0.1',
-				'port'   => $redisConfig['port']   ?? 6379,
+				'host'   => $redisConfig['host'] ?? '127.0.0.1',
+				'port'   => $redisConfig['port'] ?? 6379,
 			]);
 			
 			$kernel    = new Kernel($appConfig);

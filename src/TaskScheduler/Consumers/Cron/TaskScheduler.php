@@ -3,19 +3,22 @@
 	namespace Quellabs\Canvas\TaskScheduler\Consumers\Cron;
 	
 	use Cron\CronExpression;
+	use Quellabs\Canvas\Kernel;
 	use Psr\Log\LoggerInterface;
 	use Psr\Log\NullLogger;
+	use Quellabs\Support\ComposerUtils;
 	use Quellabs\Discover\Scanner\DirectoryScanner;
+	use Quellabs\Canvas\Discover\DependencyAwareDiscover;
+	use Quellabs\Canvas\TaskScheduler\Storage\FileJobStorage;
 	use Quellabs\Canvas\TaskScheduler\Runner\TaskRunnerFactory;
-	use Quellabs\Canvas\TaskScheduler\Storage\JobStorageInterface;
 	use Quellabs\Contracts\TaskScheduler\TaskTimeoutException;
-	use Quellabs\Discover\Discover;
 	use Quellabs\Discover\Scanner\ComposerScanner;
 	
 	class TaskScheduler {
 		
-		private JobStorageInterface $storage;
+		private Kernel $kernel;
 		private LoggerInterface $logger;
+		private FileJobStorage $storage;
 		private string $tasksPath;
 		
 		/**
@@ -25,18 +28,13 @@
 		
 		/**
 		 * TaskScheduler constructor
-		 * @param JobStorageInterface $storage
-		 * @param string $tasksPath Path to scan for local task classes
 		 * @param LoggerInterface|null $logger
 		 */
-		public function __construct(
-			JobStorageInterface $storage,
-			string              $tasksPath,
-			?LoggerInterface    $logger = null
-		) {
-			$this->storage   = $storage;
-			$this->tasksPath = $tasksPath;
+		public function __construct(?LoggerInterface $logger = null) {
+			$this->kernel    = new Kernel();
+			$this->storage   = new FileJobStorage(ComposerUtils::getProjectRoot() . '/storage/task-scheduler');
 			$this->logger    = $logger ?? new NullLogger();
+			$this->tasksPath = $this->kernel->getConfiguration()->get('task_scheduler_directory', ComposerUtils::getProjectRoot() . '/src/Tasks');
 			
 			// Scan for tasks
 			$this->scanForTasks();
@@ -164,20 +162,27 @@
 		}
 		
 		/**
+		 * Discover tasks registered under the "task-scheduler" Composer family
+		 * @return DependencyAwareDiscover
+		 */
+		private function scanForProviders(): DependencyAwareDiscover {
+			$discover = $this->kernel->getDiscover();
+			$discover->addScanner(new ComposerScanner("task-scheduler", "discover", $this->logger));
+			
+			if (is_dir($this->tasksPath)) {
+				$discover->addScanner(new DirectoryScanner([$this->tasksPath]));
+			}
+			
+			return $discover->discover();
+		}
+		
+		/**
 		 * Scan for available tasks via Composer metadata and local directory
 		 * @return void
 		 */
 		private function scanForTasks(): void {
 			// Discover tasks registered under the "task-scheduler" Composer family
-			$discover = new Discover();
-			$discover->addScanner(new ComposerScanner("task-scheduler", "discover", $this->logger));
-			
-			// If a local tasks directory exists, scan that too
-			if (is_dir($this->tasksPath)) {
-				$discover->addScanner(new DirectoryScanner([$this->tasksPath]));
-			}
-			
-			$discover->discover();
+			$discover = $this->scanForProviders();
 			
 			// Build a list of tasks; filter out everything that does not implement TaskInterface
 			foreach ($discover->getProviders() as $provider) {

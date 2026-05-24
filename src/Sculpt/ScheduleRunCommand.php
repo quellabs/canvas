@@ -2,30 +2,30 @@
 	
 	namespace Quellabs\Canvas\Sculpt;
 	
+	use Quellabs\Canvas\TaskScheduler\Consumers\Cron\CronConsumer;
 	use Quellabs\Contracts\TaskScheduler\ConsumerInterface;
 	use Quellabs\Sculpt\ConfigurationManager;
 	use Quellabs\Discover\Discover;
 	use Quellabs\Discover\Scanner\ComposerScanner;
-	use Quellabs\Support\ComposerUtils;
 	
 	/**
 	 * Unified queue/scheduler work command.
-	 * Discovers all registered consumers and delegates to the one matching
-	 * --consumer (defaults to "cron" if not specified).
+	 * Cron is the default consumer and is instantiated directly.
+	 * Other consumers are discovered via Composer metadata.
 	 *
 	 * Usage:
-	 *   php sculpt queue:work                    — runs cron consumer (default)
-	 *   php sculpt queue:work --consumer=redis   — runs Redis consumer
-	 *   php sculpt queue:work --consumer=cron    — explicit cron
+	 *   php sculpt schedule:run                    — runs cron consumer (default)
+	 *   php sculpt schedule:run --consumer=redis   — runs Redis consumer
+	 *   php sculpt schedule:run --consumer=cron    — explicit cron
 	 */
-	class QueueWorkCommand extends RoutesBase {
+	class ScheduleRunCommand extends RoutesBase {
 		
 		/**
 		 * Returns the signature of this command
 		 * @return string
 		 */
 		public function getSignature(): string {
-			return "queue:work";
+			return "schedule:run";
 		}
 		
 		/**
@@ -42,15 +42,20 @@
 		 * @return int Exit code
 		 */
 		public function execute(ConfigurationManager $config): int {
-			// Fetch the consumer we want to use. Default to 'cron'.
 			$consumerName = $config->getAsString('consumer', 'cron');
 			
-			// Discover all registered consumers via Composer metadata
+			// Cron is the built-in default — instantiate directly without discovery
+			if ($consumerName === 'cron') {
+				$consumer = new CronConsumer();
+				$consumer->run();
+				return 0;
+			}
+			
+			// All other consumers are discovered via Composer metadata
 			$discover = new Discover();
 			$discover->addScanner(new ComposerScanner('task-scheduler'));
 			$discover->discover();
 			
-			// Find the consumer matching the requested name
 			foreach ($discover->getProviders() as $provider) {
 				if (!$provider instanceof ConsumerInterface) {
 					continue;

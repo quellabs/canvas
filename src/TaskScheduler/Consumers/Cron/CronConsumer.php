@@ -2,9 +2,7 @@
 	
 	namespace Quellabs\Canvas\TaskScheduler\Consumers\Cron;
 	
-	use Quellabs\Canvas\TaskScheduler\Storage\FileJobStorage;
 	use Quellabs\Contracts\TaskScheduler\ConsumerInterface;
-	use Quellabs\Support\ComposerUtils;
 	
 	/**
 	 * Cron-based task scheduler consumer.
@@ -56,25 +54,11 @@
 		
 		/**
 		 * Start the cron consumer and run all due tasks.
-		 * Loads its own configuration from app.php.
+		 * Loads its own configuration via the Kernel.
 		 * @return void
 		 */
 		public function run(): void {
-			$projectRoot = ComposerUtils::getProjectRoot();
-			
-			if (file_exists($projectRoot . '/config/app.php')) {
-				$appConfig = require $projectRoot . '/config/app.php';
-			} else {
-				$appConfig = [];
-			}
-			
-			$tasksPath = $appConfig['task_scheduler_directory'] ?? $projectRoot . '/src/Tasks';
-			
-			$scheduler = new TaskScheduler(
-				new FileJobStorage($projectRoot . '/storage/task-scheduler'),
-				$tasksPath
-			);
-			
+			$scheduler = new TaskScheduler();
 			$scheduler->run();
 		}
 	}
