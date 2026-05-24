@@ -242,7 +242,7 @@
 				$this->dependencyInjector->unregister($requestBinding);
 			}
 			
-			// Publish request telemetry — belongs here, not inside the renderer
+			// Publish request telemetry
 			$route = $urlData !== null && $urlData['route'] instanceof Route ? $urlData['route'] : null;
 			
 			$this->canvasQuerySignal->emit([
@@ -261,6 +261,7 @@
 				$this->injectDebugBar($debugCollector, $request, $response);
 			}
 			
+			// Return response
 			return $response;
 		}
 		
