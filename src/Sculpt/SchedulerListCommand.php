@@ -2,6 +2,7 @@
 	
 	namespace Quellabs\Canvas\Sculpt;
 	
+	use Quellabs\Canvas\Kernel;
 	use Quellabs\Sculpt\ConfigurationManager;
 	use Quellabs\Canvas\TaskScheduler\Consumers\Cron\TaskScheduler;
 	use Quellabs\Canvas\TaskScheduler\Storage\FileJobStorage;
@@ -43,24 +44,12 @@
 		 * @return int Exit code (0 for success, non-zero for failure)
 		 */
 		public function execute(ConfigurationManager $config): int {
-			$projectRoot = ComposerUtils::getProjectRoot();
-			
-			// Load app config to resolve the tasks directory path
-			if (file_exists($projectRoot . '/config/app.php')) {
-				$appConfig = require $projectRoot . '/config/app.php';
-			} else {
-				$appConfig = [];
-			}
-			
-			// Load path from config
-			$tasksPath = $appConfig['task_scheduler_directory'] ?? $projectRoot . '/src/Tasks';
-			
 			// Create a task scheduler instance with file-based storage
-			// The storage directory is set to {project_root}/storage/task-scheduler
-			$scheduler = new TaskScheduler(
-				new FileJobStorage($projectRoot . "/storage/task-scheduler"),
-				$tasksPath
-			);
+			$kernel         = new Kernel();
+			$container      = $kernel->getDependencyInjector();
+			$tasksPath      = $kernel->getConfiguration()->get('task_scheduler_directory', ComposerUtils::getProjectRoot() . '/src/Tasks');
+			$fileJobStorage = new FileJobStorage(ComposerUtils::getProjectRoot() . '/storage/task-scheduler');
+			$scheduler      = new TaskScheduler($fileJobStorage, $container, $tasksPath);
 			
 			// Build the task list with sorting data
 			$tasks = [];
