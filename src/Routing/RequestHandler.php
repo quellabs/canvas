@@ -40,9 +40,6 @@
 		 * @throws AnnotationReaderException|RouteNotFoundException|\ReflectionException
 		 */
 		public function handle(Request $request, ?array &$urlData): Response {
-			// Set up request environment and get service providers
-			$providers = $this->prepareRequest($request);
-			
 			try {
 				return $this->modernResolve($request, $urlData);
 			} catch (RouteNotFoundException $e) {
@@ -51,43 +48,7 @@
 				}
 				
 				return $this->legacyResolve($request);
-			} finally {
-				// Always clean up request resources, regardless of success/failure
-				$this->cleanupRequest($providers);
 			}
-		}
-		
-		/**
-		 * Prepare the request for processing by ensuring session availability and registering providers
-		 * @param Request $request The incoming HTTP request
-		 * @return array{request: SimpleBinding, session: SimpleBinding} Array containing the registered providers for cleanup
-		 */
-		private function prepareRequest(Request $request): array {
-			// Check if session exists, create if needed
-			if (!$request->hasSession()) {
-				$request->setSession(new Session());
-			}
-			
-			// Register providers with dependency injector for this request lifecycle
-			$requestProvider = new SimpleBinding(Request::class, $request);
-			$sessionProvider = new SimpleBinding(SessionInterface::class, $request->getSession());
-			$this->kernel->getDependencyInjector()->register($requestProvider);
-			$this->kernel->getDependencyInjector()->register($sessionProvider);
-			
-			// Return providers for cleanup in finally block
-			return [
-				'request' => $requestProvider,
-				'session' => $sessionProvider
-			];
-		}
-		
-		/**
-		 * Clean up registered providers from the dependency injector
-		 * @param array{request: SimpleBinding, session: SimpleBinding} $providers Array of providers to unregister
-		 */
-		private function cleanupRequest(array $providers): void {
-			$this->kernel->getDependencyInjector()->unregister($providers['session']);
-			$this->kernel->getDependencyInjector()->unregister($providers['request']);
 		}
 		
 		/**

@@ -25,6 +25,7 @@
 	use Quellabs\Canvas\Annotations\Route;
 	use Quellabs\Canvas\Configuration\ConfigLoader;
 	use Quellabs\Canvas\Configuration\Configuration;
+	use Symfony\Component\HttpFoundation\Session\Session;
 	use Quellabs\Canvas\DependencyInjection\CanvasContainer;
 	use Quellabs\Canvas\Discover\DependencyAwareDiscover;
 	use Quellabs\Canvas\Error\DefaultErrorHandler;
@@ -46,6 +47,7 @@
 	use Quellabs\Support\ComposerUtils;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
+	use Symfony\Component\HttpFoundation\Session\SessionInterface;
 	
 	class Kernel {
 		
@@ -208,6 +210,17 @@
 			$start = microtime(true);
 			$memoryStart = memory_get_usage(true);
 			
+			// Check if session exists, create if needed
+			if (!$request->hasSession()) {
+				$request->setSession(new Session());
+			}
+			
+			// Register request-scoped bindings at the kernel level
+			$requestBinding = new SimpleBinding(Request::class, $request);
+			$sessionBinding = new SimpleBinding(SessionInterface::class, $request->getSession());
+			$this->dependencyInjector->register($requestBinding);
+			$this->dependencyInjector->register($sessionBinding);
+			
 			// Initialize debug data collection system for development environments
 			// This collector will gather performance metrics, query logs, and debugging info
 			if ($this->getInspectorConfiguration()->get('enabled', false)) {
@@ -224,6 +237,9 @@
 				$response = $requestHandler->handle($request, $urlData);
 			} catch (\Throwable $e) {
 				$response = $this->createErrorResponse($e, $request);
+			} finally {
+				$this->dependencyInjector->unregister($sessionBinding);
+				$this->dependencyInjector->unregister($requestBinding);
 			}
 			
 			// Publish request telemetry — belongs here, not inside the renderer
