@@ -5,7 +5,6 @@
 	use Cron\CronExpression;
 	use Psr\Log\LoggerInterface;
 	use Psr\Log\NullLogger;
-	use Quellabs\Support\ComposerUtils;
 	use Quellabs\Discover\Scanner\DirectoryScanner;
 	use Quellabs\Canvas\TaskScheduler\Runner\TaskRunnerFactory;
 	use Quellabs\Canvas\TaskScheduler\Storage\JobStorageInterface;
