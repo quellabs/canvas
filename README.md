@@ -1,6 +1,8 @@
 # Canvas
 
 [![Packagist](https://img.shields.io/packagist/v/quellabs/canvas.svg)](https://packagist.org/packages/quellabs/canvas)
+[![PHPStan](https://img.shields.io/badge/PHPStan-level%209-brightgreen.svg)](https://phpstan.org)
+[![License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 
 A PHP framework built for real-world projects — especially the messy ones. Canvas drops into existing PHP codebases without forcing a rewrite, while giving new projects a clean, annotation-driven architecture with aspect-oriented programming and a readable ORM.
 
