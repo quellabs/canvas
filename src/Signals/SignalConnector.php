@@ -1,17 +1,13 @@
 <?php
 	
-	namespace Quellabs\Canvas\Routing\Components;
+	namespace Quellabs\Canvas\Signals;
 	
 	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Canvas\Annotations\ListenTo;
-	use Quellabs\Canvas\Discover\DependencyAwareDiscover;
 	use Quellabs\Canvas\Kernel;
 	use Quellabs\Canvas\Routing\Contracts\SignalProviderInterface;
 	use Quellabs\DependencyInjection\Container;
-	use Quellabs\Discover\Discover;
-	use Quellabs\Discover\Scanner\ComposerScanner;
-	use Quellabs\Discover\Scanner\DirectoryScanner;
 	use Quellabs\SignalHub\Signal;
 	use Quellabs\SignalHub\Slot;
 	use Quellabs\Support\ComposerUtils;
@@ -61,19 +57,28 @@
 		 * The filesystem scan and reflection happen here, once, at a known point during
 		 * bootstrap — not on the first connect() call.
 		 * @param Kernel $kernel
+		 * @throws AnnotationReaderException
 		 */
 		public function __construct(Kernel $kernel) {
 			$this->annotationReader = $kernel->getAnnotationsReader();
 			$this->di = $kernel->getDependencyInjector();
 			
+			// Fetch path where listeners are stored
 			$signalProviderPath = $kernel->getConfiguration()->get(
 				"signal_listeners_path",
 				ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "Listeners"
 			);
 			
+			// Find all slots
+			if (is_dir($signalProviderPath) && is_readable($signalProviderPath)) {
+				$slotClasses = ComposerUtils::findClassesInDirectory($signalProviderPath);
+			} else {
+				$slotClasses = [];
+			}
+			
 			// Scan the filesystem and reflect all provider classes once at construction
 			// time. connect() then only does lookups into this pre-built map.
-			$this->listenerMap = $this->buildListenerMap($this->discoverSlots($signalProviderPath));
+			$this->listenerMap = $this->buildListenerMap($slotClasses);
 		}
 		
 		/**
@@ -95,49 +100,25 @@
 				
 				foreach ($listeners as $listener) {
 					// Resolve the provider instance from the container
-					$instance = $this->di->get($listener['className']);
-					
-					// Class could not be resolved — skip silently
-					if ($instance === null) {
-						continue;
-					}
+					$instance = $this->di->make($listener['className']);
 					
 					// Build the callable and verify it at runtime. is_callable() also
 					// narrows the type to callable for PHPStan, avoiding a spurious error
 					// on the dynamic method name that static analysis cannot verify.
 					$callable = [$instance, $listener['method']];
-
+					
+					// Only call if it's indeed callable
 					if (!is_callable($callable)) {
 						continue;
 					}
-
+					
 					// Signal owns the Slot strongly via its internal array, so no
 					// external reference is needed to keep it alive
 					$signal->connect(new Slot($callable), $listener['priority']);
 				}
 			}
 		}
-		
-		/**
-		 * Discovers all signal providers registered under the "signal-hub" Composer family,
-		 * plus any providers found in the configured local listeners directory.
-		 * @param string $signalProviderPath Path to scan for local listener classes
-		 * @return Discover
-		 */
-		private function discoverSlots(string $signalProviderPath): Discover {
-			// Discover all packages that register themselves under the "signal-hub" family
-			$discover = new DependencyAwareDiscover($this->di);
-			$discover->addScanner(new ComposerScanner("signal-hub"));
-			
-			// If a local listeners directory exists, scan that too
-			if (is_dir($signalProviderPath)) {
-				$discover->addScanner(new DirectoryScanner([$signalProviderPath]));
-			}
-			
-			$discover->discover();
-			return $discover;
-		}
-		
+
 		/**
 		 * Scans all discovered providers for @ListenTo annotations and builds a
 		 * signal-name-keyed map of listener definitions.
@@ -146,22 +127,16 @@
 		 * are stored here. The provider instance is resolved from the container in
 		 * connect() once we know a matching signal actually exists.
 		 *
-		 * @param Discover $discover
+		 * @param array<string> $classNames
 		 * @return ListenerMap
+		 * @throws AnnotationReaderException
 		 */
-		private function buildListenerMap(Discover $discover): array {
+		private function buildListenerMap(array $classNames): array {
 			$map = [];
 			
-			foreach ($discover->getDefinitions() as $definition) {
-				$className = $definition->className;
-				
-				// Skip classes that don't exist to avoid fatal errors on reflection
+			foreach ($classNames as $className) {
+				// Skip classes that don't exist
 				if (!class_exists($className)) {
-					continue;
-				}
-				
-				// Filter by interface using the class name string — no instantiation needed
-				if (!is_a($className, SignalProviderInterface::class, true)) {
 					continue;
 				}
 				
@@ -171,15 +146,11 @@
 				foreach ($reflection->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
 					// Read @ListenTo annotations from the method without instantiating the class.
 					// If the annotation is malformed or unresolvable, skip this method silently.
-					try {
-						$annotations = $this->annotationReader->getMethodAnnotations(
-							$className,
-							$method->getName(),
-							ListenTo::class
-						);
-					} catch (AnnotationReaderException $e) {
-						continue;
-					}
+					$annotations = $this->annotationReader->getMethodAnnotations(
+						$className,
+						$method->getName(),
+						ListenTo::class
+					);
 					
 					// Store the class name and method rather than a callable — instantiation
 					// is deferred to connect() where we know a matching signal exists
