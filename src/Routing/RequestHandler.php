@@ -2,19 +2,15 @@
 	
 	namespace Quellabs\Canvas\Routing;
 	
+	use Quellabs\Canvas\Signals\SignalConnector;
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Canvas\AOP\AspectDispatcher;
 	use Quellabs\Canvas\Discover\MethodContextProvider;
 	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
 	use Quellabs\Canvas\Kernel;
-	use Quellabs\Canvas\Legacy\LegacyHandler;
-	use Quellabs\Canvas\Routing\Components\SignalConnector;
 	use Quellabs\Canvas\Routing\Context\MethodContext;
-	use Quellabs\DependencyInjection\Provider\SimpleBinding;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
-	use Symfony\Component\HttpFoundation\Session\Session;
-	use Symfony\Component\HttpFoundation\Session\SessionInterface;
 	
 	/**
 	 * @phpstan-import-type MatchedRoute from RouteTypes
@@ -38,6 +34,7 @@
 		 * @param array<string, mixed>|null $urlData
 		 * @return Response HTTP response to be sent back to the client
 		 * @throws AnnotationReaderException|RouteNotFoundException|\ReflectionException
+		 * @throws \Exception
 		 */
 		public function handle(Request $request, ?array &$urlData): Response {
 			try {
@@ -75,7 +72,7 @@
 		 * Fallback to legacy routing system when modern resolution fails
 		 * @param Request $request The incoming HTTP request to resolve
 		 * @return Response The response from legacy handler or 404 if routing fails
-		 * @throws RouteNotFoundException
+		 * @throws \Exception
 		 */
 		private function legacyResolve(Request $request): Response {
 			return $this->kernel->getLegacyHandler()->handle($request);
@@ -96,12 +93,7 @@
 			
 			/** @var class-string $controllerClass */
 			$controllerClass = $urlData["controller"];
-			$controller = $dependencyInjector->get($controllerClass);
-			
-			// A null result means the provider found no instance — this is always a routing error
-			if ($controller === null) {
-				throw new \RuntimeException("Could not instantiate controller '{$controllerClass}'");
-			}
+			$controller = $dependencyInjector->make($controllerClass);
 			
 			// Register controller signals with the hub
 			$hub = $this->kernel->getSignalHub();
