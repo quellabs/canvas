@@ -26,7 +26,7 @@
 	 * the Signal does, and are released automatically when the Signal goes out of scope.
 	 *
 	 * @phpstan-type ListenerDefinition array{
-	 *     className: class-string<SignalProviderInterface>,
+	 *     className: class-string,
 	 *     method: non-empty-string,
 	 *     priority: int
 	 * }
@@ -140,16 +140,9 @@
 					continue;
 				}
 				
-				// Reflect the class to enumerate its public methods
+				// Reflect the class and  enumerate its public methods
 				$reflection = new ReflectionClass($className);
 				
-				// Skip classes that don't implement SignalProviderInterface.
-				// is_a() with $allow_string=true narrows $className to
-				// class-string<SignalProviderInterface> for PHPStan.
-				if (!is_a($className, SignalProviderInterface::class, true)) {
-					continue;
-				}
-
 				foreach ($reflection->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
 					// Read @ListenTo annotations from the method without instantiating the class.
 					// If the annotation is malformed or unresolvable, skip this method silently.
