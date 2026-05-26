@@ -90,7 +90,7 @@
 	    exit(0); // Success exit code
 	} catch (Exception \$e) {
 	    // Write error to stderr and exit with failure code
-	    fwrite(STDERR, $e->getMessage() . PHP_EOL);
+	    fwrite(STDERR, \$e->getMessage() . PHP_EOL);
 	    exit(1);
 	}
 PHP;
