@@ -170,12 +170,12 @@
 		}
 		
 		/**
-		 * Discover tasks registered under the "task-scheduler" Composer family
+		 * Discover tasks registered under the "scheduler" Composer family
 		 * @return Discover
 		 */
 		private function scanForProviders(): Discover {
 			$discover = new Discover();
-			$discover->addScanner(new ComposerScanner("task-scheduler", "discover", $this->logger));
+			$discover->addScanner(new ComposerScanner("scheduler", "discover", $this->logger));
 			
 			if (is_dir($this->tasksPath)) {
 				$discover->addScanner(new DirectoryScanner([$this->tasksPath]));
@@ -189,7 +189,7 @@
 		 * @return void
 		 */
 		private function scanForTasks(): void {
-			// Discover tasks registered under the "task-scheduler" Composer family
+			// Discover tasks registered under the "scheduler" Composer family
 			$discover = $this->scanForProviders();
 			
 			// Build a list of tasks; filter out everything that does not implement TaskInterface
