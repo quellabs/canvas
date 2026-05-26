@@ -1,6 +1,6 @@
 <?php
 	
-	namespace Quellabs\Canvas\TaskScheduler\Storage;
+	namespace Quellabs\Canvas\Scheduler\Storage;
 	
 	use DateTime;
 	use RuntimeException;

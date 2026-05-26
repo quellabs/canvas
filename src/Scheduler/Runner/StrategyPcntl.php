@@ -1,11 +1,11 @@
 <?php
 	
-	namespace Quellabs\Canvas\TaskScheduler\Consumers\Cron\Runner;
+	namespace Quellabs\Canvas\Scheduler\Runner;
 	
 	use Psr\Log\LoggerInterface;
-	use Quellabs\Canvas\TaskScheduler\JobInterface;
-	use Quellabs\Contracts\TaskScheduler\TaskFailException;
-	use Quellabs\Contracts\TaskScheduler\TaskTimeoutException;
+	use Quellabs\Contracts\Scheduler\JobInterface;
+	use Quellabs\Contracts\Scheduler\TaskFailException;
+	use Quellabs\Contracts\Scheduler\TaskTimeoutException;
 	
 	/**
 	 * Runner strategy using PCNTL (Process Control) functions to enforce execution

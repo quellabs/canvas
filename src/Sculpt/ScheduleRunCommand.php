@@ -3,8 +3,8 @@
 	namespace Quellabs\Canvas\Sculpt;
 	
 	use Quellabs\Canvas\Kernel;
-	use Quellabs\Canvas\TaskScheduler\Consumers\Cron\CronConsumer;
-	use Quellabs\Contracts\TaskScheduler\ConsumerInterface;
+	use Quellabs\Canvas\Scheduler\Cron\CronConsumer;
+	use Quellabs\Contracts\Scheduler\ConsumerInterface;
 	use Quellabs\Sculpt\ConfigurationManager;
 	use Quellabs\Discover\Discover;
 	use Quellabs\Discover\Scanner\ComposerScanner;

@@ -1,6 +1,6 @@
 <?php
 	
-	namespace Quellabs\Canvas\TaskScheduler\Consumers\Cron;
+	namespace Quellabs\Canvas\Scheduler;
 	
 	use Cron\CronExpression;
 	use Psr\Log\LoggerInterface;
@@ -8,12 +8,13 @@
 	use Quellabs\Discover\Discover;
 	use Quellabs\DependencyInjection\Container;
 	use Quellabs\Discover\Scanner\DirectoryScanner;
-	use Quellabs\Contracts\TaskScheduler\TaskTimeoutException;
+	use Quellabs\Canvas\Scheduler\Cron\TaskInterface;
+	use Quellabs\Contracts\Scheduler\TaskTimeoutException;
 	use Quellabs\Discover\Scanner\ComposerScanner;
-	use Quellabs\Canvas\TaskScheduler\Storage\JobStorageInterface;
-	use Quellabs\Canvas\TaskScheduler\Consumers\Cron\Runner\TaskRunnerFactory;
+	use Quellabs\Canvas\Scheduler\Storage\JobStorageInterface;
+	use Quellabs\Canvas\Scheduler\Runner\TaskRunnerFactory;
 	
-	class TaskScheduler {
+	class Scheduler {
 		
 		private JobStorageInterface $storage;
 		private Container $container;

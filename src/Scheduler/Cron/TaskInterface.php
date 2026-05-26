@@ -1,8 +1,8 @@
 <?php
 	
-	namespace Quellabs\Canvas\TaskScheduler\Consumers\Cron;
+	namespace Quellabs\Canvas\Scheduler\Cron;
 	
-	use Quellabs\Canvas\TaskScheduler\JobInterface;
+	use Quellabs\Contracts\Scheduler\JobInterface;
 	use Quellabs\Contracts\Discovery\ProviderInterface;
 	
 	/**

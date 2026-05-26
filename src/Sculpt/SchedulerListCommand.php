@@ -3,9 +3,9 @@
 	namespace Quellabs\Canvas\Sculpt;
 	
 	use Quellabs\Canvas\Kernel;
+	use Quellabs\Canvas\Scheduler\Scheduler;
 	use Quellabs\Sculpt\ConfigurationManager;
-	use Quellabs\Canvas\TaskScheduler\Consumers\Cron\TaskScheduler;
-	use Quellabs\Canvas\TaskScheduler\Storage\FileJobStorage;
+	use Quellabs\Canvas\Scheduler\Storage\FileJobStorage;
 	use Quellabs\Support\ComposerUtils;
 	
 	/**
@@ -45,11 +45,11 @@
 		 */
 		public function execute(ConfigurationManager $config): int {
 			// Create a task scheduler instance with file-based storage
-			$kernel         = new Kernel();
-			$container      = $kernel->getDependencyInjector();
-			$tasksPath      = $kernel->getConfiguration()->get('task_scheduler_directory', ComposerUtils::getProjectRoot() . '/src/Tasks');
-			$fileJobStorage = new FileJobStorage(ComposerUtils::getProjectRoot() . '/storage/task-scheduler');
-			$scheduler      = new TaskScheduler($fileJobStorage, $container, $tasksPath);
+			$kernel = new Kernel();
+			$container = $kernel->getDependencyInjector();
+			$tasksPath = $kernel->getConfiguration()->get('scheduler_directory', ComposerUtils::getProjectRoot() . '/src/Tasks');
+			$fileJobStorage = new FileJobStorage(ComposerUtils::getProjectRoot() . '/storage/scheduler');
+			$scheduler = new Scheduler($fileJobStorage, $container, $tasksPath);
 			
 			// Build the task list with sorting data
 			$tasks = [];

@@ -1,8 +1,8 @@
 <?php
 	
-	namespace Quellabs\Canvas\TaskScheduler\Consumers\Cron;
+	namespace Quellabs\Canvas\Scheduler;
 	
-	use Quellabs\Canvas\TaskScheduler\JobResult;
+	use Quellabs\Canvas\Scheduler\Cron\TaskInterface;
 	
 	/**
 	 * Execution result for a cron task.

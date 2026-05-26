@@ -1,6 +1,8 @@
 <?php
 	
-	namespace Quellabs\Canvas\TaskScheduler;
+	namespace Quellabs\Canvas\Scheduler;
+	
+	use Quellabs\Contracts\Scheduler\JobInterface;
 	
 	/**
 	 * Represents the result of a job execution
@@ -12,6 +14,13 @@
 		public int $duration;
 		public ?\Exception $exception;
 		
+		/**
+		 * JobResult constructor
+		 * @param JobInterface $job
+		 * @param bool $success
+		 * @param int $duration
+		 * @param \Exception|null $exception
+		 */
 		public function __construct(
 			JobInterface $job,
 			bool         $success,

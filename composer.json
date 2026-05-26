@@ -36,7 +36,6 @@
     "monolog/monolog": "^3.10",
     "symfony/http-foundation": "^7.0 || ^8.0",
     "dragonmantank/cron-expression": "^3.6",
-    "predis/predis": "^2.0",
     "quellabs/contracts": "^1",
     "quellabs/support": "^1",
     "quellabs/discover": "^1",

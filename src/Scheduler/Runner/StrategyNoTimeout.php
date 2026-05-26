@@ -1,10 +1,9 @@
 <?php
 	
-	namespace Quellabs\Canvas\TaskScheduler\Consumers\Cron\Runner;
+	namespace Quellabs\Canvas\Scheduler\Runner;
 	
 	use Psr\Log\LoggerInterface;
-	use Quellabs\Canvas\TaskScheduler\JobInterface;
-	use Quellabs\Contracts\TaskScheduler\TaskTimeoutException;
+	use Quellabs\Contracts\Scheduler\JobInterface;
 	
 	/**
 	 * A runner strategy that does not enforce any timeout limits.

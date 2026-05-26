@@ -1,11 +1,11 @@
 <?php
 	
-	namespace Quellabs\Canvas\TaskScheduler\Consumers\Cron\Runner;
+	namespace Quellabs\Canvas\Scheduler\Runner;
 	
 	use Psr\Log\LoggerInterface;
-	use Quellabs\Canvas\TaskScheduler\JobInterface;
-	use Quellabs\Contracts\TaskScheduler\TaskException;
-	use Quellabs\Contracts\TaskScheduler\TaskTimeoutException;
+	use Quellabs\Contracts\Scheduler\JobInterface;
+	use Quellabs\Contracts\Scheduler\TaskException;
+	use Quellabs\Contracts\Scheduler\TaskTimeoutException;
 	use Quellabs\Support\ComposerUtils;
 	
 	/**
