@@ -55,7 +55,7 @@
 			
 			// All other consumers are discovered via Composer metadata
 			$discover = new Discover();
-			$discover->addScanner(new ComposerScanner('task-scheduler'));
+			$discover->addScanner(new ComposerScanner("scheduler"));
 			$discover->discover();
 			
 			foreach ($discover->getDefinitions() as $definition) {
