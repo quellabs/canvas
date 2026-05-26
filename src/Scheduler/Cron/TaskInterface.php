@@ -2,8 +2,9 @@
 	
 	namespace Quellabs\Canvas\Scheduler\Cron;
 	
-	use Quellabs\Contracts\Scheduler\JobInterface;
 	use Quellabs\Contracts\Discovery\ProviderInterface;
+	use Quellabs\Contracts\Scheduler\JobInterface;
+	use Quellabs\Contracts\Scheduler\TaskTimeoutException;
 	
 	/**
 	 * Interface for cron-scheduled tasks.
@@ -38,10 +39,10 @@
 		
 		/**
 		 * Called when the task exceeds its timeout
-		 * @param \Exception $exception
+		 * @param TaskTimeoutException $exception
 		 * @return void
 		 */
-		public function onTimeout(\Exception $exception): void;
+		public function onTimeout(TaskTimeoutException $exception): void;
 		
 		/**
 		 * Called when the task fails for any non-timeout reason
