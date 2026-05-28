@@ -87,7 +87,7 @@
 						continue;
 					}
 					
-					$withContextMap[$annotation->getParameter()] = $annotation->getContext();
+					$withContextMap[$annotation->getParameter()] = $annotation->getMetadata();
 				}
 			} catch (\Throwable) {
 				// Annotation parsing failed or no docblock present — proceed without
@@ -110,7 +110,7 @@
 		 * Extends base parameter resolution to support @WithContext annotation.
 		 * Sets the current parameter's context before delegating to the base class,
 		 * so that resolveType() can pick it up and use the correct container clone.
-		 * @param ParameterMeta $param Parameter metadata, optionally containing 'context' from @WithContext
+		 * @param array $param Parameter metadata, optionally containing 'context' from @WithContext
 		 * @param array<string, mixed> $parameters User-provided parameter values
 		 * @param MethodContextInterface|null $methodContext Context object for dependency injection
 		 * @param string $className Class name for error reporting

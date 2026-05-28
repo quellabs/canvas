@@ -25,6 +25,7 @@
 	use Quellabs\Canvas\Annotations\Route;
 	use Quellabs\Canvas\Configuration\ConfigLoader;
 	use Quellabs\Canvas\Configuration\Configuration;
+	use Quellabs\Canvas\Logger\LoggerInterfaceProvider;
 	use Symfony\Component\HttpFoundation\Session\Session;
 	use Quellabs\Canvas\DependencyInjection\CanvasContainer;
 	use Quellabs\Canvas\Discover\DependencyAwareDiscover;
@@ -135,6 +136,7 @@
 			$this->dependencyInjector->register(new SimpleBinding(SignalHub::class, $this->signalHub));
 			$this->dependencyInjector->register(new SimpleBinding(AnnotationReader::class, $this->annotationsReader));
 			$this->dependencyInjector->register(new CacheInterfaceProvider($this->dependencyInjector, $this->annotationsReader));
+			$this->dependencyInjector->register(new LoggerInterfaceProvider(ComposerUtils::getProjectRoot() . '/storage/logs/canvas.log'));
 
 			// Initialize legacy support
 			$this->initializeLegacySupport();

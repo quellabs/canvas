@@ -6,7 +6,7 @@
 	
 	/**
 	 * @Annotation
-     * Specifies the DI container context to use when resolving a particular
+	 * Specifies the DI container context to use when resolving a particular
 	 * constructor or method parameter.
 	 */
 	class WithContext implements AnnotationInterface {
@@ -66,5 +66,23 @@
 		 */
 		public function getContext(): string {
 			return $this->context;
+		}
+		
+		/**
+		 * Returns the metadata
+		 * @return array<string, mixed>
+		 */
+		public function getMetadata(): array {
+			$result = [];
+			
+			foreach ($this->parameters as $key => $value) {
+				if ($key === 'context') {
+					$key = 'provider';
+				}
+				
+				$result[$key] = $value;
+			}
+			
+			return $result;
 		}
 	}
