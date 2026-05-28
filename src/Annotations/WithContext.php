@@ -5,15 +5,9 @@
 	use Quellabs\AnnotationReader\AnnotationInterface;
 	
 	/**
-	 * Specifies the DI container context to use when resolving a particular
+	 * @Annotation
+     * Specifies the DI container context to use when resolving a particular
 	 * constructor or method parameter.
-	 *
-	 * Usage:
-	 * @WithContext(parameter="templateEngine", context="blade")
-	 *   public function render(TemplateEngineInterface $templateEngine): string
-	 *
-	 * This causes $templateEngine to be resolved via $container->for('blade')
-	 * instead of the default container.
 	 */
 	class WithContext implements AnnotationInterface {
 		

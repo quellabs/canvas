@@ -5,11 +5,9 @@
 	use Quellabs\AnnotationReader\AnnotationInterface;
 	
 	/**
+	 * @Annotation
+	 * @Target("METHOD")
 	 * Annotation for declaring aspect-oriented method interception
-	 *
-	 * Usage examples:
-	 * @InterceptWith(LoggingAspect::class)
-	 * @InterceptWith(CacheAspect::class, ttl=3600, priority=10)
 	 */
 	class InterceptWith implements AnnotationInterface {
 		

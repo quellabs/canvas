@@ -5,6 +5,8 @@
 	use Quellabs\AnnotationReader\AnnotationInterface;
 	
 	/**
+	 * @Annotation
+	 * @Target("METHOD")
 	 * CacheContext annotation class
 	 */
 	class CacheContext implements AnnotationInterface {

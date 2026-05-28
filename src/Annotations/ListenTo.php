@@ -5,15 +5,9 @@
 	use Quellabs\AnnotationReader\AnnotationInterface;
 	
 	/**
+	 * @Annotation
+	 * @Target("METHOD")
 	 * Declares that an annotated method should be connected to a named signal.
-	 *
-	 * Usage on a signal provider method:
-	 * @ListenTo("user.created")
-	 * @ListenTo("user.created", priority=10)
-	 *
-	 * The annotation reader passes all annotation parameters as a key-value array.
-	 * "value" holds the signal name (the unnamed first argument by convention),
-	 * "priority" is optional and defaults to 0 if omitted.
 	 */
 	class ListenTo implements AnnotationInterface {
 		

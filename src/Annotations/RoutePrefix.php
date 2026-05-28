@@ -5,6 +5,8 @@
 	use Quellabs\AnnotationReader\AnnotationInterface;
 	
 	/**
+	 * @Annotation
+     *
 	 * RoutePrefix Annotation Class
 	 *
 	 * This class implements an annotation interface for defining route prefixes

@@ -6,6 +6,7 @@
 	
 	/**
 	 * @Annotation
+	 * @Target("METHOD")
 	 *
 	 * Route annotation class for handling HTTP routing.
 	 * This class defines a route annotation that can be used to configure
