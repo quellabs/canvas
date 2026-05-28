@@ -88,7 +88,7 @@
 						continue;
 					}
 					
-					$withContextMap[$annotation->getParameter()] = $annotation->getMetadata();
+					$withContextMap[$annotation->getParameter()] = $annotation->getContext();
 				}
 			} catch (\Throwable) {
 				// Annotation parsing failed or no docblock present — proceed without
