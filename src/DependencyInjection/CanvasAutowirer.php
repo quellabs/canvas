@@ -1,4 +1,6 @@
 <?php
+
+	/** @noinspection PhpDocSignatureInspection */
 	
 	namespace Quellabs\Canvas\DependencyInjection;
 	
