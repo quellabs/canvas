@@ -187,19 +187,29 @@
 			
 			// If no around aspects exist, execute the method directly without interception
 			if (empty($aroundAspects)) {
-				$result = $this->di->invoke($context->getClass(), $context->getMethodName(), $context->getArguments());
+				$result = $this->di->invoke(
+					$context->getClass(),
+					$context->getMethodName(),
+					$context->getArguments(),
+					$context
+				);
 			} else {
-			// Create the base "proceed" function that calls the actual controller method
-			// This is the innermost function in the chain
-			$proceed = fn() => $this->di->invoke($context->getClass(), $context->getMethodName(), $context->getArguments());
-			
-			// Build a nested chain of around aspects
-			foreach ($aroundAspects as $aspect) {
-				$currentProceed = $proceed; // Capture current proceed function in closure
-				$proceed = fn() => $aspect->around($context, $currentProceed); // Wrap with this aspect
-			}
-			
-			// Execute the complete chain starting from the outermost aspect
+				// Create the base "proceed" function that calls the actual controller method
+				// This is the innermost function in the chain
+				$proceed = fn() => $this->di->invoke(
+					$context->getClass(),
+					$context->getMethodName(),
+					$context->getArguments(),
+					$context
+				);
+				
+				// Build a nested chain of around aspects
+				foreach ($aroundAspects as $aspect) {
+					$currentProceed = $proceed; // Capture current proceed function in closure
+					$proceed = fn() => $aspect->around($context, $currentProceed); // Wrap with this aspect
+				}
+				
+				// Execute the complete chain starting from the outermost aspect
 				$result = $proceed();
 			}
 			

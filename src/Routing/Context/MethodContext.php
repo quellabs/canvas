@@ -12,12 +12,12 @@
 	 */
 	class MethodContext implements MethodContextInterface {
 		
-		/** @var list<array<string, mixed>> */
-		private array $compiledPattern;
-		
 		private Request $request;
 		private object $class;
 		private string $methodName;
+		
+		/** @var list<array<string, mixed>> */
+		private array $compiledPattern;
 		
 		/** @var array<string, mixed> */
 		private array $arguments;
