@@ -2,7 +2,7 @@
 	
 	namespace Quellabs\Canvas\Logger;
 	
-	use Monolog\Handler\AbstractHandler;
+	use Quellabs\Support\ComposerUtils;
 	use Monolog\Handler\ErrorLogHandler;
 	use Monolog\Handler\RotatingFileHandler;
 	use Monolog\Handler\StreamHandler;
@@ -14,37 +14,22 @@
 	
 	/**
 	 * Provides a contextual LoggerInterface implementation to the dependency
-	 * injection container. Each consuming class receives a Logger instance
-	 * pre-configured with its own class name as the channel, so log output
-	 * is automatically namespaced without any manual configuration.
+	 * injection container. Each consumer receives a Logger instance configured
+	 * with the handler and channel specified via metadata, or sensible defaults.
 	 *
-	 * Logger instances are cached by channel name so that repeated injections
-	 * into the same class return the same instance rather than constructing a
-	 * new one each time.
+	 * Logger instances are cached by their full configuration (channel, provider,
+	 * logfile) so that repeated injections with the same settings return the same
+	 * instance rather than constructing a new one each time.
 	 *
-	 * Handler resolution order:
-	 *   1. $metadata['provider'] — a string identifier mapped via HANDLERS
-	 *   2. Default — StreamHandler writing to storage/logs/canvas.log
-	 *
-	 * Supported $metadata['provider'] values:
-	 *   'stream'   — StreamHandler writing to storage/logs/canvas.log (default)
-	 *   'stderr'   — ErrorLogHandler writing to PHP's error log
-	 *   'rotating' — RotatingFileHandler with daily rotation in storage/logs/
+	 * Supported $metadata keys:
+	 *   'provider' — handler identifier: 'stream' (default), 'rotating', 'stderr'
+	 *   'logfile'  — overrides the default log file path (stream and rotating only)
+	 *   'channel'  — Monolog channel label; defaults to 'app'
 	 */
 	class LoggerInterfaceProvider extends ServiceProvider {
 		
 		/** @var string Default log file */
 		private string $logfile;
-		
-		/** @var array<string, class-string<AbstractHandler>> Maps provider identifiers to handler class names */
-		private const array HANDLERS = [
-			'stream'   => StreamHandler::class,
-			'stderr'   => ErrorLogHandler::class,
-			'rotating' => RotatingFileHandler::class,
-		];
-		
-		/** @var array<string> Handler identifiers that require a file path as their first constructor argument */
-		private const array HANDLERS_REQUIRE_PATH = ['stream', 'rotating'];
 		
 		/** @var array<string, LoggerInterface> Cached logger instances keyed by channel name */
 		private array $loggers = [];
@@ -68,67 +53,53 @@
 		}
 		
 		/**
-		 * Creates and returns a Logger instance for the consuming class.
-		 * The channel is derived from the consuming class name, giving each
-		 * class its own named logger without any manual setup.
+		 * Creates and returns a Logger instance configured per the supplied metadata.
 		 * @param class-string $className The class name being requested (should be LoggerInterface::class)
 		 * @param array<int|string, mixed> $dependencies Dependencies for the class (unused)
-		 * @param array<string, mixed> $metadata Metadata as passed by the container — may contain 'provider' key with a handler identifier string, and 'logfile' key to override the default log path
-		 * @param MethodContextInterface|null $methodContext Context about the class requesting the logger
+		 * @param array<string, mixed> $metadata May contain 'provider', 'logfile', and 'channel' keys
+		 * @param MethodContextInterface|null $methodContext Context about the class requesting the logger (unused)
 		 * @return LoggerInterface The configured logger instance
 		 */
 		public function createInstance(
 			string $className,
 			array $dependencies,
 			array $metadata,
-			?MethodContextInterface $methodContext = null
+			MethodContextInterface|null $methodContext = null
 		): LoggerInterface {
-			// Derive the channel from the consuming class name.
-			// Fall back to 'app' when called outside a request context.
-			$channel = $methodContext?->getClassName() ?? 'app';
+			// Resolve all configuration from metadata, falling back to defaults.
+			// Use is_string guards — PHPStan at strict level rejects casts on mixed.
+			$channel = is_string($metadata['channel'] ?? null) ? $metadata['channel'] : 'app';
+			$provider = is_string($metadata['provider'] ?? null) ? $metadata['provider'] : 'stream';
 			
-			// Use the short class name as the channel to keep log output readable
-			$channel = substr($channel, strrpos($channel, '\\') + 1);
+			// Resolve logfile
+			$logfile = is_string($metadata['logfile'] ?? null) ? $metadata['logfile'] : $this->logfile;
 			
-			// Return the cached instance if one already exists for this channel
-			if (isset($this->loggers[$channel])) {
-				return $this->loggers[$channel];
+			if (!str_starts_with($logfile, DIRECTORY_SEPARATOR)) {
+				$logfile = ComposerUtils::getProjectRoot() . '/storage/logs/' . $logfile;
 			}
 			
-			// Resolve the handler from the provider identifier, or use the default if none specified
-			if (isset($metadata['provider'])) {
-				if (!isset(self::HANDLERS[$metadata['provider']])) {
-					$supported = implode(', ', array_keys(self::HANDLERS));
-					
-					throw new \InvalidArgumentException(
-						"Unsupported logger provider '{$metadata['provider']}'. Supported values: {$supported}."
-					);
-				}
-				
-				$handlerClass = self::HANDLERS[$metadata['provider']];
-				$logfile = $metadata['logfile'] ?? $this->logfile;
-
-				if (in_array($metadata['provider'], self::HANDLERS_REQUIRE_PATH)) {
-					$handler = new $handlerClass($logfile);
-				} else {
-					$handler = new $handlerClass();
-				}
-			} else {
-				$handler = $this->createDefaultHandler();
+			// Cache key includes channel, provider, and logfile so that two injections
+			// into the same class with different handlers or paths get distinct instances
+			$cacheKey = $channel . '|' . $provider . '|' . $logfile;
+			
+			// Return the cached instance if one already exists for this combination
+			if (isset($this->loggers[$cacheKey])) {
+				return $this->loggers[$cacheKey];
 			}
+			
+			// Instantiate the handler concretely so PHPStan can verify constructor signatures
+			$handler = match ($provider) {
+				'stream' => new StreamHandler($logfile, Level::Debug),
+				'rotating' => new RotatingFileHandler($logfile, 0, Level::Debug),
+				'stderr' => new ErrorLogHandler(),
+				default => throw new \InvalidArgumentException(
+					"Unsupported logger provider '{$provider}'. Supported values: stream, rotating, stderr."
+				),
+			};
 			
 			// Create the logger
 			$logger = new Logger($channel);
 			$logger->pushHandler($handler);
-			return $this->loggers[$channel] = $logger;
-		}
-		
-		/**
-		 * Creates the default log handler.
-		 * Writes to storage/logs/canvas.log at DEBUG level.
-		 * @return AbstractHandler
-		 */
-		private function createDefaultHandler(): AbstractHandler {
-			return new StreamHandler($this->logfile, Level::Debug);
+			return $this->loggers[$cacheKey] = $logger;
 		}
 	}

@@ -136,8 +136,10 @@
 			$this->dependencyInjector->register(new SimpleBinding(SignalHub::class, $this->signalHub));
 			$this->dependencyInjector->register(new SimpleBinding(AnnotationReader::class, $this->annotationsReader));
 			$this->dependencyInjector->register(new CacheInterfaceProvider($this->dependencyInjector, $this->annotationsReader));
-			$this->dependencyInjector->register(new LoggerInterfaceProvider(ComposerUtils::getProjectRoot() . '/storage/logs/canvas.log'));
-
+			$this->dependencyInjector->register(new LoggerInterfaceProvider(
+				$this->configuration->get("monolog_file", ComposerUtils::getProjectRoot() . '/storage/logs/canvas.log')
+			));
+			
 			// Initialize legacy support
 			$this->initializeLegacySupport();
 		}
@@ -165,7 +167,7 @@
 		public function getInspectorConfiguration(): ConfigurationInterface {
 			return $this->inspector_configuration;
 		}
-
+		
 		/**
 		 * Returns the Container object
 		 * @return Container

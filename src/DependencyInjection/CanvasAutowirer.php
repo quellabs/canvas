@@ -30,10 +30,12 @@
 	class CanvasAutowirer extends Autowirer {
 		
 		/**
-		 * Context
-		 * @var string|null
+		 * Metadata array for the current parameter being resolved, populated from
+		 * the @WithContext annotation. Null when no annotation was declared, causing
+		 * resolveType() to use the default container.
+		 * @var array<string, mixed>|null
 		 */
-		private ?string $currentParamContext = null;
+		private ?array $currentParamContext = null;
 		
 		/**
 		 * Annotation reader used to extract @WithContext annotations from method docblocks.
@@ -56,22 +58,21 @@
 		 * Extends base parameter resolution with @WithContext annotation support.
 		 *
 		 * Reads @WithContext annotations from the method docblock and attaches a
-		 * 'for_context' key to any parameter entry whose name matches an annotation.
-		 * The base resolveParameter() then picks up 'for_context' and switches to
-		 * a contextual container clone for that parameter's resolution.
+		 * 'context' key to any parameter entry whose name matches an annotation.
+		 * resolveType() reads 'context' and uses it to select the correct container.
 		 *
 		 * Annotation parsing failures are silently swallowed so that methods without
 		 * docblocks, or with unrelated parse errors, fall through to normal resolution.
 		 *
 		 * @param class-string $className The fully qualified class name containing the method
 		 * @param string $methodName The name of the method to reflect
-		 * @return array<int, ParameterMeta> Parameter metadata array, each entry optionally containing 'for_context'
+		 * @return array<int, ParameterMeta> Parameter metadata array, each entry optionally containing 'context'
 		 */
 		protected function getMethodParameters(string $className, string $methodName): array {
 			// Delegate to parent for base parameter metadata (types, defaults, names)
 			$params = parent::getMethodParameters($className, $methodName);
 			
-			// Build a map of param name -> context string from @WithContext annotations
+			// Build a map of param name -> metadata array from @WithContext annotations
 			$withContextMap = [];
 			
 			try {
@@ -94,7 +95,7 @@
 				// context, falling back to standard container resolution for all params
 			}
 			
-			// Attach for_context to any parameter entry that has a matching annotation
+			// Attach context to any parameter entry that has a matching annotation
 			if (!empty($withContextMap)) {
 				foreach ($params as &$param) {
 					if (isset($withContextMap[$param['name']])) {
@@ -109,8 +110,8 @@
 		/**
 		 * Extends base parameter resolution to support @WithContext annotation.
 		 * Sets the current parameter's context before delegating to the base class,
-		 * so that resolveType() can pick it up and use the correct container clone.
-		 * @param array $param Parameter metadata, optionally containing 'context' from @WithContext
+		 * so that resolveType() can pick it up and use the correct container.
+		 * @param ParameterMeta $param Parameter metadata, optionally containing 'context' from @WithContext
 		 * @param array<string, mixed> $parameters User-provided parameter values
 		 * @param MethodContextInterface|null $methodContext Context object for dependency injection
 		 * @param string $className Class name for error reporting
