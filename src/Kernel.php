@@ -21,6 +21,7 @@
 	
 	namespace Quellabs\Canvas;
 	
+	use Quellabs\AnnotationReader\AnnotationReaderLocator;
 	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\Canvas\Annotations\Route;
 	use Quellabs\Canvas\Configuration\ConfigLoader;
@@ -105,7 +106,11 @@
 			$this->inspector_configuration = $this->configLoader->loadConfigFile("inspector.php");
 			
 			// Register Annotations Reader
+			// Make the reader available process-wide so other packages (e.g. ObjectQuel)
+			// can share this instance and its in-memory cache instead of constructing
+			// their own readers with cold caches.
 			$this->annotationsReader = $this->createAnnotationReader();
+			AnnotationReaderLocator::setInstance($this->annotationsReader);
 			
 			// Determine the error handler directory
 			$errorHandlerDirectory = $this->configuration->get("error_handler_directory", ComposerUtils::getProjectRoot() . "/src/Errors");
@@ -362,9 +367,14 @@
 		private function createAnnotationReader(): AnnotationReader {
 			// Initialize the annotation reader configuration object
 			$config = new \Quellabs\AnnotationReader\Configuration();
+			$debugMode = (bool)$this->configuration->get('debug_mode', false);
 			
-			// Check if we're NOT in debug mode (i.e., in production or staging)
-			if (!$this->configuration->get('debug_mode', false)) {
+			// Pass debug mode so the reader knows whether to validate cache files
+			// against source mtime (debug) or trust them unconditionally (production)
+			$config->setDebugMode($debugMode);
+			
+			// Enable file-based caching in production
+			if (!$debugMode) {
 				// Get the project root directory path for cache storage
 				$rootPath = ComposerUtils::getProjectRoot();
 				
