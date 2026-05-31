@@ -12,15 +12,20 @@
 	 */
 	class MethodContext implements MethodContextInterface {
 		
+		/** @var Request Current request object */
 		private Request $request;
-		private object $class;
-		private string $methodName;
 		
-		/** @var list<array<string, mixed>> */
-		private array $compiledPattern;
+		/** @var object Class being autowired */
+		private object $class;
+		
+		/** @var string Method name being autowired */
+		private string $methodName;
 		
 		/** @var array<string, mixed> */
 		private array $arguments;
+		
+		/** @var string|null Name of the parameter currently being autowirted */
+		private ?string $currentParameterName = null;
 		
 		/**
 		 * Initialize the method context with all relevant call information.
@@ -28,20 +33,17 @@
 		 * @param object $target The original object instance on which the method is being called
 		 * @param string $methodName Name of the method being invoked
 		 * @param array<string, mixed> $arguments Array of arguments passed to the method
-		 * @param list<array<string, mixed>> $compiledPattern Matched pattern
 		 */
 		public function __construct(
 			Request $request,              // The request object
 			object $target,                // The original object instance
 			string $methodName,            // Method being called
 			array $arguments,              // Method parameters
-			array $compiledPattern         // Matched pattern
 		) {
 			$this->request = $request;
 			$this->class = $target;
 			$this->methodName = $methodName;
 			$this->arguments = $arguments;
-			$this->compiledPattern = $compiledPattern;
 		}
 		
 		/**
@@ -92,12 +94,21 @@
 		public function setRequest(Request $request): void {
 			$this->request = $request;
 		}
+
+		/**
+		 * Sets the parameter that is currently being autowired
+		 * @param string|null $name
+		 * @return void
+		 */
+		public function setCurrentParameterName(?string $name): void {
+			$this->currentParameterName = $name;
+		}
 		
 		/**
-		 * Returns the pattern that was matched
-		 * @return list<array<string, mixed>>
+		 * Gets the parameter that is currently being autowired
+		 * @return string|null
 		 */
-		public function getCompiledPattern(): array {
-			return $this->compiledPattern;
+		public function getCurrentParameterName(): ?string {
+			return $this->currentParameterName;
 		}
 	}

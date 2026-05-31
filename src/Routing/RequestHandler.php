@@ -110,8 +110,7 @@
 				request: $request,
 				target: $controller,
 				methodName: $urlData["method"],
-				arguments: $urlData["variables"],
-				compiledPattern: $urlData["compiled_pattern"]
+				arguments: $urlData["variables"]
 			);
 			
 			// Register context with DI for autowiring into services
