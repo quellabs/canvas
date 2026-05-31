@@ -11,29 +11,27 @@
 	use Quellabs\Contracts\Context\MethodContextInterface;
 	
 	/**
-	 * Canvas-aware autowirer that extends the base autowirer with annotation-driven
-	 * contextual dependency injection via @WithContext.
+	 * Canvas-aware autowirer that extends the base autowirer with @WithContext
+	 * annotation support. Reads @WithContext from method docblocks and resolves
+	 * the annotated parameter through a scoped container context instead of the default.
 	 *
-	 * The base Autowirer has no knowledge of annotations — it lives in the DI package
-	 * which has no dependency on AnnotationReader or Canvas configuration. This subclass
-	 * adds that layer by reading @WithContext annotations from method docblocks and
-	 * slotting the resolved context into the parameter metadata before resolution runs.
+	 * Usage:
+	 * @WithContext(parameter="templateEngine", context="blade")
+	 *   public function render(TemplateEngineInterface $templateEngine): string
 	 *
 	 * @phpstan-import-type ParameterMeta from Autowirer
 	 */
 	class CanvasAutowirer extends Autowirer {
 		
 		/**
-		 * Metadata array for the current parameter being resolved, populated from
-		 * the @WithContext annotation. Null when no annotation was declared, causing
-		 * resolveType() to use the default container.
+		 * Context from the @WithContext annotation for the parameter currently being resolved.
+		 * Null when no annotation is present, causing resolveType() to use the default container.
 		 * @var array<string, mixed>|null
 		 */
 		private ?array $currentParamContext = null;
 		
 		/**
 		 * Annotation reader used to extract @WithContext annotations from method docblocks.
-		 * Configured by the Kernel with the correct cache settings for the current environment.
 		 * @var AnnotationReader
 		 */
 		private AnnotationReader $annotationReader;
@@ -49,15 +47,9 @@
 		}
 		
 		/**
-		 * Extends base parameter resolution with @WithContext annotation support.
-		 *
-		 * Reads @WithContext annotations from the method docblock and attaches a
-		 * 'context' key to any parameter entry whose name matches an annotation.
-		 * resolveType() reads 'context' and uses it to select the correct container.
-		 *
-		 * Annotation parsing failures are silently swallowed so that methods without
-		 * docblocks, or with unrelated parse errors, fall through to normal resolution.
-		 *
+		 * Extends parent by reading @WithContext annotations and attaching their context
+		 * to the matching parameter entry before resolution runs. Annotation failures are
+		 * silently swallowed and fall back to normal resolution.
 		 * @param class-string $className The fully qualified class name containing the method
 		 * @param string $methodName The name of the method to reflect
 		 * @return array<int, ParameterMeta> Parameter metadata array, each entry optionally containing 'context'
@@ -85,8 +77,7 @@
 					$withContextMap[$annotation->getParameter()] = $annotation->getContext();
 				}
 			} catch (\Throwable) {
-				// Annotation parsing failed or no docblock present — proceed without
-				// context, falling back to standard container resolution for all params
+				// Annotation parsing failed or no docblock present — proceed without context
 			}
 			
 			// Attach context to any parameter entry that has a matching annotation
@@ -102,9 +93,8 @@
 		}
 		
 		/**
-		 * Extends base parameter resolution to support @WithContext annotation.
-		 * Sets the current parameter's context before delegating to the base class,
-		 * so that resolveType() can pick it up and use the correct container.
+		 * Stashes the @WithContext context for the current parameter so resolveType()
+		 * can pick it up, then resets it after resolution to prevent bleed-over.
 		 * @param ParameterMeta $param Parameter metadata, optionally containing 'context' from @WithContext
 		 * @param array<string, mixed> $parameters User-provided parameter values
 		 * @param MethodContextInterface|null $methodContext Context object for dependency injection
@@ -134,9 +124,8 @@
 		}
 		
 		/**
-		 * Overrides base type resolution to use a contextual container clone when
-		 * a @WithContext annotation has been declared for the current parameter.
-		 *
+		 * When @WithContext is active, temporarily resolves through a scoped container
+		 * clone. The original container is restored in the finally block.
 		 * @param class-string $type The fully qualified class or interface name to resolve
 		 * @param array<string, mixed> $parameters Additional parameters for resolution
 		 * @param MethodContextInterface|null $methodContext
