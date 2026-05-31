@@ -19,14 +19,6 @@
 	 * adds that layer by reading @WithContext annotations from method docblocks and
 	 * slotting the resolved context into the parameter metadata before resolution runs.
 	 *
-	 * Usage:
-	 * @WithContext(parameter="templateEngine", context="blade")
-	 *   public function render(TemplateEngineInterface $templateEngine): string
-	 *
-	 * This causes $templateEngine to be resolved via $container->for('blade') instead
-	 * of the default container, allowing service providers to return context-specific
-	 * implementations.
-	 *
 	 * @phpstan-import-type ParameterMeta from Autowirer
 	 */
 	class CanvasAutowirer extends Autowirer {
@@ -144,20 +136,26 @@
 		/**
 		 * Overrides base type resolution to use a contextual container clone when
 		 * a @WithContext annotation has been declared for the current parameter.
+		 *
 		 * @param class-string $type The fully qualified class or interface name to resolve
 		 * @param array<string, mixed> $parameters Additional parameters for resolution
 		 * @param MethodContextInterface|null $methodContext
-		 * @return object|null The resolved instance or null
+		 * @return object|null The resolved instance, or null
 		 */
 		protected function resolveType(string $type, array $parameters, ?MethodContextInterface $methodContext): ?object {
-			// When @WithContext declared a context for this parameter, resolve through
-			// a cloned container scoped to that context. Otherwise, use the default container.
+			// When @WithContext is active, temporarily swap the container to a scoped
+			// clone for this resolution only. The original is restored in the finally
+			// block so the next parameter resolves from the default container.
+			$originalContainer = $this->container;
+			
 			if ($this->currentParamContext) {
-				$container = $this->container->for($this->currentParamContext);
-			} else {
-				$container = $this->container;
+				$this->container = $this->container->for($this->currentParamContext);
 			}
 			
-			return $container->get($type, [], $methodContext);
+			try {
+				return parent::resolveType($type, $parameters, $methodContext);
+			} finally {
+				$this->container = $originalContainer;
+			}
 		}
 	}
