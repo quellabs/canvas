@@ -39,9 +39,11 @@
 		
 		/**
 		 * No server-side events to process — all message data is client-side.
+		 * @param EventCollectorInterface $collector
 		 * @return void
 		 */
-		public function processEvents(EventCollectorInterface $collector): void {}
+		public function processEvents(EventCollectorInterface $collector): void {
+		}
 		
 		/**
 		 * @return string
@@ -193,6 +195,13 @@ const WakaPACPanel = {
     /** @type {string}  localStorage key used to persist filter toggle states across page loads */
     storageKey: 'wakapac-spy-filters',
 
+    /**
+     * The pac-id to restrict the message stream to, or null to show all containers.
+     * Set via the container select dropdown in the toolbar.
+     * @type {string|null}
+     */
+    containerFilter: null,
+
     // ── Initialisation ────────────────────────────────────────────────────────
 
     /**
@@ -260,10 +269,9 @@ const WakaPACPanel = {
         // Equivalent to Win32 WH_CALLWNDPROC: fires before msgProc receives the message.
         // Arrow function preserves `this` so the hook body can access panel state.
         this.hhook = wakaPAC.installMessageHook((event, callNextHook) => {
-            // Drop the message immediately if its category is filtered out.
-            // Filtering at intake means the buffer only ever contains messages
-            // the user actually wants to see.
-            if (!this.isVisible(event.message)) {
+            // Drop the message immediately if its category is filtered out,
+            // or if a container filter is active and this message is for a different container.
+            if (!this.isVisible(event.message, event.pacId ?? null)) {
                 callNextHook();
                 return;
             }
@@ -328,6 +336,20 @@ const WakaPACPanel = {
                 this.saveFilters();
                 this.refresh();
             });
+        });
+
+        // Wire up container select — scans the DOM for pac-id elements upfront,
+        // populates the dropdown, and updates containerFilter on change.
+        this.scanContainers();
+
+        panelEl.querySelector('.wakapac-container-select')?.addEventListener('change', (e) => {
+            this.containerFilter = e.target.value === '' ? null : e.target.value;
+            // Changing the container filter clears the buffers so stale messages
+            // from other containers don't linger in the view.
+            this.ringBuffer.length = 0;
+            this.captureBuffer     = [];
+            this.totalSeen         = 0;
+            this.refresh();
         });
 
         // Wire up tab buttons
@@ -409,20 +431,66 @@ const WakaPACPanel = {
         }
     },
 
+    // ── Container discovery ───────────────────────────────────────────────────
+
+    /**
+     * Scans the page DOM for all [data-pac-id] elements (excluding those inside
+     * the Inspector panel itself) and populates the container select dropdown.
+     *
+     * Called once from init() after the panel is in the DOM. The Inspector is
+     * excluded because its own internal elements are not application containers.
+     */
+    scanContainers() {
+        const select = this.panelEl.querySelector('.wakapac-container-select');
+        
+        if (!select) {
+            return;
+        }
+
+        // Collect all pac-id values, excluding anything inside the debug bar
+        const debugBar = document.getElementById('canvas-debug-bar');
+        const pacIds   = [];
+
+        document.querySelectorAll('[data-pac-id]').forEach(el => {
+            // Skip elements that are part of the Inspector itself
+            if (debugBar && debugBar.contains(el)) {
+                return;
+            }
+
+            // Deduplicate — the same pac-id should only appear once
+            const id = el.getAttribute('data-pac-id');
+
+            if (id && !pacIds.includes(id)) {
+                pacIds.push(id);
+            }
+        });
+
+        // Populate the select with an "All" option followed by each discovered pac-id
+        select.innerHTML = '<option value="">All containers</option>'
+            + pacIds.map(id => '<option value="' + id + '">' + id + '</option>').join('');
+    },
+
     // ── Filtering ─────────────────────────────────────────────────────────────
 
     /**
-     * Returns true if the given message type should be buffered given the
-     * current filter state. Called at hook intake — messages that return false
-     * are dropped before they reach the buffer.
+     * Returns true if the given message should be buffered given the current
+     * filter state. Checks both the category filter and the container filter.
      *
      * Messages that don't belong to any known category (MSG_USER+ custom messages)
-     * are always accepted — they are intentional application-level dispatches.
+     * are always accepted by the category filter — they are intentional
+     * application-level dispatches.
      *
      * @param {number} message
+     * @param {string|null} pacId   The pac-id of the container receiving the message
      * @returns {boolean}
      */
-    isVisible(message) {
+    isVisible(message, pacId = null) {
+        // Container filter: drop messages not destined for the selected container
+        if (this.containerFilter !== null && pacId !== this.containerFilter) {
+            return false;
+        }
+
+        // Category filter
         for (const [category, messageSet] of Object.entries(this.filterCategories)) {
             if (messageSet.has(message)) {
                 return this.filters[category] === true;
@@ -443,10 +511,16 @@ const WakaPACPanel = {
     loadFilters() {
         try {
             const json = localStorage.getItem(this.storageKey);
-            if (!json) { return; }
+            
+            if (!json) {
+                return;
+            }
 
             const saved = JSON.parse(json);
-            if (typeof saved !== 'object' || saved === null) { return; }
+            
+            if (typeof saved !== 'object' || saved === null) {
+                return;
+            }
 
             for (const key of Object.keys(this.filters)) {
                 if (typeof saved[key] === 'boolean') {
@@ -515,7 +589,10 @@ const WakaPACPanel = {
      */
     renderTable(entries) {
         const tbody = this.panelEl.querySelector('.wakapac-tbody');
-        if (!tbody) { return; }
+        
+        if (!tbody) {
+            return;
+        }
 
         if (entries.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" class="wakapac-empty">No messages yet</td></tr>';
@@ -637,6 +714,7 @@ const WakaPACPanel = {
      * @param {number} message
      * @param {number} wParam
      * @param {number} lParam
+     * @param {Object|null} gesture
      * @returns {string}
      */
     formatDetails(message, wParam, lParam, gesture = null) {
@@ -918,6 +996,8 @@ return `
                 <button class="wakapac-tab" data-tab="recording">Recording<span class="wakapac-tab-count"></span></button>
             </div>
             <div class="wakapac-toolbar-right">
+                <label class="wakapac-container-label">Container:</label>
+                <select class="wakapac-container-select"></select>
                 <span class="wakapac-counter">0</span>&nbsp;seen
                 <button class="wakapac-btn wakapac-btn-capture">⏺ Record</button>
                 <button class="wakapac-btn wakapac-btn-clear">🗑 Clear</button>
@@ -1088,6 +1168,29 @@ JS;
 #panel-wakapac .wakapac-filter-btn-active:hover {
     background: #0b5ed7;
     border-color: #0b5ed7;
+}
+
+/* ── Container filter ── */
+#panel-wakapac .wakapac-container-label {
+    font-size: 11px;
+    color: #6c757d;
+    white-space: nowrap;
+}
+
+#panel-wakapac .wakapac-container-select {
+    font-size: 11px;
+    padding: 2px 6px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background: #fff;
+    color: #495057;
+    cursor: pointer;
+    max-width: 160px;
+}
+
+#panel-wakapac .wakapac-container-select:focus {
+    outline: none;
+    border-color: #0d6efd;
 }
 
 /* ── Action buttons ── */
