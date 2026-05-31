@@ -271,9 +271,9 @@
 		 */
 		public function resolveTypeToRegex(string $type): string {
 			return match ($type) {
-				'*' => '[^/]*',     // Single wildcard - any chars except path separator
-				'**' => '.*',       // Multi-wildcard - any chars including path separators
-				default => self::TYPE_PATTERNS[$type] ?? '[^/]+'
+				'*' => '[^\/]*',     // Single wildcard - any chars except path separator
+				'**' => '.*',        // Multi-wildcard - any chars including path separators
+				default => self::TYPE_PATTERNS[$type] ?? '[^\/]+'
 			};
 		}
 		
@@ -381,8 +381,14 @@
 				$variableName = $this->segmentAnalyzer->extractVariableName($segment);
 			}
 			
+			if (str_ends_with($segment, ':**}') || str_ends_with($segment, ':.*}')) {
+				$type = SegmentTypes::MULTI_WILDCARD_VAR;
+			} else {
+				$type = SegmentTypes::MULTI_WILDCARD;
+			}
+			
 			return [
-				'type'                     => 'multi_wildcard',
+				'type'                     => $type,
 				'original'                 => $segment,
 				'variable_name'            => $variableName,
 				'pattern'                  => null,   // Strategy matches .* unconditionally — no stored pattern needed
@@ -517,7 +523,7 @@
 			}
 			
 			// Single wildcard (*) - matches within single path segment
-			return "(?<{$safeVarName}>[^/]*)"; // Direct pattern instead of using varInfo['regex']
+			return "(?<{$safeVarName}>[^\/]*)"; // Direct pattern instead of using varInfo['regex']
 		}
 		
 		/**
@@ -533,7 +539,7 @@
 			string &$pattern,
 			string &$literalPrefix,
 			string &$literalSuffix,
-			bool   $hasFoundVariable
+			bool $hasFoundVariable
 		): void {
 			// Escape special regex characters
 			$pattern .= preg_quote($char, '/');
@@ -619,7 +625,7 @@
 			return [
 				'name'              => $content,
 				'clean_name'        => $content,
-				'regex'             => '[^/]+',
+				'regex'             => '[^\/]+',
 				'is_wildcard'       => false,
 				'is_multi_wildcard' => false,
 				'original_content'  => $content
@@ -640,7 +646,7 @@
 			// Define wildcard patterns and their corresponding regex patterns
 			$wildcards = [
 				'**' => ['regex' => '.*', 'multi' => true],        // Multi-segment wildcard
-				'*'  => ['regex' => '[^/]*', 'multi' => false]    // Single-segment wildcard
+				'*'  => ['regex' => '[^\/]*', 'multi' => false]    // Single-segment wildcard
 			];
 			
 			$config = $wildcards[$content];
@@ -669,7 +675,7 @@
 			// Define suffix patterns with their properties
 			$suffixes = [
 				':**' => ['length' => 3, 'regex' => '.*', 'multi' => true],        // Multi-segment named wildcard
-				':*'  => ['length' => 2, 'regex' => '[^/]*', 'multi' => false]    // Single-segment named wildcard
+				':*'  => ['length' => 2, 'regex' => '[^\/]*', 'multi' => false]    // Single-segment named wildcard
 			];
 			
 			// Find the matching suffix
@@ -692,7 +698,7 @@
 			return [
 				'name'              => $content,
 				'clean_name'        => $content,
-				'regex'             => '[^/]+',
+				'regex'             => '[^\/]+',
 				'is_wildcard'       => false,
 				'is_multi_wildcard' => false,
 				'original_content'  => $content
