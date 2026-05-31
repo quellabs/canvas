@@ -58,7 +58,17 @@
 		}
 		
 		/**
-		 * Determines if an array represents a nested field structure or a list of validators
+		 * Determines if an array represents a nested field structure or a list of validators.
+		 *
+		 * A nested field structure maps string field names to their own validator sets,
+		 * e.g. ['city' => [new NotBlank()], 'zip' => [new NotBlank()]].
+		 * A validator list contains ValidationRuleInterface objects (or arrays of them),
+		 * e.g. [new NotBlank(), new Email()] or [new NotBlank()].
+		 *
+		 * The distinction: in a validator list, values are ValidationRuleInterface objects
+		 * or arrays whose elements are ValidationRuleInterface objects. In a nested structure,
+		 * values are arrays keyed by string field names (never direct rule objects at depth 0).
+		 *
 		 * @param array<mixed> $validators The array to check
 		 * @return bool True if it's a nested field structure, false if it's validators
 		 */
@@ -67,25 +77,24 @@
 				return false;
 			}
 			
-			// Look for ANY ValidationRuleInterface objects in the structure
-			// If we find any, it's a validator array. If we find none, it's nested fields.
-			foreach ($validators as $value) {
-				// Case 1: Direct validator object
+			foreach ($validators as $key => $value) {
+				// A direct ValidationRuleInterface at depth 0 means this is a validator list.
 				if ($value instanceof ValidationRuleInterface) {
 					return false;
 				}
 				
-				// Case 2: Array that might contain validators
-				if (is_array($value)) {
-					foreach ($value as $item) {
-						if ($item instanceof ValidationRuleInterface) {
-							return false;
-						}
-					}
+				// A non-array value at depth 0 cannot be a field group or a validator.
+				if (!is_array($value)) {
+					return false;
+				}
+				
+				// Integer keys mean this is a list of validators (e.g. [new NotBlank(), new Email()]).
+				if (!is_string($key)) {
+					return false;
 				}
 			}
 			
-			// No ValidationRuleInterface objects found - it's a nested field structure
+			// All values are arrays keyed by strings — this is a nested field structure.
 			return true;
 		}
 		
