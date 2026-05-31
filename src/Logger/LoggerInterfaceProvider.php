@@ -22,9 +22,9 @@
 	 * instance rather than constructing a new one each time.
 	 *
 	 * Supported $metadata keys:
-	 *   'provider' — handler identifier: 'stream' (default), 'rotating', 'stderr'
-	 *   'logfile'  — overrides the default log file path (stream and rotating only)
-	 *   'channel'  — Monolog channel label; defaults to 'app'
+	 *   'context' — handler identifier: 'stream' (default), 'rotating', 'stderr'
+	 *   'logfile' — overrides the default log file path (stream and rotating only)
+	 *   'channel' — Monolog channel label; defaults to 'app'
 	 */
 	class LoggerInterfaceProvider extends ServiceProvider {
 		

@@ -65,11 +65,6 @@
 					continue;
 				}
 				
-				// DI system uses 'provider' instead of 'context'
-				if ($key === 'context') {
-					$key = 'provider';
-				}
-				
 				$result[$key] = $value;
 			}
 			
