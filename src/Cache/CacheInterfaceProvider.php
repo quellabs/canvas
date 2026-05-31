@@ -82,7 +82,7 @@
 			$context = $this->resolveContext($methodContext, $dependencies);
 			
 			// Determine which cache provider to use based on metadata or annotations
-			$rawProvider = $metadata['provider'] ?? $context['driver'] ?? null;
+			$rawProvider = $metadata['context'] ?? $context['driver'] ?? null;
 			$providerName = is_string($rawProvider) ? $rawProvider : null;
 			$providerClass = $this->getProviderClass($providerName);
 			

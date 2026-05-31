@@ -69,7 +69,7 @@
 			// Resolve all configuration from metadata, falling back to defaults.
 			// Use is_string guards — PHPStan at strict level rejects casts on mixed.
 			$channel = is_string($metadata['channel'] ?? null) ? $metadata['channel'] : 'app';
-			$provider = is_string($metadata['provider'] ?? null) ? $metadata['provider'] : 'stream';
+			$provider = is_string($metadata['context'] ?? null) ? $metadata['context'] : 'stream';
 			
 			// Resolve logfile
 			$logfile = is_string($metadata['logfile'] ?? null) ? $metadata['logfile'] : $this->logfile;
