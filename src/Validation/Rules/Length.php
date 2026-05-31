@@ -36,7 +36,7 @@
 		 * @param int|null $max
 		 * @param string|null $message
 		 */
-		public function __construct(?int $min = null, int $max = null, ?string $message = null) {
+		public function __construct(?int $min = null, ?int $max = null, ?string $message = null) {
 			parent::__construct($message);
 			$this->min = $min;
 			$this->max = $max;

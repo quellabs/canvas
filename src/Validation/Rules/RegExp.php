@@ -54,9 +54,10 @@
 				return false;
 			}
 			
-			// Use preg_match to test the value against the regular expression
-			// Returns true if the pattern matches, false if it doesn't match or if there's an error
-			return preg_match($this->pattern, $value) !== false;
+			// Use preg_match to test the value against the regular expression.
+			// Must be === 1: preg_match returns 0 on no-match and false on regex error.
+			// Using !== false would incorrectly pass non-matching values (0 !== false is true).
+			return preg_match($this->pattern, $value) === 1;
 		}
 		
 		/**

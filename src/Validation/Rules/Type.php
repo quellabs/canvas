@@ -63,7 +63,12 @@
 				throw new \InvalidArgumentException("Unsupported type '{$type}'");
 			}
 			
+			// Store the type
 			$this->type = $type;
+			
+			// Pre-populate defaultMessage so getError() always returns a non-empty string,
+			// even if validate() has never been called.
+			$this->defaultMessage = "This value should be of type {$type}";
 		}
 		
 		/**
@@ -82,25 +87,26 @@
 				return true;
 			}
 			
-			// Value must be a string
-			if (!is_string($value)) {
-				return false;
-			}
-			
-			// Handle types that use PHP's is_* functions (e.g., is_string, is_int)
+			// Handle types that use PHP's is_* functions (e.g., is_string, is_int).
+			// The value is passed as-is so native type checks work correctly on non-string values.
 			if (in_array($this->type, self::IS_A_TYPES, true)) {
 				if (!$this->getIsTypeValidator($this->type)($value)) {
 					$this->defaultMessage = "This value should be of type {$this->type}";
 					return false;
 				}
+				
+				return true;
+			}
+			
+			// ctype_* functions require a string argument — reject non-strings before casting.
+			if (!is_string($value)) {
+				return false;
 			}
 			
 			// Handle types that use PHP's ctype_* functions (e.g., ctype_alpha, ctype_digit)
-			if (in_array($this->type, self::CTYPE_TYPES, true)) {
-				if (!$this->getCtypeValidator($this->type)((string)$value)) {
-					$this->defaultMessage = $this->getCtypeErrorMessage($this->type);
-					return false;
-				}
+			if (!$this->getCtypeValidator($this->type)((string)$value)) {
+				$this->defaultMessage = $this->getCtypeErrorMessage($this->type);
+				return false;
 			}
 			
 			// Validation passed
