@@ -7,6 +7,7 @@
 	use Quellabs\Canvas\Exceptions\JwtAuthenticationException;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Symfony\Component\HttpFoundation\Response;
+	use Quellabs\Contracts\Configuration\ConfigProviderInterface;
 	
 	/**
 	 * JWT authentication aspect that validates Bearer tokens before a method executes.
@@ -82,7 +83,7 @@
 		
 		/**
 		 * JwtAuthenticationAspect constructor
-		 * @param Configuration $configuration Application configuration, supplies jwt.* defaults
+		 * @param ConfigProviderInterface $configLoader Configuration file loader
 		 * @param string $secret HMAC secret override; falls back to jwt.secret in config
 		 * @param string $algorithm Algorithm override; falls back to jwt.algorithm in config
 		 * @param bool|null $throwOnFailure Failure mode override; falls back to jwt.throw_on_failure in config
@@ -91,7 +92,7 @@
 		 * @param string $audience Expected audience override; falls back to jwt.audience in config
 		 */
 		public function __construct(
-			Configuration $configuration,
+			ConfigProviderInterface $configLoader,
 			string $secret = '',
 			string $algorithm = '',
 			?bool $throwOnFailure = null,
@@ -99,13 +100,16 @@
 			string $issuer = '',
 			string $audience = ''
 		) {
-			// Fetch data
-			$resolvedAlgorithm = $algorithm ?: $configuration->get('jwt.algorithm', 'HS256');
-			$resolvedSecret = $secret ?: $configuration->get('jwt.secret', '');
-			$resolvedThrowOnFailure = $throwOnFailure ?? $configuration->get('jwt.throw_on_failure', false);
-			$resolvedClockSkew = $clockSkew ?? $configuration->get('jwt.clock_skew', 30);
-			$resolvedIssuer = $issuer ?: $configuration->get('jwt.issuer', '');
-			$resolvedAudience = $audience ?: $configuration->get('jwt.audience', '');
+			// Load configuration data
+			$config = $configLoader->loadConfigFile('jwt.php');
+			
+			// Fetch data from config file
+			$resolvedAlgorithm = $algorithm ?: $config->get('algorithm', 'HS256');
+			$resolvedSecret = $secret ?: $config->get('secret', '');
+			$resolvedThrowOnFailure = $throwOnFailure ?? $config->get('throw_on_failure', false);
+			$resolvedClockSkew = $clockSkew ?? $config->get('clock_skew', 30);
+			$resolvedIssuer = $issuer ?: $config->get('issuer', '');
+			$resolvedAudience = $audience ?: $config->get('audience', '');
 			
 			// RS256/ES256 require asymmetric key handling and a different validation path;
 			// reject early rather than silently falling back to an insecure comparison
