@@ -2,6 +2,7 @@
 	
 	namespace Quellabs\Canvas\Security;
 	
+	use Quellabs\Canvas\Configuration\Configuration;
 	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
 	use Quellabs\Canvas\Exceptions\JwtAuthenticationException;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
@@ -43,25 +44,39 @@
 		
 		/**
 		 * JwtAuthenticationAspect constructor
-		 * @param string $secret HMAC secret for HS256, or PEM public key for RS256
-		 * @param string $algorithm Signing algorithm (currently only HS256 is supported)
-		 * @param bool $throwOnFailure When true, throws on failure instead of setting request attributes
+		 * @param Configuration $configuration Application configuration, supplies jwt.secret,
+		 *                                      jwt.algorithm, and jwt.throw_on_failure defaults
+		 * @param string $secret HMAC secret override; falls back to jwt.secret in config
+		 * @param string $algorithm Algorithm override; falls back to jwt.algorithm in config
+		 * @param bool|null $throwOnFailure Failure mode override; falls back to jwt.throw_on_failure in config
 		 */
 		public function __construct(
-			string $secret,
-			string $algorithm = 'HS256',
-			bool $throwOnFailure = false
+			Configuration $configuration,
+			string $secret = '',
+			string $algorithm = '',
+			?bool $throwOnFailure = null
 		) {
+			// Fetch data
+			$resolvedAlgorithm = $algorithm ?: $configuration->get('jwt.algorithm', 'HS256');
+			$resolvedSecret = $secret ?: $configuration->get('jwt.secret', '');
+			$resolvedThrowOnFailure = $throwOnFailure ?? $configuration->get('jwt.throw_on_failure', false);
+			
 			// RS256/ES256 require asymmetric key handling and a different validation path;
 			// reject early rather than silently falling back to an insecure comparison
-			if ($algorithm !== 'HS256') {
+			if ($resolvedAlgorithm !== 'HS256') {
 				throw new \InvalidArgumentException(
-					"Unsupported algorithm '{$algorithm}'. Only HS256 is currently supported."
+					"Unsupported algorithm '{$resolvedAlgorithm}'. Only HS256 is currently supported."
 				);
 			}
 			
-			$this->secret = $secret;
-			$this->throwOnFailure = $throwOnFailure;
+			if (empty($resolvedSecret)) {
+				throw new \RuntimeException(
+					"JWT secret is not configured. Set 'jwt.secret' in config/app.php or pass it via the annotation."
+				);
+			}
+			
+			$this->secret = $resolvedSecret;
+			$this->throwOnFailure = $resolvedThrowOnFailure;
 		}
 		
 		/**
