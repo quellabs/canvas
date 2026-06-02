@@ -29,7 +29,7 @@
 	 *   jwt.secret           — required, set the real value in config/app.local.php
 	 *   jwt.algorithm        — defaults to 'HS256'
 	 *   jwt.throw_on_failure — defaults to false
-	 *   jwt.clock_skew       — defaults to 30 (seconds)
+	 *   jwt.clock_skew       — defaults to 30 (seconds, must be >= 0)
 	 *   jwt.issuer           — defaults to '' (not validated when empty)
 	 *   jwt.audience         — defaults to '' (not validated when empty)
 	 *
@@ -63,6 +63,7 @@
 		/**
 		 * Number of seconds of clock skew to allow when validating exp and nbf claims.
 		 * Compensates for minor time differences between token issuer and this server.
+		 * Must be >= 0.
 		 * @var int
 		 */
 		private int $clockSkew;
@@ -85,7 +86,7 @@
 		 * @param string $secret HMAC secret override; falls back to jwt.secret in config
 		 * @param string $algorithm Algorithm override; falls back to jwt.algorithm in config
 		 * @param bool|null $throwOnFailure Failure mode override; falls back to jwt.throw_on_failure in config
-		 * @param int|null $clockSkew Clock skew override in seconds; falls back to jwt.clock_skew in config
+		 * @param int|null $clockSkew Clock skew override in seconds (>= 0); falls back to jwt.clock_skew in config
 		 * @param string $issuer Expected issuer override; falls back to jwt.issuer in config
 		 * @param string $audience Expected audience override; falls back to jwt.audience in config
 		 */
@@ -119,6 +120,16 @@
 			if (empty($resolvedSecret)) {
 				throw new \RuntimeException(
 					"JWT secret is not configured. Set 'jwt.secret' in config/app.local.php."
+				);
+			}
+			
+			// Negative clock skew would reverse the intended expiry logic — a negative value
+			// for exp would require the token to have expired before it is accepted, and a
+			// negative value for nbf would require the token to not yet be valid in the future;
+			// both are almost certainly misconfiguration rather than intentional behaviour
+			if ($resolvedClockSkew < 0) {
+				throw new \InvalidArgumentException(
+					"Clock skew must be >= 0, got {$resolvedClockSkew}."
 				);
 			}
 			
@@ -230,36 +241,31 @@
 		/**
 		 * Decode a base64url-encoded JWT segment and return it as an associative array.
 		 *
-		 * JWT uses unpadded base64url encoding; PHP's base64_decode() requires standard
-		 * padding, so we restore it before decoding. strtr maps the URL-safe alphabet
-		 * (-_) back to the standard alphabet (+/).
+		 * Delegates base64url decoding to base64UrlDecode() and handles JSON parsing,
+		 * so all base64url normalisation logic lives in one place.
 		 *
 		 * @param string $segment Base64url-encoded JWT segment (header or payload).
 		 * @return array<string, mixed> Decoded segment as an associative array.
 		 * @throws JwtAuthenticationException On malformed base64url input or invalid JSON.
 		 */
 		private function decodeSegment(string $segment): array {
-			// Restore standard base64 alphabet from base64url
-			$base64 = strtr($segment, '-_', '+/');
+			$decoded = $this->base64UrlDecode($segment);
 			
-			// Restore padding stripped by the JWT encoder; base64 requires length % 4 === 0
-			$padding = strlen($base64) % 4;
-			
-			if ($padding !== 0) {
-				$base64 .= str_repeat('=', 4 - $padding);
-			}
-			
-			$decoded = base64_decode($base64, true);
-			
-			// base64_decode returns false on malformed input (illegal characters, bad padding)
+			// base64UrlDecode returns false on malformed input (illegal characters, bad padding)
 			if ($decoded === false) {
 				throw new JwtAuthenticationException('Invalid JWT segment encoding');
 			}
 			
-			$data = json_decode($decoded, true);
+			try {
+				// JSON_THROW_ON_ERROR ensures malformed JSON throws rather than returning null,
+				// avoiding a separate null check and making the failure reason explicit
+				$data = json_decode($decoded, true, 512, JSON_THROW_ON_ERROR);
+			} catch (\JsonException) {
+				throw new JwtAuthenticationException('Invalid JWT segment JSON');
+			}
 			
-			// json_decode returns null on parse failure, or a scalar for non-object JSON;
-			// a valid JWT header and payload are always JSON objects, which decode to arrays
+			// json_decode with assoc=true returns an array for JSON objects and arrays,
+			// or a scalar for primitive JSON values; a valid JWT segment is always an object
 			if (!is_array($data)) {
 				throw new JwtAuthenticationException('Invalid JWT segment JSON');
 			}
@@ -289,7 +295,7 @@
 			// exactly as the issuer would have done when creating the token
 			$expected = hash_hmac('sha256', $headerB64 . '.' . $payloadB64, $this->secret, true);
 			
-			// Decode the signature the token actually carries using the same base64url decoder
+			// Decode the signature the token actually carries using the shared base64url decoder
 			$provided = $this->base64UrlDecode($signatureB64);
 			
 			// hash_equals performs a constant-time comparison to prevent timing attacks;
@@ -300,16 +306,20 @@
 		}
 		
 		/**
-		 * Decode a base64url-encoded value to raw bytes without JSON parsing.
-		 * Used for the signature segment, which is binary rather than JSON.
+		 * Decode a base64url-encoded value to raw bytes.
+		 *
+		 * JWT uses unpadded base64url encoding. This method restores the standard base64
+		 * alphabet and padding before decoding, and is used for all three JWT segments so
+		 * the normalisation logic is not duplicated.
+		 *
 		 * @param string $value Base64url-encoded value.
 		 * @return string|false Decoded bytes, or false on malformed input.
 		 */
 		private function base64UrlDecode(string $value): string|false {
-			// Restore standard base64 alphabet from base64url
+			// Restore standard base64 alphabet from base64url (-_ -> +/)
 			$value = strtr($value, '-_', '+/');
 			
-			// Restore padding stripped by the JWT encoder
+			// Restore padding stripped by the JWT encoder; base64 requires length % 4 === 0
 			$padding = strlen($value) % 4;
 			
 			if ($padding !== 0) {
@@ -322,6 +332,11 @@
 		/**
 		 * Validate the standard time-based claims (exp, nbf, iat) and optional
 		 * issuer and audience claims.
+		 *
+		 * NumericDate values (exp, nbf, iat) accept both int and float per RFC 7519,
+		 * since some JWT issuers emit floating-point timestamps. Values are cast to int
+		 * before comparison so fractional seconds do not affect validation logic.
+		 *
 		 * @param array<string, mixed> $payload Decoded JWT claims.
 		 * @throws JwtAuthenticationException When any claim is violated.
 		 */
@@ -329,36 +344,39 @@
 			$now = time();
 			
 			if (isset($payload['exp'])) {
-				// exp must be an integer Unix timestamp per RFC 7519 §4.1.4
-				if (!is_int($payload['exp'])) {
+				// RFC 7519 §2 defines NumericDate as a JSON numeric value (integer or float);
+				// some issuers emit 1717000000.0 rather than 1717000000, so both are accepted
+				if (!is_int($payload['exp']) && !is_float($payload['exp'])) {
 					throw new JwtAuthenticationException('Invalid exp claim');
 				}
 				
 				// Allow clock skew to compensate for minor time differences between
 				// the token issuer and this server; subtract skew from now so that
 				// tokens expired by less than $clockSkew seconds are still accepted
-				if ($payload['exp'] < ($now - $this->clockSkew)) {
+				if ((int)$payload['exp'] < ($now - $this->clockSkew)) {
 					throw new JwtAuthenticationException('JWT has expired');
 				}
 			}
 			
 			if (isset($payload['nbf'])) {
-				// nbf must be an integer Unix timestamp per RFC 7519 §4.1.5
-				if (!is_int($payload['nbf'])) {
+				// Accept both int and float for the same interoperability reason as exp
+				if (!is_int($payload['nbf']) && !is_float($payload['nbf'])) {
 					throw new JwtAuthenticationException('Invalid nbf claim');
 				}
 				
 				// Allow clock skew in the opposite direction; add skew to now so that
 				// tokens not-before'd up to $clockSkew seconds in the future are accepted
-				if ($payload['nbf'] > ($now + $this->clockSkew)) {
+				if ((int)$payload['nbf'] > ($now + $this->clockSkew)) {
 					throw new JwtAuthenticationException('JWT is not yet valid');
 				}
 			}
 			
-			// iat carries no enforcement logic here but must be a valid integer if present;
-			// a non-integer value indicates a malformed token rather than a legitimate one
-			if (isset($payload['iat']) && !is_int($payload['iat'])) {
-				throw new JwtAuthenticationException('Invalid iat claim');
+			if (isset($payload['iat'])) {
+				// Accept both int and float for the same interoperability reason as exp
+				// iat carries no enforcement logic here but must be a valid numeric type
+				if (!is_int($payload['iat']) && !is_float($payload['iat'])) {
+					throw new JwtAuthenticationException('Invalid iat claim');
+				}
 			}
 			
 			// Validate issuer if configured — prevents tokens issued for another service
@@ -374,8 +392,20 @@
 			if (!empty($this->audience)) {
 				$aud = $payload['aud'] ?? null;
 				
-				$audMatches = $aud === $this->audience ||
-					(is_array($aud) && in_array($this->audience, $aud, true));
+				if (is_array($aud)) {
+					// Validate that all elements are strings before searching — a malformed
+					// aud array with non-string elements should be rejected rather than
+					// silently failing to match
+					foreach ($aud as $entry) {
+						if (!is_string($entry)) {
+							throw new JwtAuthenticationException('Invalid JWT audience');
+						}
+					}
+					
+					$audMatches = in_array($this->audience, $aud, true);
+				} else {
+					$audMatches = $aud === $this->audience;
+				}
 				
 				if (!$audMatches) {
 					throw new JwtAuthenticationException('Invalid JWT audience');
