@@ -264,9 +264,10 @@
 				throw new JwtAuthenticationException('Invalid JWT segment JSON');
 			}
 			
-			// json_decode with assoc=true returns an array for JSON objects and arrays,
-			// or a scalar for primitive JSON values; a valid JWT segment is always an object
-			if (!is_array($data)) {
+			// json_decode with assoc=true returns a list array for JSON arrays and an
+			// associative array for JSON objects; JWT headers and payloads must be objects
+			// (RFC 7519 §3), so list arrays are explicitly rejected here
+			if (!is_array($data) || array_is_list($data)) {
 				throw new JwtAuthenticationException('Invalid JWT segment JSON');
 			}
 			
