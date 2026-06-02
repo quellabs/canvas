@@ -2,12 +2,11 @@
 	
 	namespace Quellabs\Canvas\Security;
 	
-	use Quellabs\Canvas\Configuration\Configuration;
 	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
 	use Quellabs\Canvas\Exceptions\JwtAuthenticationException;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
-	use Symfony\Component\HttpFoundation\Response;
 	use Quellabs\Contracts\Configuration\ConfigProviderInterface;
+	use Symfony\Component\HttpFoundation\Response;
 	
 	/**
 	 * JWT authentication aspect that validates Bearer tokens before a method executes.
@@ -23,16 +22,17 @@
 	 *   ErrorHandlerInterface that handles JwtAuthenticationException to produce
 	 *   a proper JSON 401 response; the default handler returns HTML.
 	 *
-	 * All constructor parameters except $configuration are optional annotation overrides.
-	 * Each falls back to the corresponding jwt.* key in config/app.php when not provided.
+	 * Configuration is loaded from config/jwt.php (and config/jwt.local.php for
+	 * environment-specific overrides). All constructor parameters except $configLoader
+	 * are optional annotation overrides that take precedence over config file values.
 	 *
-	 * config/app.php keys:
-	 *   jwt.secret           — required, set the real value in config/app.local.php
-	 *   jwt.algorithm        — defaults to 'HS256'
-	 *   jwt.throw_on_failure — defaults to false
-	 *   jwt.clock_skew       — defaults to 30 (seconds, must be >= 0)
-	 *   jwt.issuer           — defaults to '' (not validated when empty)
-	 *   jwt.audience         — defaults to '' (not validated when empty)
+	 * config/jwt.php keys:
+	 *   secret           — required, set the real value in config/jwt.local.php
+	 *   algorithm        — defaults to 'HS256'
+	 *   throw_on_failure — defaults to false
+	 *   clock_skew       — defaults to 30 (seconds, must be >= 0)
+	 *   issuer           — defaults to '' (not validated when empty)
+	 *   audience         — defaults to '' (not validated when empty)
 	 *
 	 * Usage:
 	 * @InterceptWith(Quellabs\Canvas\Security\JwtAuthenticationAspect::class)
@@ -83,13 +83,13 @@
 		
 		/**
 		 * JwtAuthenticationAspect constructor
-		 * @param ConfigProviderInterface $configLoader Configuration file loader
-		 * @param string $secret HMAC secret override; falls back to jwt.secret in config
-		 * @param string $algorithm Algorithm override; falls back to jwt.algorithm in config
-		 * @param bool|null $throwOnFailure Failure mode override; falls back to jwt.throw_on_failure in config
-		 * @param int|null $clockSkew Clock skew override in seconds (>= 0); falls back to jwt.clock_skew in config
-		 * @param string $issuer Expected issuer override; falls back to jwt.issuer in config
-		 * @param string $audience Expected audience override; falls back to jwt.audience in config
+		 * @param ConfigProviderInterface $configLoader Config loader, used to load config/jwt.php
+		 * @param string $secret HMAC secret override; falls back to secret in config/jwt.php
+		 * @param string $algorithm Algorithm override; falls back to algorithm in config/jwt.php
+		 * @param bool|null $throwOnFailure Failure mode override; falls back to throw_on_failure in config/jwt.php
+		 * @param int|null $clockSkew Clock skew override in seconds (>= 0); falls back to clock_skew in config/jwt.php
+		 * @param string $issuer Expected issuer override; falls back to issuer in config/jwt.php
+		 * @param string $audience Expected audience override; falls back to audience in config/jwt.php
 		 */
 		public function __construct(
 			ConfigProviderInterface $configLoader,
@@ -100,7 +100,10 @@
 			string $issuer = '',
 			string $audience = ''
 		) {
-			// Load configuration data
+			// Load config/jwt.php (and config/jwt.local.php if present).
+			// If neither file exists, $config is an empty config object and all
+			// get() calls return their defaults — the missing secret check below
+			// catches this case and fails with a clear error message.
 			$config = $configLoader->loadConfigFile('jwt.php');
 			
 			// Fetch data from config file
@@ -123,7 +126,7 @@
 			// which is a critical misconfiguration; fail hard at startup rather than silently
 			if (empty($resolvedSecret)) {
 				throw new \RuntimeException(
-					"JWT secret is not configured. Set 'jwt.secret' in config/app.local.php."
+					"JWT secret is not configured. Set 'secret' in config/jwt.local.php."
 				);
 			}
 			
@@ -268,9 +271,9 @@
 				throw new JwtAuthenticationException('Invalid JWT segment JSON');
 			}
 			
-			// json_decode with assoc=true returns a list array for JSON arrays and an
-			// associative array for JSON objects; JWT headers and payloads must be objects
-			// (RFC 7519 §3), so list arrays are explicitly rejected here
+			// With assoc=true, both JSON objects and JSON arrays decode to PHP arrays.
+			// JWT headers and payloads must be JSON objects per RFC 7519 §3, so list
+			// arrays (i.e. JSON arrays) are explicitly rejected here.
 			if (!is_array($data) || array_is_list($data)) {
 				throw new JwtAuthenticationException('Invalid JWT segment JSON');
 			}
@@ -377,7 +380,7 @@
 			}
 			
 			if (isset($payload['iat'])) {
-				// Accept both int and float for the same interoperability reason as exp
+				// Accept both int and float for the same interoperability reason as exp;
 				// iat carries no enforcement logic here but must be a valid numeric type
 				if (!is_int($payload['iat']) && !is_float($payload['iat'])) {
 					throw new JwtAuthenticationException('Invalid iat claim');
