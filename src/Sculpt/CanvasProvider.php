@@ -17,6 +17,7 @@
 				ScheduleRunCommand::class,
 				SchedulerListCommand::class,
 				CacheInitCommand::class,
+				JwtInitCommand::class,
 			]);
 		}
 	}
