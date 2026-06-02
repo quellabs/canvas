@@ -369,21 +369,11 @@
 			$config = new \Quellabs\AnnotationReader\Configuration();
 			$debugMode = (bool)$this->configuration->get('debug_mode', false);
 			
-			// Pass debug mode so the reader knows whether to validate cache files
-			// against source mtime (debug) or trust them unconditionally (production)
+			// Enable annotation caching
+			$rootPath = ComposerUtils::getProjectRoot();
+			$config->setUseAnnotationCache(true);
+			$config->setAnnotationCachePath($rootPath . "/storage/annotations");
 			$config->setDebugMode($debugMode);
-			
-			// Enable file-based caching in production
-			if (!$debugMode) {
-				// Get the project root directory path for cache storage
-				$rootPath = ComposerUtils::getProjectRoot();
-				
-				// Enable annotation caching for better performance in production
-				$config->setUseAnnotationCache(true);
-				
-				// Set the cache directory path within the project's storage folder
-				$config->setAnnotationCachePath($rootPath . "/storage/annotations");
-			}
 			
 			// Create and return the configured AnnotationReader instance
 			return new AnnotationReader($config);

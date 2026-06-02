@@ -2,8 +2,11 @@
 	
 	namespace Quellabs\Canvas\Sculpt;
 	
+	use Quellabs\Canvas\Kernel;
+	use Quellabs\Canvas\Annotations\Route;
 	use Quellabs\Sculpt\ConfigurationManager;
 	use Quellabs\Support\ComposerUtils;
+	use Quellabs\AnnotationReader\AnnotationReader;
 	
 	class RoutesCacheClearCommand extends RoutesBase {
 		
@@ -29,16 +32,9 @@
 		 * @return int
 		 */
 		public function execute(ConfigurationManager $config): int {
-			// Fetch contents of app.php
-			$providerConfig = $this->getProvider()->getConfig();
-			
-			// Determine the cache directory
-			$cacheDirectory = $providerConfig['cache_dir'] ?? ComposerUtils::getProjectRoot();
-			
-			// Remove the cache file
-			if (file_exists($cacheDirectory . "/storage/cache/routes.serialized")) {
-				@unlink($cacheDirectory . "/storage/cache/routes.serialized");
-			}
+			// Remove the cache files
+			$kernel = new Kernel();
+			$kernel->getAnnotationsReader()->clearCacheByAnnotationClass(Route::class);
 			
 			// Show message
 			$this->output->success("Routes cache cleared");
