@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Sculpt;
 	
 	use Quellabs\Canvas\Kernel;
+	use Quellabs\Support\ComposerUtils;
 	use Quellabs\Canvas\Annotations\Route;
 	use Quellabs\Sculpt\ConfigurationManager;
 	use Quellabs\Sculpt\Contracts\CommandBase;
