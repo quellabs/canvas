@@ -2,7 +2,13 @@
 	
 	namespace Quellabs\Canvas\Routing;
 	
+	use Quellabs\Canvas\AOP\AspectResolver;
+	use Quellabs\DependencyInjection\Container;
 	use Quellabs\Canvas\Signals\SignalConnector;
+	use Quellabs\Canvas\AOP\Contracts\AfterAspectInterface;
+	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
+	use Quellabs\Canvas\AOP\Contracts\AroundAspectInterface;
+	use Quellabs\Canvas\AOP\Contracts\RequestAspectInterface;
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Canvas\AOP\AspectDispatcher;
 	use Quellabs\Canvas\Discover\MethodContextProvider;
@@ -95,9 +101,18 @@
 			$controllerClass = $urlData["controller"];
 			$controller = $dependencyInjector->make($controllerClass);
 			
+			// Discover all aspects that apply to the method and instantiate them
+			$aspectResolver = new AspectResolver($this->kernel->getAnnotationsReader());
+			$aspects = $aspectResolver->resolve($controller, $urlData["method"]);
+			$resolvedAspects = $this->resolveAspects($dependencyInjector, $aspects);
+			
 			// Register controller signals with the hub
 			$hub = $this->kernel->getSignalHub();
 			$signals = $hub->discoverSignals($controller);
+			
+			foreach ($resolvedAspects as $aspectObject) {
+				$signals = array_merge($signals, $hub->discoverSignals($aspectObject));
+			}
 			
 			// If signals found, auto-connect them to slots
 			if (!empty($signals)) {
@@ -120,12 +135,11 @@
 			try {
 				// Create aspect-aware dispatcher
 				$aspectDispatcher = new AspectDispatcher(
-					$this->kernel->getAnnotationsReader(),
 					$this->kernel->getDependencyInjector()
 				);
 				
 				// Run the request through the aspect dispatcher
-				return $aspectDispatcher->dispatch($context);
+				return $aspectDispatcher->dispatch($context, $resolvedAspects);
 				
 			} finally {
 				// Always unregister context, even if exception occurs
@@ -133,6 +147,42 @@
 				
 				// Unregister signals
 				$hub->unregisterSignals($controller);
+				
+				foreach ($resolvedAspects as $aspectObject) {
+					$hub->unregisterSignals($aspectObject);
+				}
 			}
+		}
+		
+		/**
+		 * Resolves and instantiates aspects for a given controller method.
+		 * @param array<int, array{class: class-string, parameters: array<string, mixed>, priority: int}> $aspects
+		 * @return array<int, RequestAspectInterface|BeforeAspectInterface|AroundAspectInterface|AfterAspectInterface> Array of instantiated aspect objects ready for execution
+		 */
+		private function resolveAspects(Container $di, array $aspects): array {
+			$aspectsResolved = [];
+			
+			foreach ($aspects as $entry) {
+				// Use dependency injection container to create aspect instance with its parameters
+				// The DI container handles constructor injection and aspect lifecycle
+				$instance = $di->make($entry['class'], $entry['parameters']);
+				
+				// Validate that we got any of the valid AOP interfaces
+				if (
+					!$instance instanceof RequestAspectInterface &&
+					!$instance instanceof BeforeAspectInterface &&
+					!$instance instanceof AroundAspectInterface &&
+					!$instance instanceof AfterAspectInterface
+				) {
+					throw new \RuntimeException(
+						"Resolved aspect must implement a valid aspect interface: {$entry['class']}"
+					);
+				}
+				
+				// Add instance to the resolved list
+				$aspectsResolved[] = $instance;
+			}
+			
+			return $aspectsResolved;
 		}
 	}

@@ -7,6 +7,9 @@
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Canvas\Annotations\InterceptWith;
 	
+	/**
+	 * @phpstan-type AspectDefinition array{class: class-string, parameters: array<string, mixed>, priority: int}
+	 */
 	readonly class AspectResolver {
 		
 		/**
@@ -30,7 +33,7 @@
 		 * Within each level, higher priority executes first.
 		 * @param object|class-string $controller The controller instance
 		 * @param string $method The method name being called
-		 * @return array<int, array{class: class-string, parameters: array<string, mixed>, priority: int}> Array of aspect definitions sorted by inheritance hierarchy and priority
+		 * @return array<int, AspectDefinition> Array of aspect definitions sorted by inheritance hierarchy and priority
 		 * @throws AnnotationReaderException
 		 */
 		public function resolve(object|string $controller, string $method): array {
@@ -69,7 +72,7 @@
 		/**
 		 * Convert annotation instances to aspect definitions with parameters and priority
 		 * @param AnnotationCollection $annotations Collection of InterceptWith annotations
-		 * @return array<int, array{class: class-string, parameters: array<string, mixed>, priority: int}> Array of aspect definitions
+		 * @return array<int, AspectDefinition> Array of aspect definitions
 		 */
 		private function convertAnnotationsToAspects(AnnotationCollection $annotations): array {
 			$aspects = [];

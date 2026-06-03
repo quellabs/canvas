@@ -12,18 +12,19 @@
 	use Quellabs\DependencyInjection\Container;
 	use Symfony\Component\HttpFoundation\Response;
 	
+	/**
+	 * @phpstan-import-type AspectDefinition from AspectResolver
+	 */
 	class AspectDispatcher {
-		
-		private AnnotationReader $annotationReader;
+
+		/** @var Container Dependency injector */
 		private Container $di;
 		
 		/**
 		 * AspectDispatcher constructor
-		 * @param AnnotationReader $annotationReader
 		 * @param Container $di
 		 */
-		public function __construct(AnnotationReader $annotationReader, Container $di) {
-			$this->annotationReader = $annotationReader;
+		public function __construct(Container $di) {
 			$this->di = $di;
 		}
 		
@@ -45,15 +46,12 @@
 		 * 7. Returns the final response
 		 *
 		 * @param MethodContextInterface $context Pre-created method context (already registered with DI)
+		 * @param array<int, RequestAspectInterface|BeforeAspectInterface|AroundAspectInterface|AfterAspectInterface> $aspects Array of instantiated aspect objects ready for execution
 		 * @return Response The final HTTP response after all aspect processing
 		 * @throws AnnotationReaderException
 		 */
-		public function dispatch(MethodContextInterface $context): Response {
+		public function dispatch(MethodContextInterface $context, array $aspects): Response {
 			try {
-				// Discover and instantiate all aspects that apply to this method
-				// Uses annotation scanning and dependency injection for aspect creation
-				$aspects = $this->getResolvedAspects($context->getClass(), $context->getMethodName());
-				
 				// Phase 1: Transform the incoming request.
 				// Request aspects can modify headers, parameters, or add computed attributes
 				$this->handleRequestAspects($aspects, $context);
@@ -78,48 +76,6 @@
 				// AopException carries the response that should be returned immediately
 				return $e->getResponse();
 			}
-		}
-		
-		/**
-		 * Resolves and instantiates aspects for a given controller method.
-		 * @param object $controller The controller instance that contains the target method
-		 * @param string $method The name of the method to resolve aspects for
-		 * @return array<int, RequestAspectInterface|BeforeAspectInterface|AroundAspectInterface|AfterAspectInterface> Array of instantiated aspect objects ready for execution
-		 * @throws AnnotationReaderException
-		 */
-		private function getResolvedAspects(object $controller, string $method): array {
-			// Instantiate AspectResolver, which is used to find AOP classes
-			$aspectResolver = new AspectResolver($this->annotationReader);
-			
-			// Use the aspect resolver to determine which aspects apply to this controller method
-			// Returns an array where keys are aspect class names and values are constructor parameters
-			$aspects = $aspectResolver->resolve($controller, $method);
-			
-			// Iterate through each resolved aspect and instantiate it
-			$aspectsResolved = [];
-			
-			foreach ($aspects as $entry) {
-				// Use dependency injection container to create aspect instance with its parameters
-				// The DI container handles constructor injection and aspect lifecycle
-				$instance = $this->di->make($entry['class'], $entry['parameters']);
-				
-				// Validate that we got any of the valid AOP interfaces
-				if (
-					!$instance instanceof RequestAspectInterface &&
-					!$instance instanceof BeforeAspectInterface &&
-					!$instance instanceof AroundAspectInterface &&
-					!$instance instanceof AfterAspectInterface
-				) {
-					throw new \RuntimeException(
-						"Resolved aspect must implement a valid aspect interface: {$entry['class']}"
-					);
-				}
-				
-				// Add instance to the resolved list
-				$aspectsResolved[] = $instance;
-			}
-			
-			return $aspectsResolved;
 		}
 		
 		/**
