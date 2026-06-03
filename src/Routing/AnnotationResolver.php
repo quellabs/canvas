@@ -56,13 +56,12 @@
 	 *
 	 * The resolver maintains full backward compatibility while providing significant
 	 * performance improvements, especially for applications with large numbers of routes.
-     *
+	 *
 	 * @phpstan-import-type RouteDefinition from RouteTypes
 	 * @phpstan-import-type RouteIndex from RouteTypes
 	 * @phpstan-import-type MatchedRoute from RouteTypes
 	 */
 	class AnnotationResolver extends AnnotationBase {
-		private bool $debugMode;
 		private bool $matchTrailingSlashes;
 		private string $cacheDirectory;
 		
@@ -154,15 +153,6 @@
 		}
 		
 		/**
-		 * Clear all caches and force rebuild
-		 * @return bool True if all caches were cleared successfully
-		 */
-		public function clearAllCaches(): bool {
-			$this->routeIndex = null;
-			return $this->cacheManager->clearCache();
-		}
-		
-		/**
 		 * Parse request URL into segments
 		 * @param string $requestUri Raw request URI
 		 * @return list<string> Parsed URL segments
@@ -192,7 +182,7 @@
 			
 			// Get all routes (from cache or fresh build)
 			/** @var list<RouteDefinition> $allRoutes */
-			$allRoutes = $this->cacheManager->getCachedRoutes(function() {
+			$allRoutes = $this->cacheManager->getCachedRoutes(function () {
 				return $this->routeDiscovery->buildRoutesFromControllers();
 			});
 			
@@ -207,7 +197,6 @@
 		private function initializeConfiguration(): void {
 			$config = $this->kernel->getConfiguration();
 			
-			$this->debugMode = $config->get('debug_mode',  false);
 			$this->matchTrailingSlashes = $config->get('match_trailing_slashes', false);
 			$this->cacheDirectory = $config->get('cache_dir', ComposerUtils::getProjectRoot() . "/storage/cache");
 		}
@@ -249,12 +238,9 @@
 			);
 			
 			// Set up cache management for storing and retrieving compiled routes
-			// Uses file cache for persistence, debug mode affects caching behavior,
-			// and controller directory for locating route definitions
 			$this->cacheManager = new RouteCacheManager(
-				$fileCache,                   // File-based cache storage
-				$controllerDiscovery,         // Discovery component
-				$this->debugMode,             // Debug mode flag (affects cache invalidation)
+				$fileCache,              // File-based cache storage
+				$controllerDiscovery     // Discovery component
 			);
 		}
 		
@@ -264,12 +250,10 @@
 		 */
 		private function initializeCacheDirectory(): void {
 			if (
-				!$this->debugMode &&
 				!is_dir($this->cacheDirectory) &&
 				!@mkdir($this->cacheDirectory, 0755, true)
 			) {
 				error_log("AnnotationResolver: Cannot create cache directory: {$this->cacheDirectory}");
-				$this->debugMode = true;
 			}
 		}
 	}

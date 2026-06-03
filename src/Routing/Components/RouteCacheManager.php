@@ -18,13 +18,11 @@
 	 * - Route caching: Stores compiled routes and indexes to avoid expensive rebuilds
 	 * - Cache invalidation: Automatically detects controller file changes
 	 * - File modification tracking: Monitors controller directory for updates
-	 * - Debug mode handling: Bypasses caching during development
 	 * - Concurrency protection: Uses FileCache atomic operations for thread safety
 	 * - Cache statistics: Provides metrics on cache performance and status
 	 *
 	 * Caching strategy:
 	 * - Production mode: Aggressive caching with file modification detection
-	 * - Debug mode: Cache bypass for immediate reflection of code changes
 	 * - Intelligent invalidation: Compares controller modification times
 	 * - Atomic operations: Thread-safe cache updates using FileCache
 	 * - Configurable TTL: Default 24-hour cache lifetime with override support
@@ -56,7 +54,6 @@
 		
 		private FileCache $cache;
 		private ControllersDiscovery $controllersDiscovery;
-		private bool $debugMode;
 		private int $defaultTtl;
 		
 		/**
@@ -71,18 +68,15 @@
 		 * RouteCacheManager constructor
 		 * @param FileCache $cache
 		 * @param ControllersDiscovery $controllersDiscovery
-		 * @param bool $debugMode
 		 * @param int $defaultTtl
 		 */
 		public function __construct(
-			FileCache            $cache,
+			FileCache $cache,
 			ControllersDiscovery $controllersDiscovery,
-			bool                 $debugMode,
-			int                  $defaultTtl = 86400 // 24 hours default
+			int $defaultTtl = 86400 // 24 hours default
 		) {
 			$this->cache = $cache;
 			$this->controllersDiscovery = $controllersDiscovery;
-			$this->debugMode = $debugMode;
 			$this->defaultTtl = $defaultTtl;
 		}
 		
@@ -93,16 +87,11 @@
 		 * @return T Cached or freshly built routes array
 		 */
 		public function getCachedRoutes(callable $builder): mixed {
-			// Skip caching entirely in debug mode for development flexibility
-			if ($this->debugMode) {
-				return $builder();
-			}
-			
 			$currentMtime = $this->getLastControllerModification();
 			$cached = $this->getCachedBundle();
 			
 			// Cache hit: entry exists and mtime still matches
-			if ($cached !== null && $cached['mtime'] === $currentMtime) {
+			if ($cached !== null && $this->isBundleValid($cached, $currentMtime)) {
 				return $cached['routes'];
 			}
 			
@@ -119,31 +108,21 @@
 		}
 		
 		/**
-		 * Check if cache is valid by comparing modification times.
-		 * Pure read — no filesystem side effects beyond what getLastControllerModification
-		 * already documents.
-		 * @return bool True if cache is still valid, false if stale
-		 */
-		public function isCacheValid(): bool {
-			if ($this->debugMode) {
-				return false;
-			}
-			
-			$cached = $this->getCachedBundle();
-			
-			if ($cached === null) {
-				return false;
-			}
-			
-			return $cached['mtime'] === $this->getLastControllerModification();
-		}
-		
-		/**
 		 * Clear all cached routes and related data
 		 * @return bool True if cache was cleared successfully
 		 */
 		public function clearCache(): bool {
 			return $this->cache->forget(self::ROUTES_CACHE_KEY);
+		}
+		
+		/**
+		 * Determine whether a cached bundle is still valid by comparing mtimes.
+		 * @param array{mtime: int, routes: mixed}|null $cached
+		 * @param int $currentMtime
+		 * @return bool
+		 */
+		private function isBundleValid(?array $cached, int $currentMtime): bool {
+			return $cached !== null && $cached['mtime'] === $currentMtime;
 		}
 		
 		/**

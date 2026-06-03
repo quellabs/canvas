@@ -32,9 +32,20 @@
 		 * @return int
 		 */
 		public function execute(ConfigurationManager $config): int {
-			// Remove the cache files
+			// Remove annotation cache files
 			$kernel = new Kernel();
 			$kernel->getAnnotationsReader()->clearCacheByAnnotationClass(Route::class);
+			
+			// Remove compiled routes
+			$files = glob(ComposerUtils::getProjectRoot() . '/storage/cache/routes/*');
+			
+			if ($files !== false) {
+				foreach ($files as $file) {
+					if (is_file($file)) {
+						@unlink($file);
+					}
+				}
+			}
 			
 			// Show message
 			$this->output->success("Routes cache cleared");
