@@ -1,7 +1,5 @@
 <?php
 	
-	namespace Quellabs\Contracts\AOP;
-	
 	namespace Quellabs\Canvas\AOP\Contracts;
 	
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
