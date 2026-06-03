@@ -3,18 +3,17 @@
 	namespace Quellabs\Canvas\Sculpt;
 	
 	use Quellabs\Canvas\Kernel;
-	use Quellabs\Canvas\Annotations\Route;
 	use Quellabs\Sculpt\ConfigurationManager;
 	use Quellabs\Sculpt\Contracts\CommandBase;
 	
-	class RoutesCacheClearCommand extends CommandBase {
+	class AnnotationsCacheClearCommand extends CommandBase {
 		
 		/**
 		 * Returns the signature of this command
 		 * @return string
 		 */
 		public function getSignature(): string {
-			return "route:clear-cache";
+			return "annotations:clear-cache";
 		}
 		
 		/**
@@ -22,21 +21,21 @@
 		 * @return string
 		 */
 		public function getDescription(): string {
-			return "Clear routing cache";
+			return "Clear all annotation caches";
 		}
 		
 		/**
-		 * List the routes
+		 * Clear all annotation cache files
 		 * @param ConfigurationManager $config
 		 * @return int
 		 */
 		public function execute(ConfigurationManager $config): int {
-			// Remove the cache files
+			// Remove all annotation cache and manifest files
 			$kernel = new Kernel();
-			$kernel->getAnnotationsReader()->clearCacheByAnnotationClass(Route::class);
+			$kernel->getAnnotationsReader()->clearAllCaches();
 			
 			// Show message
-			$this->output->success("Routes cache cleared");
+			$this->output->success("Annotation cache cleared");
 			
 			// Return success status
 			return 0;
