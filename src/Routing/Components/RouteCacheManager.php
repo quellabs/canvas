@@ -88,6 +88,8 @@
 		 */
 		public function getCachedRoutes(callable $builder): mixed {
 			$currentMtime = $this->getLastControllerModification();
+			
+			// Fetch cache
 			$cached = $this->getCachedBundle();
 			
 			// Cache hit: entry exists and mtime still matches
