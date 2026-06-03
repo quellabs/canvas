@@ -6,6 +6,7 @@
 	use Quellabs\Canvas\Routing\AnnotationResolver;
 	use Quellabs\Sculpt\ConfigurationManager;
 	use Symfony\Component\HttpFoundation\Request;
+	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	
 	class MatchRoutesCommand extends RoutesBase {
 		
@@ -29,6 +30,7 @@
 		 * List the routes
 		 * @param ConfigurationManager $config
 		 * @return int
+		 * @throws AnnotationReaderException
 		 */
 		public function execute(ConfigurationManager $config): int {
 			$request = $this->createRequestFromConfig($config);

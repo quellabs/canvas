@@ -5,6 +5,7 @@
 	use Quellabs\Canvas\Kernel;
 	use Quellabs\Canvas\Scheduler\Scheduler;
 	use Quellabs\Sculpt\ConfigurationManager;
+	use Quellabs\Sculpt\Contracts\CommandBase;
 	use Quellabs\Canvas\Scheduler\Storage\FileJobStorage;
 	use Quellabs\Support\ComposerUtils;
 	
@@ -14,7 +15,7 @@
 	 * This command discovers and displays all scheduled tasks in the system.
 	 * It uses a file-based storage system to retrieve task scheduling information.
 	 */
-	class SchedulerListCommand extends RoutesBase {
+	class SchedulerListCommand extends CommandBase {
 		
 		/**
 		 * Returns the signature of this command

@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Sculpt;
 	
 	use Quellabs\Canvas\Kernel;
+	use Quellabs\Sculpt\Contracts\CommandBase;
 	use Quellabs\Canvas\Scheduler\Cron\CronConsumer;
 	use Quellabs\Contracts\Scheduler\ConsumerInterface;
 	use Quellabs\Sculpt\ConfigurationManager;
@@ -19,7 +20,7 @@
 	 *   php sculpt schedule:run --consumer=redis   — runs Redis consumer
 	 *   php sculpt schedule:run --consumer=cron    — explicit cron
 	 */
-	class ScheduleRunCommand extends RoutesBase {
+	class ScheduleRunCommand extends CommandBase {
 		
 		/**
 		 * Returns the signature of this command
