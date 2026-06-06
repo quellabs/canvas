@@ -22,7 +22,7 @@
 		 * @return string
 		 */
 		public function getSignature(): string {
-			return "route:match";
+			return "routes:match";
 		}
 		
 		/**
@@ -45,7 +45,7 @@ DESCRIPTION:
     When no HTTP method is given, GET is assumed.
 
 USAGE:
-    php sculpt route:match <path> [method]
+    php sculpt routes:match <path> [method]
 
 ARGUMENTS:
     method    HTTP method to match against (GET, POST, PUT, PATCH, DELETE)
@@ -53,10 +53,10 @@ ARGUMENTS:
     path      The URL path to match (e.g. /users/42)
 
 EXAMPLES:
-    php sculpt route:match /users/42
+    php sculpt routes:match /users/42
         Matches /users/42 using GET
 
-    php sculpt route:match /users POST
+    php sculpt routes:match /users POST
         Matches /users using POST
 
 NOTES:

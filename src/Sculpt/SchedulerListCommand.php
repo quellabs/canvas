@@ -22,7 +22,7 @@
 		 * @return string The command signature "schedule:list"
 		 */
 		public function getSignature(): string {
-			return "schedule:list";
+			return "scheduler:list";
 		}
 		
 		/**
@@ -45,10 +45,10 @@ DESCRIPTION:
     alphabetically by name within the same frequency group.
 
 USAGE:
-    php sculpt schedule:list
+    php sculpt scheduler:list
 
 EXAMPLES:
-    php sculpt schedule:list
+    php sculpt scheduler:list
         Prints a table of all tasks with their name, description, and schedule
 
 NOTES:

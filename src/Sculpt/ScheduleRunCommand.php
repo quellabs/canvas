@@ -24,7 +24,7 @@
 		 * @return string
 		 */
 		public function getSignature(): string {
-			return "schedule:run";
+			return "scheduler:run";
 		}
 		
 		/**
@@ -47,19 +47,19 @@ DESCRIPTION:
     via Composer metadata and must be installed as separate packages.
 
 USAGE:
-    php sculpt schedule:run [--consumer=<name>]
+    php sculpt scheduler:run [--consumer=<name>]
 
 OPTIONS:
     --consumer=<name>    Name of the consumer to run (default: cron)
 
 EXAMPLES:
-    php sculpt schedule:run
+    php sculpt scheduler:run
         Starts the built-in cron consumer
 
-    php sculpt schedule:run --consumer=cron
+    php sculpt scheduler:run --consumer=cron
         Explicit equivalent of the default
 
-    php sculpt schedule:run --consumer=redis
+    php sculpt scheduler:run --consumer=redis
         Starts the Redis consumer (requires the Redis consumer package)
 
 NOTES:

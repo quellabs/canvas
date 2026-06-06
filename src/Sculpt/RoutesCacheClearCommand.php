@@ -15,7 +15,7 @@
 		 * @return string
 		 */
 		public function getSignature(): string {
-			return "route:clear-cache";
+			return "routes:clear-cache";
 		}
 		
 		/**

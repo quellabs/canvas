@@ -17,7 +17,7 @@
 		 * @return string
 		 */
 		public function getSignature(): string {
-			return "route:list";
+			return "routes:list";
 		}
 		
 		/**
@@ -39,10 +39,10 @@ DESCRIPTION:
     including their HTTP methods, path, controller action, and attached aspects.
 
 USAGE:
-    php sculpt route:list
+    php sculpt routes:list
 
 EXAMPLES:
-    php sculpt route:list
+    php sculpt routes:list
         Prints all registered routes to the console
 
 NOTES:
