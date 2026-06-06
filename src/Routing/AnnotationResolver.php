@@ -153,6 +153,17 @@
 		}
 		
 		/**
+		 * Initialize configuration from kernel
+		 * @return void
+		 */
+		private function initializeConfiguration(): void {
+			$config = $this->kernel->getConfiguration();
+			
+			$this->matchTrailingSlashes = $config->get('match_trailing_slashes', false);
+			$this->cacheDirectory = $config->get('cache_dir', ComposerUtils::getProjectRoot() . "/storage/cache");
+		}
+		
+		/**
 		 * Parse request URL into segments
 		 * @param string $requestUri Raw request URI
 		 * @return list<string> Parsed URL segments
@@ -188,17 +199,6 @@
 			
 			// Build and cache the index
 			return $this->routeIndex = $this->candidateFilter->buildRouteIndex($allRoutes);
-		}
-		
-		/**
-		 * Initialize configuration from kernel
-		 * @return void
-		 */
-		private function initializeConfiguration(): void {
-			$config = $this->kernel->getConfiguration();
-			
-			$this->matchTrailingSlashes = $config->get('match_trailing_slashes', false);
-			$this->cacheDirectory = $config->get('cache_dir', ComposerUtils::getProjectRoot() . "/storage/cache");
 		}
 		
 		/**
