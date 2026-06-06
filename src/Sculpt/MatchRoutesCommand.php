@@ -8,6 +8,13 @@
 	use Symfony\Component\HttpFoundation\Request;
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	
+	/**
+	 * MatchRoutesCommand - Test which routes match a given URL and HTTP method
+	 *
+	 * Resolves a path against the application's registered routes and displays
+	 * all matches in a table, including the controller action and any attached
+	 * aspects. Defaults to GET when no HTTP method is specified.
+	 */
 	class MatchRoutesCommand extends RoutesBase {
 		
 		/**
@@ -24,6 +31,39 @@
 		 */
 		public function getDescription(): string {
 			return "Test which route matches a given URL/path";
+		}
+		
+		/**
+		 * Returns extended help text displayed when --help is passed.
+		 * @return string
+		 */
+		public function getHelp(): string {
+			return <<<HELP
+DESCRIPTION:
+    Resolves a path against the application's registered routes and displays all
+    matches in a table with their HTTP methods, controller action, and aspects.
+    When no HTTP method is given, GET is assumed.
+
+USAGE:
+    php sculpt route:match <path>
+    php sculpt route:match <method> <path>
+
+ARGUMENTS:
+    method    HTTP method to match against (GET, POST, PUT, PATCH, DELETE)
+              Defaults to GET when omitted
+    path      The URL path to match (e.g. /users/42)
+
+EXAMPLES:
+    php sculpt route:match /users/42
+        Matches /users/42 using GET
+
+    php sculpt route:match POST /users
+        Matches /users using POST
+
+NOTES:
+    - Aspects are shown as a comma-separated list in brackets
+    - An empty result table means no route matched the given path and method
+HELP;
 		}
 		
 		/**

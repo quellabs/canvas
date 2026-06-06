@@ -11,14 +11,11 @@
 	use Quellabs\Discover\Scanner\ComposerScanner;
 	
 	/**
-	 * Unified queue/scheduler work command.
-	 * Cron is the default consumer and is instantiated directly.
-	 * Other consumers are discovered via Composer metadata.
+	 * ScheduleRunCommand - Start a task consumer
 	 *
-	 * Usage:
-	 *   php sculpt schedule:run                    — runs cron consumer (default)
-	 *   php sculpt schedule:run --consumer=redis   — runs Redis consumer
-	 *   php sculpt schedule:run --consumer=cron    — explicit cron
+	 * Runs a scheduler consumer in the foreground. The cron consumer is built in
+	 * and used by default. Additional consumers are discovered via Composer metadata
+	 * and selected with the --consumer option.
 	 */
 	class ScheduleRunCommand extends CommandBase {
 		
@@ -36,6 +33,40 @@
 		 */
 		public function getDescription(): string {
 			return "Start a task consumer (default: cron)";
+		}
+		
+		/**
+		 * Returns extended help text displayed when --help is passed.
+		 * @return string
+		 */
+		public function getHelp(): string {
+			return <<<HELP
+DESCRIPTION:
+    Starts a scheduler consumer in the foreground. The built-in cron consumer
+    is used by default. Additional consumers (e.g. Redis) are resolved by name
+    via Composer metadata and must be installed as separate packages.
+
+USAGE:
+    php sculpt schedule:run [--consumer=<name>]
+
+OPTIONS:
+    --consumer=<name>    Name of the consumer to run (default: cron)
+
+EXAMPLES:
+    php sculpt schedule:run
+        Starts the built-in cron consumer
+
+    php sculpt schedule:run --consumer=cron
+        Explicit equivalent of the default
+
+    php sculpt schedule:run --consumer=redis
+        Starts the Redis consumer (requires the Redis consumer package)
+
+NOTES:
+    - The command runs in the foreground; use a process manager for production
+    - Non-cron consumers are discovered via the "scheduler" Composer metadata key
+    - An unknown consumer name exits with code 1 and an explanatory message
+HELP;
 		}
 		
 		/**
