@@ -7,9 +7,10 @@
 	use Quellabs\Support\ComposerUtils;
 	
 	/**
-	 * This command generates the cache configuration file with default settings.
-	 * It creates config/cache.php with FileCache as default and includes configuration
-	 * templates for Redis and Memcached drivers.
+	 * CacheInitCommand - Create the cache configuration file
+	 *
+	 * Generates config/cache.php with FileCache as the default driver and
+	 * includes commented configuration templates for Redis and Memcached.
 	 */
 	class CacheInitCommand extends CommandBase {
 		
@@ -35,17 +36,27 @@
 		 */
 		public function getHelp(): string {
 			return <<<HELP
-Usage: cache:init [--force]
+DESCRIPTION:
+    Creates config/cache.php with FileCache as the default driver. The generated
+    file also includes ready-to-use configuration blocks for Redis and Memcached
+    that can be activated by changing the default driver key.
 
-Creates a new cache configuration file at config/cache.php with default settings.
+USAGE:
+    php sculpt cache:init [--force]
 
-Options:
-  --force    Overwrite existing cache configuration file
+OPTIONS:
+    --force    Overwrite the existing cache configuration file
 
-The generated configuration includes:
-  - FileCache as the default driver
-  - Redis configuration template
-  - Memcached configuration template
+EXAMPLES:
+    php sculpt cache:init
+        Creates config/cache.php; exits with an error if the file already exists
+
+    php sculpt cache:init --force
+        Creates or overwrites config/cache.php
+
+NOTES:
+    - The config directory is created automatically if it does not exist
+    - Default driver is FileCache; Redis and Memcached blocks are included but inactive
 HELP;
 		}
 		

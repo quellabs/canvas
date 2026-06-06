@@ -4,6 +4,12 @@
 	
 	use Quellabs\Sculpt\ConfigurationManager;
 	
+	/**
+	 * ListRoutesCommand - List all registered application routes
+	 *
+	 * Displays a formatted table of every route known to the application,
+	 * showing the HTTP methods, path, controller action, and any attached aspects.
+	 */
 	class ListRoutesCommand extends RoutesBase {
 		
 		/**
@@ -19,7 +25,30 @@
 		 * @return string
 		 */
 		public function getDescription(): string {
-			return "List routes";
+			return "List all registered application routes";
+		}
+		
+		/**
+		 * Returns extended help text displayed when --help is passed.
+		 * @return string
+		 */
+		public function getHelp(): string {
+			return <<<HELP
+DESCRIPTION:
+    Displays a formatted table of all routes registered in the application,
+    including their HTTP methods, path, controller action, and attached aspects.
+
+USAGE:
+    php sculpt route:list
+
+EXAMPLES:
+    php sculpt route:list
+        Prints all registered routes to the console
+
+NOTES:
+    - Routes are discovered from controller annotations at runtime
+    - Aspects are shown as a comma-separated list in brackets
+HELP;
 		}
 		
 		/**

@@ -7,9 +7,11 @@
 	use Quellabs\Support\ComposerUtils;
 	
 	/**
-	 * This command generates a new controller class with a basic template structure.
-	 * It handles file creation, directory structure, and provides interactive prompts
-	 * for controller name input when not provided as an argument.
+	 * CreateControllerCommand - Create a new controller class
+	 *
+	 * Generates a controller class in App\Controllers with a basic route-annotated
+	 * index action. The controller name can be passed as a positional argument or
+	 * entered interactively when omitted.
 	 */
 	class CreateControllerCommand extends CommandBase {
 		
@@ -34,16 +36,31 @@
 		 * @return string
 		 */
 		public function getHelp(): string {
-			return <<<HELPX
-Usage: make:controller [controller-name]
+			return <<<HELP
+DESCRIPTION:
+    Generates a controller class in the App\Controllers namespace with a basic
+    route-annotated index action. The "Controller" suffix is added automatically
+    and stripped from input if already present.
 
-Creates a new controller class in the App\\Controllers namespace.
+USAGE:
+    php sculpt make:controller [controller-name]
 
-Arguments:
-  controller-name    Name of the controller to create (without 'Controller' suffix)");
+ARGUMENTS:
+    controller-name    Name of the controller without the "Controller" suffix
+                       If omitted, you will be prompted to enter one
 
-If no controller name is provided, you will be prompted to enter one.
-HELPX;
+EXAMPLES:
+    php sculpt make:controller User
+        Creates src/Controllers/UserController.php
+
+    php sculpt make:controller
+        Prompts for the controller name interactively
+
+NOTES:
+    - The "Controller" suffix is stripped from input and re-added automatically
+    - Names are converted to PascalCase; hyphens and underscores act as word separators
+    - The command exits without error if the controller file already exists
+HELP;
 		}
 		
 		/**
@@ -116,36 +133,34 @@ HELPX;
 		 * @return string Complete PHP class content ready to be written to file
 		 */
 		private function createController(string $controllerName): string {
-			return sprintf("<?php
+			$route = strtolower($controllerName);
+			
+			return <<<PHP
+<?php
 
 	namespace App\\Controllers;
 	
 	use Quellabs\\Canvas\\Annotations\\Route;
-	use Quellabs\Canvas\Controllers\BaseController;
+	use Quellabs\\Canvas\\Controllers\\BaseController;
 	use Symfony\\Component\\HttpFoundation\\Response;
 	
 	/**
-	 * %s Controller
+	 * {$controllerName} Controller
 	 */
-	class %sController extends BaseController {
+	class {$controllerName}Controller extends BaseController {
 	
 	    /**
-	     * Display the main %s view
-	     * @Route(\"/%s\", methods={\"GET\"})
+	     * Display the main {$route} view
+	     * @Route("/{$route}", methods={"GET"})
 	     * @return Response
 	     */
 	    public function index(): Response {
 	        // TODO: Implement your controller logic here
-	        return new Response('Hello from %sController');
+	        return new Response('Hello from {$controllerName}Controller');
 	    }
 	
-	}",
-				$controllerName,
-				$controllerName,
-				strtolower($controllerName),
-				strtolower($controllerName),
-				$controllerName
-			);
+	}
+PHP;
 		}
 		
 		/**

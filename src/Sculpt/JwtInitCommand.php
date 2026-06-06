@@ -7,8 +7,9 @@
 	use Quellabs\Support\ComposerUtils;
 	
 	/**
-	 * This command generates the JWT configuration file with default settings.
-	 * It creates config/jwt.php with HS256 as the default algorithm and sensible
+	 * JwtInitCommand - Create the JWT configuration file
+	 *
+	 * Generates config/jwt.php with HS256 as the default algorithm and sensible
 	 * defaults for clock skew and failure mode. The secret is intentionally left
 	 * empty and must be set in config/jwt.local.php, which should not be committed
 	 * to source control.
@@ -37,22 +38,31 @@
 		 */
 		public function getHelp(): string {
 			return <<<HELP
-Usage: jwt:init [--force]
+DESCRIPTION:
+    Creates config/jwt.php with HS256 as the default signing algorithm and
+    sensible defaults for clock skew tolerance and failure mode. The secret
+    key is intentionally left empty and must be set separately in
+    config/jwt.local.php, which should not be committed to source control.
 
-Creates a new JWT configuration file at config/jwt.php with default settings.
+USAGE:
+    php sculpt jwt:init [--force]
 
-Options:
-  --force    Overwrite existing JWT configuration file
+OPTIONS:
+    --force    Overwrite the existing JWT configuration file
 
-After running this command:
-  1. Add config/jwt.local.php to your .gitignore
-  2. Create config/jwt.local.php and set the 'secret' key to a strong random value
+EXAMPLES:
+    php sculpt jwt:init
+        Creates config/jwt.php; exits with an error if the file already exists
 
-The generated configuration includes:
-  - HS256 as the default signing algorithm
-  - Attribute mode as the default failure mode (throw_on_failure = false)
-  - 30 seconds of clock skew tolerance
-  - Empty issuer and audience (optional, leave empty to skip validation)
+    php sculpt jwt:init --force
+        Creates or overwrites config/jwt.php
+
+NOTES:
+    - After running, add config/jwt.local.php to your .gitignore
+    - Create config/jwt.local.php and set 'secret' to a strong random value
+    - Default failure mode is attribute mode (throw_on_failure = false); failures
+      set 'jwt_error' on request attributes instead of throwing an exception
+    - Clock skew tolerance defaults to 30 seconds
 HELP;
 		}
 		
