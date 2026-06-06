@@ -10,6 +10,9 @@
 	use Quellabs\Sculpt\Console\ConsoleOutput;
 	use Quellabs\Sculpt\Contracts\CommandBase;
 	
+	/**
+	 * @phpstan-import-type RouteRecord from AnnotationLister
+	 */
 	abstract class RoutesBase extends CommandBase {
 		
 		/**
@@ -36,7 +39,7 @@
 		 * Discovers and builds a complete list of all routes in the application
 		 * by scanning controller classes and their annotated methods
 		 * @param ConfigurationManager $config
-		 * @return array<int, array{name: string|null, http_methods: string[], controller: string, method: string, route: string, aspects: string[]}> Array of route configurations with controller, method, route, and aspects info
+		 * @return array<int, RouteRecord> Array of route configurations with controller, method, route, and aspects info
 		 */
 		protected function getRoutes(ConfigurationManager $config): array {
 			try {

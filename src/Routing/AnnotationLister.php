@@ -2,17 +2,23 @@
 	
 	namespace Quellabs\Canvas\Routing;
 	
-	use Quellabs\AnnotationReader\AnnotationReader;
-	use Quellabs\AnnotationReader\Configuration;
-	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
+	use Quellabs\Canvas\Kernel;
 	use Quellabs\Canvas\Annotations\Route;
 	use Quellabs\Canvas\AOP\AspectResolver;
-	use Quellabs\Canvas\Kernel;
-	use Quellabs\Canvas\Routing\Components\ControllersDiscovery;
-	use Quellabs\Canvas\Routing\Components\RouteDiscovery;
 	use Quellabs\Sculpt\ConfigurationManager;
-	use Quellabs\Support\ComposerUtils;
+	use Quellabs\Canvas\Routing\Components\ControllersDiscovery;
+	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	
+	/**
+	 * @phpstan-type RouteRecord array{
+	 *     name: string|null,
+	 *     http_methods: string[],
+	 *     controller: string,
+	 *     method: string,
+	 *     route: string,
+	 *     aspects: string[]
+	 * }
+	 */
 	class AnnotationLister extends AnnotationBase {
 		
 		/**
@@ -39,7 +45,7 @@
 		 * Discovers and builds a complete list of all routes in the application
 		 * by scanning controller classes and their annotated methods
 		 * @param ConfigurationManager|null $config
-		 * @return array<int, array{name: string|null, http_methods: string[], controller: string, method: string, route: string, aspects: string[]}> Array of route configurations with controller, method, route, and aspects info
+		 * @return array<int, RouteRecord> Array of route configurations with controller, method, route, and aspects info
 		 * @throws \ReflectionException
 		 * @throws AnnotationReaderException
 		 */
@@ -51,12 +57,12 @@
 		/**
 		 * Discovers all routes by scanning controllers and their annotated methods.
 		 * Populates the route name cache as a side effect.
-		 * @return array<int, array{name: string|null, http_methods: string[], controller: string, method: string, route: string, aspects: string[]}> Sorted array of route configurations
+		 * @return array<int, RouteRecord> Sorted array of route configurations
 		 * @throws \ReflectionException
 		 * @throws AnnotationReaderException
 		 */
 		private function discoverRoutes(): array {
-			/** @var array<int, array{name: string|null, http_methods: string[], controller: string, method: string, route: string, aspects: string[]}> $result */
+			/** @var array<int, RouteRecord> $result */
 			$result = [];
 			
 			/**
@@ -92,7 +98,7 @@
 						$completeRoutePath = "/" . $routePrefix . ltrim($routePath, "/");
 						
 						// Create the record
-						/** @var array{name: string|null, http_methods: string[], controller: string, method: string, route: string, aspects: string[]} $record */
+						/** @var RouteRecord $record */
 						$record = [
 							'name'         => $routeAnnotation->getName(),    // The name of the route (can be null)
 							'http_methods' => $routeAnnotation->getMethods(), // A list of http methods
@@ -151,9 +157,9 @@
 		
 		/**
 		 * Filter routes based on configuration options
-		 * @param array<int, array{name: string|null, http_methods: string[], controller: string, method: string, route: string, aspects: string[]}> $routes Collection of routes to filter
+		 * @param array<int, RouteRecord> $routes Collection of routes to filter
 		 * @param ConfigurationManager $config Configuration manager containing filter options
-		 * @return array<int, array{name: string|null, http_methods: string[], controller: string, method: string, route: string, aspects: string[]}> Filtered routes array
+		 * @return array<int, RouteRecord> Filtered routes array
 		 */
 		protected function filterRoutes(array $routes, ConfigurationManager $config): array {
 			// Get the controller filter option from configuration
