@@ -45,8 +45,8 @@ DESCRIPTION:
     When no HTTP method is given, GET is assumed.
 
 USAGE:
-    php sculpt route:match <path>
-    php sculpt route:match <method> <path>
+    php sculpt route:match [path]
+    php sculpt route:match [method] [path]
 
 ARGUMENTS:
     method    HTTP method to match against (GET, POST, PUT, PATCH, DELETE)
