@@ -45,8 +45,7 @@ DESCRIPTION:
     When no HTTP method is given, GET is assumed.
 
 USAGE:
-    php sculpt route:match [path]
-    php sculpt route:match [method] [path]
+    php sculpt route:match <path> [method]
 
 ARGUMENTS:
     method    HTTP method to match against (GET, POST, PUT, PATCH, DELETE)
@@ -57,7 +56,7 @@ EXAMPLES:
     php sculpt route:match /users/42
         Matches /users/42 using GET
 
-    php sculpt route:match POST /users
+    php sculpt route:match /users POST
         Matches /users using POST
 
 NOTES:
@@ -109,29 +108,15 @@ HELP;
 		 * @return Request|null Returns null if validation fails
 		 */
 		private function createRequestFromConfig(ConfigurationManager $config): ?Request {
-			$firstParam = $config->getPositional(0);
+			$path = $config->getPositional(0);
 			
-			if (empty($firstParam)) {
-				$this->output->error("Path parameter is required");
+			if (empty($path)) {
+				$this->output->error("Path parameter is required.");
 				return null;
 			}
 			
-			// List of all http methods
-			$httpMethods = ['GET', 'POST', 'DELETE', 'PUT', 'PATCH'];
+			$method = strtoupper($config->getPositional(1) ?? 'GET');
 			
-			// First parameter is HTTP method, second is the path
-			if (in_array(strtoupper($firstParam), $httpMethods, true)) {
-				$path = $config->getPositional(1);
-				
-				if (empty($path)) {
-					$this->output->error("Path parameter is required when HTTP method is specified");
-					return null;
-				}
-				
-				return Request::create($path, strtoupper($firstParam));
-			}
-			
-			// First parameter is the path, default to GET
-			return Request::create($firstParam);
+			return Request::create($path, $method);
 		}
 	}

@@ -23,31 +23,7 @@
 		 * @return string
 		 */
 		public function getDescription(): string {
-			return "Clear all routing caches";
-		}
-		
-		/**
-		 * Returns extended help text displayed when --help is passed.
-		 * @return string
-		 */
-		public function getHelp(): string {
-			return <<<HELP
-DESCRIPTION:
-    Clears two layers of routing cache: the Route annotation cache used during
-    route discovery, and the compiled route files stored in storage/cache/routes/.
-    Run this after adding, removing, or modifying route annotations.
-
-USAGE:
-    php sculpt route:clear-cache
-
-EXAMPLES:
-    php sculpt route:clear-cache
-        Removes all cached annotation and compiled route files
-
-NOTES:
-    - Both caches are rebuilt automatically on the next request
-    - Safe to run in production
-HELP;
+			return "Clear routing cache";
 		}
 		
 		/**
