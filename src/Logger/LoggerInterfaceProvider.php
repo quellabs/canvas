@@ -64,7 +64,7 @@
 			string $className,
 			array $dependencies,
 			array $metadata,
-			MethodContextInterface|null $methodContext = null
+			?MethodContextInterface $methodContext = null
 		): LoggerInterface {
 			// Resolve all configuration from metadata, falling back to defaults.
 			// Use is_string guards — PHPStan at strict level rejects casts on mixed.

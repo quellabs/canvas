@@ -26,7 +26,7 @@
 		 * @param int $code Optional exception code (defaults to 0)
 		 * @param \Throwable|null $previous Optional previous exception for exception chaining
 		 */
-		public function __construct(Response $response, string $message = '', int $code = 0, \Throwable $previous = null) {
+		public function __construct(Response $response, string $message = '', int $code = 0, ?\Throwable $previous = null) {
 			// Store the response object for later retrieval
 			$this->response = $response;
 			

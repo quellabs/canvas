@@ -86,7 +86,7 @@
 		 * @param array<string, mixed> $__all__ Special 'magic' variable that receives all InterceptWith parameters from DI
 		 */
 		public function __construct(
-			Container        $di = null,
+			?Container       $di = null,
 			?LoggerInterface $logger = null,
 			?string          $driver = null,
 			?string          $key = null,
