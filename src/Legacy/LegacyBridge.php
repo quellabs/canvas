@@ -88,7 +88,7 @@
 				 * @return ($service is null ? Container : T) If $service provided, returns the service; otherwise returns the container
 				 * @phpstan-ignore-next-line
 				 */
-				function canvas(string $service = null): mixed {
+				function canvas(?string $service = null): mixed {
 					// If a service name is provided, get that specific service
 					// Otherwise, return the container itself for advanced usage
 					return $service ? LegacyBridge::get($service) : LegacyBridge::container();
