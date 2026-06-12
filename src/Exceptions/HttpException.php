@@ -13,8 +13,4 @@
 	 *
 	 */
 	class HttpException extends RuntimeException {
-		
-		public function __construct(int $httpStatus, string $message = '', \Throwable $previous = null) {
-			parent::__construct($message, $httpStatus, $previous);
-		}
 	}

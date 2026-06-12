@@ -4,10 +4,11 @@
 	
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
+	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
 	
 	class DefaultErrorHandler {
 		
-		/** @var array|array[] Default error messages */
+		/** @var array<int, array{string, string}> Default error messages */
 		const array ERRORS = [
 			403 => ['Access Denied', 'You do not have permission to access this page.'],
 			404 => ['Page Not Found', 'The page you requested could not be found.'],
@@ -22,8 +23,7 @@
 		 * @return Response The error response
 		 */
 		public function handle(\Throwable $e, Request $request, bool $isDevelopment): Response {
-			$status = $e->getCode();
-			$status = $status >= 400 && $status <= 599 ? $status : Response::HTTP_INTERNAL_SERVER_ERROR;
+			$status = $this->resolveStatus($e);
 			
 			if ($isDevelopment) {
 				$content = $this->renderDebugErrorPageContent($e);
@@ -32,6 +32,20 @@
 			}
 			
 			return new Response($content, $status, ['Content-Type' => 'text/html']);
+		}
+		
+		/**
+		 * Resolve the HTTP status code from the exception
+		 * @param \Throwable $e
+		 * @return int
+		 */
+		private function resolveStatus(\Throwable $e): int {
+			if ($e instanceof RouteNotFoundException) {
+				return Response::HTTP_NOT_FOUND;
+			}
+			
+			$code = $e->getCode();
+			return $code >= 400 && $code <= 599 ? $code : Response::HTTP_INTERNAL_SERVER_ERROR;
 		}
 		
 		/**

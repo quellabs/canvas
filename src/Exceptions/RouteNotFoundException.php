@@ -12,9 +12,4 @@
 	 * It provides detailed information about the failed request for debugging.
 	 */
 	class RouteNotFoundException extends HttpException {
-		
-		public function __construct(string $message = '', \Throwable $previous = null) {
-			parent::__construct(404, $message, $previous);
-		}
-		
 	}
