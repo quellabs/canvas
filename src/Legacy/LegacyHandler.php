@@ -101,7 +101,7 @@
 			}
 			
 			// No resolver could handle this path
-			throw new RouteNotFoundException("No route found", 404);
+			throw new RouteNotFoundException("No route found");
 		}
 		
 		/**
