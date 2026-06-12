@@ -278,22 +278,22 @@ const WakaPACPanel = {
 
             const entry = {
                 // HH:MM:SS.mmm — readable timestamp without the date component
-                time:    new Date().toISOString().slice(11, 12),
+                time: new Date().toISOString().slice(11, 23),
                 
                 // pac-id of the container this message is dispatched to
-                pacId:   event.pacId ?? '—',
+                pacId: event.pacId ?? '—',
                 message: event.message,
-                wParam:  event.wParam,
-                lParam:  event.lParam,
+                wParam: event.wParam,
+                lParam: event.lParam,
                 
                 // The DOM element that originated the event — may be a descendant
                 // of the container (e.g. a <button> inside a PAC container).
                 // Stored as a reference; formatting happens at render time.
-                target:  event.target ?? null,
+                target: event.target ?? null,
                 
                 // Repeat counter — incremented when consecutive identical collapsible
                 // messages arrive for the same container instead of pushing a new row.
-                count:   1,
+                count: 1,
 
                 // Gesture-specific fields — only present on MSG_GESTURE events.
                 // These are richer than wParam/lParam alone and decoded at render time.
