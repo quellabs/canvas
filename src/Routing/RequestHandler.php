@@ -116,7 +116,7 @@
 			
 			// If signals found, auto-connect them to slots
 			if (!empty($signals)) {
-				$connector = new SignalConnector($this->kernel);
+				$connector = new SignalConnector($this->kernel, $controllerClass);
 				$connector->connect($signals);
 			}
 			
