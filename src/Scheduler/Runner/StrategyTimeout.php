@@ -34,7 +34,7 @@
 		 */
 		public function __construct(int $timeout, LoggerInterface $logger) {
 			$this->timeout = $timeout;
-			$this->logger  = $logger;
+			$this->logger = $logger;
 		}
 		
 		/**
@@ -88,8 +88,11 @@
 	    \$job = unserialize(base64_decode('{$serializedJob}'));
 	    \$job->handle();
 	    exit(0); // Success exit code
-	} catch (Exception \$e) {
-	    // Write error to stderr and exit with failure code
+	} catch (Throwable \$e) {
+	    // Write error to stderr and exit with failure code — catching
+	    // Throwable rather than Exception so a TypeError or other Error
+	    // (a sibling of Exception, not a subclass, since PHP 7) still
+	    // produces this clean message instead of an uncaught-error dump
 	    fwrite(STDERR, \$e->getMessage() . PHP_EOL);
 	    exit(1);
 	}
@@ -110,7 +113,7 @@ PHP;
 		 */
 		private function startJobProcess(string $script, string $jobClass): array {
 			// Build the command to execute the script
-			$command = escapeshellcmd(PHP_BINARY) . ' StrategyTimeout.php' . escapeshellarg($script);
+			$command = escapeshellcmd(PHP_BINARY) . ' ' . escapeshellarg($script);
 			
 			// Define pipe descriptors for stdin, stdout, and stderr
 			$descriptors = [
@@ -151,11 +154,11 @@ PHP;
 		private function monitorProcess(array $processData, string $jobClass): void {
 			// Fetch process and pipe data
 			$process = $processData["process"];
-			$pipes   = $processData["pipes"];
+			$pipes = $processData["pipes"];
 			
 			// Track execution time
-			$startTime   = time();
-			$output      = '';
+			$startTime = time();
+			$output = '';
 			$errorOutput = '';
 			
 			// Monitor loop
@@ -174,7 +177,7 @@ PHP;
 				}
 				
 				// Read available output from stdout and stderr
-				$output      .= stream_get_contents($pipes[1]);
+				$output .= stream_get_contents($pipes[1]);
 				$errorOutput .= stream_get_contents($pipes[2]);
 				
 				// Sleep briefly to prevent excessive CPU usage
@@ -217,7 +220,7 @@ PHP;
 		 */
 		private function handleProcessCompletion($process, array $pipes, string $jobClass, string $output, string $errorOutput): void {
 			// Read any remaining output from the pipes
-			$output      .= stream_get_contents($pipes[1]);
+			$output .= stream_get_contents($pipes[1]);
 			$errorOutput .= stream_get_contents($pipes[2]);
 			
 			// Close the pipes
