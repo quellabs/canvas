@@ -44,7 +44,7 @@
 	 *
 	 * @phpstan-import-type RouteDefinition from RouteTypes
 	 * @phpstan-import-type IntermediateRoute from RouteTypes
-     */
+	 */
 	class RouteDiscovery {
 		
 		private Kernel $kernel;
@@ -60,7 +60,7 @@
 		 * @param RoutePatternCompiler $patternCompiler
 		 */
 		public function __construct(
-			Kernel               $kernel,
+			Kernel $kernel,
 			ControllersDiscovery $controllersDiscovery,
 			RouteSegmentAnalyzer $segmentAnalyzer,
 			RoutePatternCompiler $patternCompiler
@@ -205,7 +205,7 @@
 				);
 			}
 		}
-
+		
 		/**
 		 * Build a complete route path by combining prefix and method route
 		 * @param string $prefix Controller route prefix
@@ -220,7 +220,7 @@
 			
 			// Strip surrounding slashes from prefix and leading slash from route
 			// to avoid double slashes when combining
-			$prefix    = trim($prefix, '/');
+			$prefix = trim($prefix, '/');
 			$routePath = ltrim($routePath, '/');
 			
 			// Combine prefix and route, or return just the route if no prefix
@@ -242,8 +242,8 @@
 			
 			// Split into filename and key components
 			$parts = explode("::", $route, 2);
-			$file  = $parts[0];
-			$key   = $parts[1];
+			$file = $parts[0];
+			$key = $parts[1];
 			
 			// Look up the key in the config file, falling back to $default if not found
 			$result = $this->kernel->loadConfigFile("{$file}.php")->get($key, $default);
@@ -252,18 +252,18 @@
 			if ($result === null) {
 				throw new \RuntimeException("Couldn't load route '{$key}' from config file '{$file}'.");
 			}
-
+			
 			// Config values may legitimately be full URLs (e.g. webhook URLs sent to a
 			// remote payment provider), so strip scheme/host the same way Route::getRoute()
 			// does for a literal URL annotation, ensuring only the path is registered.
 			if (str_starts_with($result, 'http://') || str_starts_with($result, 'https://')) {
 				$path = parse_url($result, PHP_URL_PATH);
-
+				
 				if ($path !== null && $path !== false) {
 					return $path;
 				}
 			}
-
+			
 			return $result;
 		}
 	}
