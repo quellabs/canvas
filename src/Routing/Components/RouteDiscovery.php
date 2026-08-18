@@ -252,7 +252,18 @@
 			if ($result === null) {
 				throw new \RuntimeException("Couldn't load route '{$key}' from config file '{$file}'.");
 			}
-			
+
+			// Config values may legitimately be full URLs (e.g. webhook URLs sent to a
+			// remote payment provider), so strip scheme/host the same way Route::getRoute()
+			// does for a literal URL annotation, ensuring only the path is registered.
+			if (str_starts_with($result, 'http://') || str_starts_with($result, 'https://')) {
+				$path = parse_url($result, PHP_URL_PATH);
+
+				if ($path !== null && $path !== false) {
+					return $path;
+				}
+			}
+
 			return $result;
 		}
 	}
