@@ -6,6 +6,7 @@
 	use ReflectionException;
 	use Quellabs\Canvas\Annotations\Route;
 	use Quellabs\Canvas\Kernel;
+	use Quellabs\Canvas\Routing\NormalizesRoutes;
 	use Quellabs\Canvas\Routing\RouteTypes;
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	
@@ -46,7 +47,9 @@
 	 * @phpstan-import-type IntermediateRoute from RouteTypes
 	 */
 	class RouteDiscovery {
-		
+
+		use NormalizesRoutes;
+
 		private Kernel $kernel;
 		private ControllersDiscovery $controllersDiscovery;
 		private RouteSegmentAnalyzer $segmentAnalyzer;
@@ -225,45 +228,5 @@
 			
 			// Combine prefix and route, or return just the route if no prefix
 			return $prefix ? "/{$prefix}/{$routePath}" : "/{$routePath}";
-		}
-		
-		/**
-		 * Normalizes a route string, resolving config file references if present.
-		 * @param string $route The route string to normalize.
-		 * @param string|null $default The default value to return if the config key is not found.
-		 * @return string The normalized route string.
-		 * @throws \RuntimeException If the config key is not found and no default is provided.
-		 */
-		private function normalizeRoute(string $route, ?string $default = null): string {
-			// Plain route string, nothing to resolve
-			if (!str_contains($route, "::")) {
-				return $route;
-			}
-			
-			// Split into filename and key components
-			$parts = explode("::", $route, 2);
-			$file = $parts[0];
-			$key = $parts[1];
-			
-			// Look up the key in the config file, falling back to $default if not found
-			$result = $this->kernel->loadConfigFile("{$file}.php")->get($key, $default);
-			
-			// If still null, no default was provided and the key doesn't exist
-			if ($result === null) {
-				throw new \RuntimeException("Couldn't load route '{$key}' from config file '{$file}'.");
-			}
-			
-			// Config values may legitimately be full URLs (e.g. webhook URLs sent to a
-			// remote payment provider), so strip scheme/host the same way Route::getRoute()
-			// does for a literal URL annotation, ensuring only the path is registered.
-			if (str_starts_with($result, 'http://') || str_starts_with($result, 'https://')) {
-				$path = parse_url($result, PHP_URL_PATH);
-				
-				if ($path !== null && $path !== false) {
-					return $path;
-				}
-			}
-			
-			return $result;
 		}
 	}
