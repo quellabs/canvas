@@ -105,12 +105,9 @@
 			$this->configuration = $this->configLoader->loadConfigFile("app.php")->merge($defaultConfiguration);
 			$this->inspector_configuration = $this->configLoader->loadConfigFile("inspector.php");
 			
-			// Register Annotations Reader
-			// Make the reader available process-wide so other packages (e.g. ObjectQuel)
-			// can share this instance and its in-memory cache instead of constructing
-			// their own readers with cold caches.
+			// Register Annotations Reader under the "canvas" key
 			$this->annotationsReader = $this->createAnnotationReader();
-			AnnotationReaderLocator::setInstance($this->annotationsReader);
+			AnnotationReaderLocator::setInstance($this->annotationsReader, 'canvas');
 			
 			// Determine the error handler directory
 			$errorHandlerDirectory = $this->configuration->get("error_handler_directory", ComposerUtils::getProjectRoot() . "/src/Errors");

@@ -13,7 +13,6 @@
 				CreateControllerCommand::class,
 				ListRoutesCommand::class,
 				MatchRoutesCommand::class,
-				AnnotationsCacheClearCommand::class,
 				RoutesCacheClearCommand::class,
 				ScheduleRunCommand::class,
 				SchedulerListCommand::class,
