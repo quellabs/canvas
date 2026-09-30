@@ -16,14 +16,43 @@
 	 * Carries enough context (required window, required methods, the methods
 	 * actually presented, and the original request's method/path) for a
 	 * centralized handler to build a machine-readable "step-up required"
-	 * response, which is the stateless equivalent of Symfony's redirect-to-
-	 * reauth-then-resume flow: the client re-authenticates against this
-	 * information and simply retries the same request with a fresh token.
+	 * response — the client re-authenticates against this information and
+	 * simply retries the same request with a fresh credential.
 	 */
-	class StaleAuthenticationException extends HttpException {
+	class StepUpAuthenticationException extends HttpException {
 
 		/**
-		 * StaleAuthenticationException constructor
+		 * Required freshness window in seconds
+		 * @var int
+		 */
+		private readonly int $maxAge;
+
+		/**
+		 * Authentication methods that would satisfy this check, if restricted
+		 * @var string[]
+		 */
+		private readonly array $requiredMethods;
+
+		/**
+		 * Authentication methods actually present on the request's token
+		 * @var string[]
+		 */
+		private readonly array $presentedMethods;
+
+		/**
+		 * HTTP method of the request that was denied
+		 * @var string
+		 */
+		private readonly string $requestMethod;
+
+		/**
+		 * Path of the request that was denied
+		 * @var string
+		 */
+		private readonly string $requestPath;
+
+		/**
+		 * StepUpAuthenticationException constructor
 		 * @param int $maxAge Required freshness window in seconds
 		 * @param string[] $requiredMethods Authentication methods that would satisfy this check, if restricted
 		 * @param string[] $presentedMethods Authentication methods actually present on the request's token
@@ -32,14 +61,20 @@
 		 * @param Throwable|null $previous Previous exception for chaining
 		 */
 		public function __construct(
-			private readonly int    $maxAge,
-			private readonly array  $requiredMethods,
-			private readonly array  $presentedMethods,
-			private readonly string $requestMethod,
-			private readonly string $requestPath,
-			?Throwable              $previous = null
+			int $maxAge,
+			array $requiredMethods,
+			array $presentedMethods,
+			string $requestMethod,
+			string $requestPath,
+			?Throwable $previous = null
 		) {
-			parent::__construct("Re-authentication required within the last {$this->maxAge} seconds", 403, $previous);
+			parent::__construct("Re-authentication required within the last {$maxAge} seconds", 403, $previous);
+
+			$this->maxAge = $maxAge;
+			$this->requiredMethods = $requiredMethods;
+			$this->presentedMethods = $presentedMethods;
+			$this->requestMethod = $requestMethod;
+			$this->requestPath = $requestPath;
 		}
 
 		/**

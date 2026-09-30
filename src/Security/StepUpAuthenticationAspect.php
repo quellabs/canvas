@@ -3,7 +3,7 @@
 	namespace Quellabs\Canvas\Security;
 
 	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
-	use Quellabs\Canvas\Exceptions\StaleAuthenticationException;
+	use Quellabs\Canvas\Exceptions\StepUpAuthenticationException;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Symfony\Component\HttpFoundation\Response;
 
@@ -39,7 +39,7 @@
 		private array $requiredMethods;
 
 		/**
-		 * If true, throws StaleAuthenticationException instead of writing to request attributes
+		 * If true, throws StepUpAuthenticationException instead of writing to request attributes
 		 * @var bool
 		 */
 		private bool $throwOnFailure;
@@ -48,7 +48,7 @@
 		 * StepUpAuthenticationAspect constructor
 		 * @param int $maxAge Required freshness window in seconds
 		 * @param string[] $requiredMethods When non-empty, at least one must be present in auth_methods
-		 * @param bool $throwOnFailure If true, throws StaleAuthenticationException instead of writing to request attributes
+		 * @param bool $throwOnFailure If true, throws StepUpAuthenticationException instead of writing to request attributes
 		 */
 		public function __construct(
 			int $maxAge = 300,
@@ -70,11 +70,11 @@
 		 * Check the request's authentication freshness and method before the controller method runs.
 		 *
 		 * On failure in attribute mode: sets 'recent_auth_error' on $request->attributes, returns null.
-		 * On failure in exception mode: throws StaleAuthenticationException.
+		 * On failure in exception mode: throws StepUpAuthenticationException.
 		 *
 		 * @param MethodContextInterface $context
 		 * @return Response|null Always null — this aspect never short-circuits via Response.
-		 * @throws StaleAuthenticationException When throwOnFailure is true and the check fails.
+		 * @throws StepUpAuthenticationException When throwOnFailure is true and the check fails.
 		 */
 		public function before(MethodContextInterface $context): ?Response {
 			$request = $context->getRequest();
@@ -90,7 +90,7 @@
 
 			if (!$isRecent || !$hasRequiredMethod) {
 				if ($this->throwOnFailure) {
-					throw new StaleAuthenticationException(
+					throw new StepUpAuthenticationException(
 						maxAge: $this->maxAge,
 						requiredMethods: $this->requiredMethods,
 						presentedMethods: $presentedMethods,
