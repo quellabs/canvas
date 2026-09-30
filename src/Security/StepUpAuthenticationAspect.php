@@ -9,36 +9,40 @@
 
 	/**
 	 * Requires the request's authentication to have been proven recently — and
-	 * optionally proven by a strong-enough method — for use on sensitive
-	 * actions (change email, delete account, ...).
+	 * optionally by a specific method — before a sensitive action runs.
 	 *
-	 * Auth-mechanism agnostic: it only reads two request attributes that any
-	 * authenticator aspect running earlier in the @InterceptWith chain is
-	 * expected to set:
-	 *   - 'auth_time'    Unix timestamp of when the credential was last proven
-	 *   - 'auth_methods' string[] of methods used (RFC 8176 names recommended,
-	 *                    e.g. 'pwd', 'hwk', 'otp'; empty when unknown)
-	 * It does not know or care whether the authenticator is JWT-, session-, or
-	 * API-key-based.
+	 * Auth-mechanism agnostic: reads 'auth_time' (Unix timestamp) and
+	 * 'auth_methods' (string[], RFC 8176 names) request attributes set by
+	 * whatever authenticator ran earlier in the chain. requiredMethods lets a
+	 * credential renewed via a weaker flow (e.g. token refresh) be excluded
+	 * from satisfying the check; there's no default exclusion, since Canvas
+	 * neither issues nor refreshes credentials itself.
 	 *
-	 * requiredMethods is the equivalent of Symfony's AuthenticationTrustResolver
-	 * extension point: a token renewed via a refresh flow rather than a fresh
-	 * credential check (Symfony's remember-me case) can carry a method such as
-	 * 'refresh' in auth_methods, and be excluded from satisfying a sensitive
-	 * action by requiring e.g. requiredMethods=['pwd']. There is no default
-	 * exclusion — unlike Symfony's security bundle, Canvas does not define a
-	 * built-in "weak" method, since it doesn't issue or refresh tokens itself.
-	 *
-	 * Must run after whatever aspect sets these attributes — before-aspects
-	 * execute in declaration order:
+	 * Must run after the authenticator — before-aspects execute in
+	 * declaration order. Instantiate twice for a two-tier policy:
 	 *
 	 * @InterceptWith(Quellabs\Canvas\Security\JwtAuthenticationAspect::class)
 	 * @InterceptWith(Quellabs\Canvas\Security\StepUpAuthenticationAspect::class, maxAge=300, requiredMethods={"pwd"})
-	 *
-	 * The same class serves both "recently" and "very recently" tiers via the
-	 * maxAge override — instantiate it twice rather than duplicating the check.
 	 */
 	readonly class StepUpAuthenticationAspect implements BeforeAspectInterface {
+
+		/**
+		 * Required freshness window in seconds
+		 * @var int
+		 */
+		private int $maxAge;
+
+		/**
+		 * When non-empty, at least one must be present in auth_methods
+		 * @var string[]
+		 */
+		private array $requiredMethods;
+
+		/**
+		 * If true, throws StaleAuthenticationException instead of writing to request attributes
+		 * @var bool
+		 */
+		private bool $throwOnFailure;
 
 		/**
 		 * StepUpAuthenticationAspect constructor
@@ -47,15 +51,19 @@
 		 * @param bool $throwOnFailure If true, throws StaleAuthenticationException instead of writing to request attributes
 		 */
 		public function __construct(
-			private int    $maxAge = 300,
-			private array  $requiredMethods = [],
-			private bool   $throwOnFailure = false
+			int $maxAge = 300,
+			array $requiredMethods = [],
+			bool $throwOnFailure = false
 		) {
 			// A non-positive window can never be satisfied, which is almost
 			// certainly misconfiguration rather than an intentional lockout
-			if ($this->maxAge <= 0) {
-				throw new \InvalidArgumentException("maxAge must be > 0, got {$this->maxAge}.");
+			if ($maxAge <= 0) {
+				throw new \InvalidArgumentException("maxAge must be > 0, got {$maxAge}.");
 			}
+
+			$this->maxAge = $maxAge;
+			$this->requiredMethods = $requiredMethods;
+			$this->throwOnFailure = $throwOnFailure;
 		}
 
 		/**
