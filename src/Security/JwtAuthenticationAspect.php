@@ -151,11 +151,12 @@
 		/**
 		 * Validate the Bearer token before the controller method runs.
 		 *
-		 * On success: sets 'jwt_payload' (full claims array) and 'jwt_user_id' ('sub' claim)
-		 * on $request->attributes, returns null.
+		 * On success: sets 'jwt_payload' (full claims array), 'jwt_user_id' ('sub' claim),
+		 * 'auth_time' (from 'iat', when present), and 'auth_methods' (from 'amr', defaulting
+		 * to an empty array) on $request->attributes, returns null.
 		 *
 		 * On failure in attribute mode: sets 'jwt_error' (reason string) on $request->attributes,
-		 * clears 'jwt_payload' and 'jwt_user_id', returns null.
+		 * clears 'jwt_payload', 'jwt_user_id', 'auth_time' and 'auth_methods', returns null.
 		 *
 		 * On failure in exception mode: throws JwtAuthenticationException.
 		 *
@@ -185,14 +186,25 @@
 				$request->attributes->set('jwt_error', $e->getMessage());
 				$request->attributes->remove('jwt_payload');
 				$request->attributes->remove('jwt_user_id');
+				$request->attributes->remove('auth_time');
+				$request->attributes->remove('auth_methods');
 				return null;
 			}
-			
+
 			// Token is valid — publish the claims and the subject identifier so controllers
 			// and downstream aspects can read them without re-parsing the token
 			$request->attributes->set('jwt_payload', $payload);
 			$request->attributes->set('jwt_user_id', $payload['sub'] ?? null);
-			
+
+			// 'auth_time' and 'auth_methods' are the auth-mechanism-agnostic contract
+			// consumed by RecentAuthenticationAspect; iat and amr are both optional per
+			// their respective RFCs, so either may be absent
+			if (isset($payload['iat']) && (is_int($payload['iat']) || is_float($payload['iat']))) {
+				$request->attributes->set('auth_time', $payload['iat']);
+			}
+
+			$request->attributes->set('auth_methods', $payload['amr'] ?? []);
+
 			// Clear any jwt_error left over from a previous attempt on the same request object
 			$request->attributes->remove('jwt_error');
 			return null;
@@ -424,6 +436,21 @@
 			// identifier; a non-string sub would produce an unexpected jwt_user_id type
 			if (isset($payload['sub']) && !is_string($payload['sub'])) {
 				throw new JwtAuthenticationException('Invalid sub claim');
+			}
+
+			// Validate amr (Authentication Methods References, RFC 8176) if present —
+			// consumed as 'auth_methods' by RecentAuthenticationAspect to distinguish
+			// a fresh credential check from a token silently renewed via refresh
+			if (isset($payload['amr'])) {
+				if (!is_array($payload['amr'])) {
+					throw new JwtAuthenticationException('Invalid amr claim');
+				}
+
+				foreach ($payload['amr'] as $method) {
+					if (!is_string($method)) {
+						throw new JwtAuthenticationException('Invalid amr claim');
+					}
+				}
 			}
 		}
 	}
