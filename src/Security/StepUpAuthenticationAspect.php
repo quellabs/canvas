@@ -99,7 +99,7 @@
 					);
 				}
 
-				$request->attributes->set('recent_auth_error', $this->buildErrorMessage($isRecent, $hasRequiredMethod));
+				$request->attributes->set('recent_auth_error', $this->buildErrorMessage($isRecent));
 				return null;
 			}
 
@@ -109,11 +109,15 @@
 
 		/**
 		 * Build a human-readable failure reason for attribute mode.
+		 *
+		 * Only called when at least one of the recency/method checks failed, so
+		 * if $isRecent is true here the method check must be the one that failed
+		 * — no need to pass it separately.
+		 *
 		 * @param bool $isRecent Whether the recency check passed
-		 * @param bool $hasRequiredMethod Whether the method check passed
 		 * @return string Reason the check failed
 		 */
-		private function buildErrorMessage(bool $isRecent, bool $hasRequiredMethod): string {
+		private function buildErrorMessage(bool $isRecent): string {
 			if (!$isRecent) {
 				return "Authentication must be renewed within {$this->maxAge} seconds";
 			}
