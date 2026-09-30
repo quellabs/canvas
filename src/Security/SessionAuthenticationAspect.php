@@ -14,12 +14,12 @@
 	 * itself. Login code elsewhere in the application is responsible for writing three
 	 * session keys on successful credential verification:
 	 *
-	 *   user_id       — mixed, the authenticated user's identifier (matches the key
+	 *   auth_user_id  — mixed, the authenticated user's identifier (matches the key
 	 *                   quellabs/canvas-authorization's scaffolded login flow sets)
 	 *   auth_time     — int|float, Unix timestamp of when the credential was proven
 	 *   auth_methods  — string[], methods used (RFC 8176 names recommended, e.g. 'pwd')
 	 *
-	 * and to remove user_id (at minimum) on logout.
+	 * and to remove auth_user_id (at minimum) on logout.
 	 *
 	 * On success, publishes 'session_user_id', 'auth_time', and 'auth_methods' on
 	 * $request->attributes — the same 'auth_time'/'auth_methods' contract JwtAuthenticationAspect
@@ -68,7 +68,7 @@
 		public function before(MethodContextInterface $context): ?Response {
 			$request = $context->getRequest();
 			$session = $request->getSession();
-			$userId = $session->get('user_id');
+			$userId = $session->get('auth_user_id');
 
 			if ($userId === null) {
 				if ($this->throwOnFailure) {

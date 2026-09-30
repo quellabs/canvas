@@ -508,9 +508,9 @@
 		 */
 		protected function getUserIdentifier(Request $request): string {
 			// Try to get user from session, JWT, or other auth mechanism
-			if ($request->hasSession() && $request->getSession()->has('user_id')) {
+			if ($request->hasSession() && $request->getSession()->has('auth_user_id')) {
 				// Fetch user id from session
-				$userId = $request->getSession()->get('user_id');
+				$userId = $request->getSession()->get('auth_user_id');
 				
 				// getSession()->get() returns mixed; guard the type before concatenation.
 				return 'user_' . (is_string($userId) || is_int($userId) ? (string)$userId : 'unknown');
