@@ -7,7 +7,7 @@
 	/**
 	 * Thrown when a request is authenticated but not recently — or not strongly —
 	 * enough for the requested action, and throwOnFailure is enabled on
-	 * RecentAuthenticationAspect.
+	 * StepUpAuthenticationAspect.
 	 *
 	 * Distinct from JwtAuthenticationException (401, not authenticated at all):
 	 * this is a 403 — the credential is valid, it's just too old or too weak

@@ -197,7 +197,7 @@
 			$request->attributes->set('jwt_user_id', $payload['sub'] ?? null);
 
 			// 'auth_time' and 'auth_methods' are the auth-mechanism-agnostic contract
-			// consumed by RecentAuthenticationAspect; iat and amr are both optional per
+			// consumed by StepUpAuthenticationAspect; iat and amr are both optional per
 			// their respective RFCs, so either may be absent
 			if (isset($payload['iat']) && (is_int($payload['iat']) || is_float($payload['iat']))) {
 				$request->attributes->set('auth_time', $payload['iat']);
@@ -439,7 +439,7 @@
 			}
 
 			// Validate amr (Authentication Methods References, RFC 8176) if present —
-			// consumed as 'auth_methods' by RecentAuthenticationAspect to distinguish
+			// consumed as 'auth_methods' by StepUpAuthenticationAspect to distinguish
 			// a fresh credential check from a token silently renewed via refresh
 			if (isset($payload['amr'])) {
 				if (!is_array($payload['amr'])) {

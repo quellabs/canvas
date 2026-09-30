@@ -33,15 +33,15 @@
 	 * execute in declaration order:
 	 *
 	 * @InterceptWith(Quellabs\Canvas\Security\JwtAuthenticationAspect::class)
-	 * @InterceptWith(Quellabs\Canvas\Security\RecentAuthenticationAspect::class, maxAge=300, requiredMethods={"pwd"})
+	 * @InterceptWith(Quellabs\Canvas\Security\StepUpAuthenticationAspect::class, maxAge=300, requiredMethods={"pwd"})
 	 *
 	 * The same class serves both "recently" and "very recently" tiers via the
 	 * maxAge override — instantiate it twice rather than duplicating the check.
 	 */
-	readonly class RecentAuthenticationAspect implements BeforeAspectInterface {
+	readonly class StepUpAuthenticationAspect implements BeforeAspectInterface {
 
 		/**
-		 * RecentAuthenticationAspect constructor
+		 * StepUpAuthenticationAspect constructor
 		 * @param int $maxAge Required freshness window in seconds
 		 * @param string[] $requiredMethods When non-empty, at least one must be present in auth_methods
 		 * @param bool $throwOnFailure If true, throws StaleAuthenticationException instead of writing to request attributes
