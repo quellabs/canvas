@@ -83,6 +83,8 @@
 
 			if (!is_array($presentedMethods)) {
 				$presentedMethods = [];
+			} else {
+				$presentedMethods = array_values(array_filter($presentedMethods, 'is_string'));
 			}
 
 			$isRecent = is_numeric($authTime) && (time() - (int)$authTime) <= $this->maxAge;
