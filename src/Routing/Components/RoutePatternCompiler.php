@@ -1,9 +1,11 @@
 <?php
 	
 	namespace Quellabs\Canvas\Routing\Components;
-	
+
+	use Quellabs\Canvas\Exceptions\InvalidRouteDefinitionException;
 	use Quellabs\Canvas\Routing\RouteTypes;
 	use Quellabs\Canvas\Routing\SegmentTypes;
+	use Quellabs\Canvas\Routing\TypeConstraintResolver;
 	
 	/**
 	 * RoutePatternCompiler
@@ -56,7 +58,6 @@
 	 * routing scenarios including nested wildcards and type validation.
 	 *
 	 * @phpstan-import-type CompiledSegment from RouteTypes
-	 * @phpstan-import-type PatternMetadata from RouteTypes
 	 * @phpstan-type VarInfo array{
 	 *     name: string,
 	 *     clean_name: string,
@@ -78,42 +79,6 @@
 		
 		private RouteSegmentAnalyzer $segmentAnalyzer;
 		
-		// Static type pattern mappings for variable validation
-		private const array TYPE_PATTERNS = [
-			// Numeric types
-			'int'          => '\d+',
-			'integer'      => '\d+',
-			
-			// Text types
-			'alpha'        => '[a-zA-Z]+',
-			'alnum'        => '[a-zA-Z0-9]+',
-			'alphanumeric' => '[a-zA-Z0-9]+',
-			'word'         => '\w+',
-			'slug'         => '[a-zA-Z0-9-]+',
-			
-			// Identifiers
-			'uuid'         => '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',
-			
-			// Web-specific
-			'email'        => '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
-			
-			// Version/Code patterns
-			'hex'          => '[a-fA-F0-9]+',
-			'base64'       => '[a-zA-Z0-9+/=]+',
-			
-			// Common business patterns
-			'sku'          => '[A-Z0-9\-]+',
-			'isbn'         => '\d{3}-\d{1,5}-\d{1,7}-\d{1,7}-\d{1}',
-			'phone'        => '\+?[0-9\-\s\(\)]+',
-			'postal'       => '[A-Z0-9\s\-]+',
-			
-			// Locale/Language
-			'locale'       => '[a-z]{2}(_[A-Z]{2})?',
-			'language'     => '[a-z]{2,3}',
-			'country'      => '[A-Z]{2}',
-			'currency'     => '[A-Z]{3}',
-		];
-		
 		/**
 		 * RouteSegmentAnalyzer constructor
 		 * @param RouteSegmentAnalyzer $segmentAnalyzer
@@ -130,8 +95,15 @@
 		 * processing overhead.
 		 * @param string $routePath The original route path pattern (e.g., "/user/{id}/posts")
 		 * @return list<CompiledSegment> Array of compiled segment objects with pre-processed matching information
+		 * @throws InvalidRouteDefinitionException If the same variable name is bound more than once,
+		 *         whether within one segment ("{id}-{id}") or across separate segments ("/{id}/{id}")
 		 */
 		public function compileRoute(string $routePath): array {
+			// A repeated variable name has no sound interpretation (which occurrence wins?),
+			// whether both occurrences are in the same segment or in separate ones — so this
+			// is checked once, directly against the raw path, before any segment is compiled.
+			$this->assertNoDuplicateVariableNames($routePath);
+
 			// Parse the route path into individual segments
 			// e.g., "/user/{id}/posts" becomes ["user", "{id}", "posts"]
 			$segments = $this->parseRoutePath($routePath);
@@ -174,10 +146,50 @@
 				$updated = [...$compiledSegments[$i], 'remaining_segments_count' => $remaining];
 				$compiledSegments[$i] = $updated;
 			}
-			
+
 			return $compiledSegments;
 		}
-		
+
+		/**
+		 * Ensures no variable name is bound more than once anywhere in the route path —
+		 * whether both occurrences are in the same segment ("{id}-{id}") or in separate
+		 * segments ("/{id}/{id}"). Checked directly against the raw path string, since
+		 * that's a single, segment-agnostic fact: the same "{name...}" token appears twice.
+		 * @param string $routePath Raw route path, e.g. "/users/{id}/posts/{id}"
+		 * @throws InvalidRouteDefinitionException If a variable name occurs more than once
+		 */
+		private function assertNoDuplicateVariableNames(string $routePath): void {
+			if (preg_match_all('/\{([^{}]+)}/', $routePath, $matches) === 0) {
+				return;
+			}
+
+			$seenGroupNames = [];
+
+			foreach ($matches[1] as $variableContent) {
+				// Strip a type/wildcard suffix, e.g. "id:int" -> "id", "path:**" -> "path"
+				$name = explode(':', $variableContent, 2)[0];
+
+				// '*' and '**' are anonymous wildcard sentinels, never a route author's chosen name
+				if ($name === '*' || $name === '**') {
+					continue;
+				}
+
+				// Compare sanitized names, since that's what actually becomes the regex capture
+				// group: "my-id" and "my_id" both sanitize to "my_id" and collide just the same,
+				// even though the raw names differ.
+				$groupName = $this->sanitizeCaptureGroupName($name);
+
+				if (isset($seenGroupNames[$groupName])) {
+					throw new InvalidRouteDefinitionException(
+						"Duplicate variable name \"{$name}\" in route \"{$routePath}\": " .
+						"each variable in a route must have a unique name."
+					);
+				}
+
+				$seenGroupNames[$groupName] = true;
+			}
+		}
+
 		/**
 		 * Takes a route segment like "/users/{id:int}/posts/{slug}" and converts it
 		 * into a regex pattern for matching URLs, extracting variable names and their
@@ -215,7 +227,7 @@
 					// Parse the variable definition to extract name and regex pattern
 					// Example: "id:\d+" becomes ['name' => 'id', 'pattern' => '\d+']
 					$variableInformation = $this->parseVariableDefinition($variableContent);
-					
+
 					// Store variable metadata for later use
 					$hasFoundVariable = true;
 					$variableNames[] = $variableInformation['name'];
@@ -262,19 +274,6 @@
 				'literal_suffix' => $literalSuffix,   // Static text after variables
 				'variable_info'  => $variableInfo     // Detailed variable metadata
 			];
-		}
-		
-		/**
-		 * Optimized regex lookup using cached patterns
-		 * @param string $type The type constraint (int, alpha, uuid, etc.)
-		 * @return string The corresponding regex pattern
-		 */
-		public function resolveTypeToRegex(string $type): string {
-			return match ($type) {
-				'*' => '[^\/]*',     // Single wildcard - any chars except path separator
-				'**' => '.*',        // Multi-wildcard - any chars including path separators
-				default => self::TYPE_PATTERNS[$type] ?? '[^\/]+'
-			};
 		}
 		
 		/**
@@ -326,7 +325,7 @@
 			// Typed variable (e.g. {id:int}, {path:**})
 			if (str_contains($segment, ':')) {
 				$parts = explode(':', trim($segment, '{}'), 2);
-				$pattern = $this->resolveTypeToRegex($parts[1]);
+				$pattern = TypeConstraintResolver::resolveTypeToRegex($parts[1]);
 				$isMultiWildcard = in_array($parts[1], ['**', '.*'], true); // {path:**} behaves like a multi-wildcard
 			} else {
 				// Untyped variable: matches any single segment
@@ -412,19 +411,17 @@
 			$variableNames = [];    // Ordered list of variable names for capture extraction
 			$literalPrefix = null;  // Static text before the first variable (e.g. "v" in "v{ver}")
 			$literalSuffix = null;  // Static text after the last variable (e.g. ".json" in "{name}.json")
-			$patternMetadata = null;  // Pre-computed lengths and name for single-variable fast path
 			$isMultiWildcard = false;
 			$variableName = null;  // Set only when a wildcard variable is present in the segment
-			
+
 			$result = $this->compilePartialSegmentPattern($segment);
-			
+
 			if ($result !== null) {
 				$compiledRegex = $result['pattern'];
 				$variableNames = $result['variables'];
 				$literalPrefix = $result['literal_prefix'];
 				$literalSuffix = $result['literal_suffix'];
-				$patternMetadata = $this->compilePatternMetadata($segment); // Null for multi-variable segments
-				
+
 				// Promote wildcard flags from the first wildcard variable found, if any.
 				// Partial wildcard segments are unusual but valid (e.g. "prefix{path:**}").
 				foreach ($result['variable_info'] as $varInfo) {
@@ -435,8 +432,8 @@
 					}
 				}
 			}
-			
-			$compiled = [
+
+			return [
 				'type'                     => 'partial_variable',
 				'original'                 => $segment,
 				'variable_name'            => $variableName,
@@ -448,61 +445,8 @@
 				'literal_suffix'           => $literalSuffix,
 				'remaining_segments_count' => 0,
 			];
-			
-			// pattern_metadata is omitted entirely when null rather than stored as null,
-			// because its presence signals to the strategy that the fast path is available.
-			if ($patternMetadata !== null) {
-				$compiled['pattern_metadata'] = $patternMetadata;
-			}
-			
-			return $compiled;
 		}
-		
-		/**
-		 * Parses route segments like "prefix{variable}suffix" and extracts
-		 * structural information needed for efficient matching and validation.
-		 * @param string $segment Route segment to analyze (e.g., "user{id}.json")
-		 * @return PatternMetadata|null
-		 */
-		private function compilePatternMetadata(string $segment): ?array {
-			// Match pattern: literal_prefix + {variable} + literal_suffix
-			// Examples: "user{id}", "{name}.json", "api/v1/{endpoint}/data"
-			if (preg_match('/^([^{]*)(\{[^}]+})(.*)$/', $segment, $matches)) {
-				// Extract the three parts of the segment
-				$literalPrefix = $matches[1];  // Text before the variable
-				$variablePart = $matches[2];   // The {variable} part including braces
-				$literalSuffix = $matches[3];  // Text after the variable
-				
-				// Pre-calculate string lengths for performance optimization
-				// These will be used frequently during route matching
-				$prefixLength = strlen($literalPrefix);
-				$suffixLength = strlen($literalSuffix);
-				
-				// Extract the variable name from within the braces
-				// Remove surrounding { } characters
-				$variableName = trim($variablePart, '{}');
-				
-				// Handle variable constraints (e.g., {id:int} -> "id")
-				// If variable has a type constraint, extract just the name part
-				if (str_contains($variableName, ':')) {
-					$variableName = explode(':', $variableName)[0];
-				}
-				
-				// Return compiled metadata for efficient route matching
-				return [
-					'literal_prefix' => $literalPrefix,    // Static text before variable
-					'literal_suffix' => $literalSuffix,    // Static text after variable
-					'prefix_length'  => $prefixLength,     // Length of prefix (performance)
-					'suffix_length'  => $suffixLength,     // Length of suffix (performance)
-					'variable_name'  => $variableName,     // Clean variable name for parameter extraction
-					'min_length'     => $prefixLength + $suffixLength // Minimum possible segment length
-				];
-			}
-			
-			// Return null for segments without variables (pure literal segments)
-			return null;
-		}
-		
+
 		/**
 		 * Builds the regex pattern for a variable based on its type.
 		 * @param VarInfo $varInfo Variable information containing name, regex, and type flags
@@ -510,8 +454,8 @@
 		 */
 		private function buildVariablePattern(array $varInfo): string {
 			// Ensure the variable name is safe for regex
-			$safeVarName = preg_replace('/[^a-zA-Z0-9_]/', '_', $varInfo['name']);
-			
+			$safeVarName = $this->sanitizeCaptureGroupName($varInfo['name']);
+
 			// Regular variable with custom or default regex
 			if (!$varInfo['is_wildcard']) {
 				return "(?<{$safeVarName}>{$varInfo['regex']})";
@@ -525,7 +469,18 @@
 			// Single wildcard (*) - matches within single path segment
 			return "(?<{$safeVarName}>[^\/]*)"; // Direct pattern instead of using varInfo['regex']
 		}
-		
+
+		/**
+		 * Sanitizes a variable name into a valid PCRE named-capture-group name.
+		 * Used both to build each group and to detect collisions between two
+		 * variables that would otherwise produce the same group name.
+		 * @param string $name Raw variable name
+		 * @return string Name safe for use in (?<name>...)
+		 */
+		private function sanitizeCaptureGroupName(string $name): string {
+			return preg_replace('/[^a-zA-Z0-9_]/', '_', $name) ?? $name;
+		}
+
 		/**
 		 * Processes a literal character and updates the pattern and prefix/suffix tracking.
 		 * @param string $char The literal character to process
@@ -717,7 +672,7 @@
 			return [
 				'name'              => $parts[0],
 				'clean_name'        => $parts[0],
-				'regex'             => $this->resolveTypeToRegex($parts[1]),
+				'regex'             => TypeConstraintResolver::resolveTypeToRegex($parts[1]),
 				'is_wildcard'       => false,
 				'is_multi_wildcard' => false,
 				'original_content'  => $content

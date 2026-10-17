@@ -5,6 +5,7 @@
 	use Quellabs\Canvas\Annotations\RoutePrefix;
 	use ReflectionException;
 	use Quellabs\Canvas\Annotations\Route;
+	use Quellabs\Canvas\Exceptions\InvalidRouteDefinitionException;
 	use Quellabs\Canvas\Kernel;
 	use Quellabs\Canvas\Routing\NormalizesRoutes;
 	use Quellabs\Canvas\Routing\RouteTypes;
@@ -81,6 +82,7 @@
 		 * processing.
 		 * @return list<RouteDefinition> Array of compiled route definitions sorted by priority (highest first)
 		 * @throws AnnotationReaderException
+		 * @throws InvalidRouteDefinitionException If a discovered route segment declares the same variable name twice
 		 */
 		public function buildRoutesFromControllers(): array {
 			// Fetch all controller class names from local directory and registered packages

@@ -21,15 +21,6 @@
 	 * It is produced by RouteMatcher during pattern matching and only exists
 	 * in the MatchedRoute that is returned to the caller.
 	 *
-	 * @phpstan-type PatternMetadata array{
-	 *     literal_prefix: string,
-	 *     literal_suffix: string,
-	 *     prefix_length: int,
-	 *     suffix_length: int,
-	 *     variable_name: string,
-	 *     min_length: int
-	 * }
-	 *
 	 * @phpstan-type CompiledSegment array{
 	 *     type: string,
 	 *     original: string,
@@ -40,7 +31,6 @@
 	 *     variable_names: list<string>,
 	 *     literal_prefix: string|null,
 	 *     literal_suffix: string|null,
-	 *     pattern_metadata?: PatternMetadata,
 	 *     remaining_segments_count: int
 	 * }
 	 *
