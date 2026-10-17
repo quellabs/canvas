@@ -67,30 +67,43 @@
 		 * Match a URL against a single route.
 		 * @param RouteDefinition $routeData Complete route configuration
 		 * @param list<string> $requestSegments URL segments
-		 * @param string $originalUrl Full original URL (used for trailing slash check)
+		 * @param string $requestPath Request path, no query string (used for trailing slash check)
 		 * @param string $requestMethod HTTP method (GET, POST, etc.)
 		 * @return MatchedRoute|null Matched route with extracted variables, or null on failure
 		 */
-		public function matchRoute(array $routeData, array $requestSegments, string $originalUrl, string $requestMethod): ?array {
+		public function matchRoute(array $routeData, array $requestSegments, string $requestPath, string $requestMethod): ?array {
 			// Reject mismatched HTTP methods before doing any pattern work.
 			if (!$this->httpMethodIsAllowed($requestMethod, $routeData['http_methods'])) {
 				return null;
 			}
-			
+
+			return $this->matchPath($routeData, $requestSegments, $requestPath);
+		}
+
+		/**
+		 * Match a URL against a single route's path, ignoring HTTP method entirely.
+		 * Used to determine whether a path exists at all (for 404 vs 405 and
+		 * automatic OPTIONS/HEAD handling) independent of which methods it declares.
+		 * @param RouteDefinition $routeData Complete route configuration
+		 * @param list<string> $requestSegments URL segments
+		 * @param string $requestPath Request path, no query string (used for trailing slash check)
+		 * @return MatchedRoute|null Matched route with extracted variables, or null on failure
+		 */
+		public function matchPath(array $routeData, array $requestSegments, string $requestPath): ?array {
 			// Trailing-slash enforcement is opt-in; skip the check when the feature is disabled.
-			if ($this->matchTrailingSlashes && !$this->trailingSlashMatches($originalUrl, $routeData['route_path'])) {
+			if ($this->matchTrailingSlashes && !$this->trailingSlashMatches($requestPath, $routeData['route_path'])) {
 				return null;
 			}
-			
+
 			// Static routes get a dedicated fast path: no variable extraction, just literal comparison.
 			$compiledPattern = $routeData['compiled_pattern'];
 			$segmentCount = count($requestSegments);
 			$patternCount = count($compiledPattern);
-			
+
 			if ($this->isStaticRoute($compiledPattern)) {
 				return $this->matchStaticRoute($compiledPattern, $requestSegments, $routeData, $segmentCount, $patternCount);
 			}
-			
+
 			return $this->matchDynamicRoute($compiledPattern, $requestSegments, $routeData, $segmentCount, $patternCount);
 		}
 		
@@ -109,20 +122,20 @@
 		}
 		
 		/**
-		 * Check that trailing slash presence matches between the request URL and route path.
+		 * Check that trailing slash presence matches between the request path and route path.
 		 * Root paths ("/" vs "/") are compared exactly. For all other paths,
 		 * both must either end with a slash or neither must.
 		 */
-		private function trailingSlashMatches(string $originalUrl, string $routePath): bool {
+		private function trailingSlashMatches(string $requestPath, string $routePath): bool {
 			// Root is a special case: "/" ends with a slash but is not a "trailing" slash in
 			// the conventional sense, so we compare the two strings directly rather than
 			// applying the ends-with check that would make every root request match every root route.
-			if ($originalUrl === '/' || $routePath === '/') {
-				return $originalUrl === $routePath;
+			if ($requestPath === '/' || $routePath === '/') {
+				return $requestPath === $routePath;
 			}
-			
+
 			// For all other paths, require that both either carry a trailing slash or neither does.
-			return str_ends_with($originalUrl, '/') === str_ends_with($routePath, '/');
+			return str_ends_with($requestPath, '/') === str_ends_with($routePath, '/');
 		}
 		
 		// -------------------------------------------------------------------------

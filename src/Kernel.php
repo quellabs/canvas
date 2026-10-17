@@ -266,9 +266,34 @@
 			if ($debugCollector !== null) {
 				$this->injectDebugBar($debugCollector, $request, $response);
 			}
-			
+
+			// HEAD must never carry a body (RFC 9110 9.3.2), regardless of which route
+			// or error path produced the response, so this is enforced at the single
+			// point every response passes through rather than in each controller/handler.
+			if ($request->isMethod('HEAD')) {
+				$this->suppressBodyForHeadRequest($response);
+			}
+
 			// Return response
 			return $response;
+		}
+
+		/**
+		 * Strip a response's body for a HEAD request while preserving its status and headers.
+		 * @param Response $response The response to strip in place
+		 * @return void
+		 */
+		private function suppressBodyForHeadRequest(Response $response): void {
+			$content = $response->getContent();
+			$length = is_string($content) ? (string)strlen($content) : '0';
+
+			if (!$response->headers->has('Content-Length') && $length !== '0') {
+				$response->headers->set('Content-Length', $length);
+			}
+
+			// StreamedResponse only accepts null: it marks the stream as already sent
+			// so its callback never runs, rather than storing an actual empty string.
+			$response->setContent(null);
 		}
 		
 		/**

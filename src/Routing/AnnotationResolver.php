@@ -8,6 +8,7 @@
 	use Quellabs\Support\ComposerUtils;
 	use Symfony\Component\HttpFoundation\Request;
 	use Quellabs\Canvas\Cache\Drivers\FileCache;
+	use Quellabs\Canvas\Exceptions\MethodNotAllowedException;
 	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
 	use Quellabs\Canvas\Routing\Components\RouteCacheManager;
 	use Quellabs\Canvas\Routing\Components\RouteDiscovery;
@@ -57,7 +58,6 @@
 	 * The resolver maintains full backward compatibility while providing significant
 	 * performance improvements, especially for applications with large numbers of routes.
 	 *
-	 * @phpstan-import-type RouteDefinition from RouteTypes
 	 * @phpstan-import-type RouteIndex from RouteTypes
 	 * @phpstan-import-type MatchedRoute from RouteTypes
 	 */
@@ -92,19 +92,27 @@
 		 * Resolves an HTTP request to find the first matching route
 		 * @param Request $request The incoming HTTP request to resolve
 		 * @return MatchedRoute Returns the first matched route info
-		 * @throws RouteNotFoundException When no matching route is found
+		 * @throws RouteNotFoundException When no route's path matches the request at all
+		 * @throws MethodNotAllowedException When a route's path matches but not the HTTP method
 		 * @throws AnnotationReaderException On error reading annotations
 		 */
 		public function resolve(Request $request): array {
 			$result = $this->resolveAll($request);
-			
+
 			if (!empty($result)) {
 				return $result[0];
 			}
-			
+
+			// The path matched something but not for this method: 405, not 404.
+			$allowedMethods = $this->resolvePathAllowedMethods($request);
+
+			if (!empty($allowedMethods)) {
+				throw new MethodNotAllowedException($allowedMethods);
+			}
+
 			throw new RouteNotFoundException("Route not found");
 		}
-		
+
 		/**
 		 * Resolves all matching routes using enhanced pre-filtering
 		 *
@@ -115,41 +123,106 @@
 		 * 3. Multi-level static segment filtering
 		 * 4. Prefix trie lookup for static routes
 		 *
+		 * A HEAD request that matches no explicit HEAD route falls back to whatever
+		 * GET route matches the path; the response body is suppressed later, at the
+		 * kernel boundary, so callers always see a normal GET-shaped MatchedRoute.
+		 *
 		 * @param Request $request The HTTP request object
 		 * @return list<MatchedRoute> Array of matched route objects, empty if no matches found
 		 * @throws AnnotationReaderException
 		 */
 		public function resolveAll(Request $request): array {
-			// Strip query string and decode the path component for consistent matching
 			$requestUrl = $this->parseRequestUrl($request->getPathInfo());
-			
-			// Build the route index or fetch from cache
 			$routeIndex = $this->getRouteIndex();
-			
+			$requestMethod = $request->getMethod();
+
+			// getPathInfo() deliberately excludes the query string, so a query string
+			// can never flip the trailing-slash comparison done inside RouteMatcher.
+			$requestPath = $request->getPathInfo();
+
+			$results = $this->matchForMethod($requestUrl, $requestMethod, $requestPath, $routeIndex);
+
+			if (!empty($results) || $requestMethod !== 'HEAD') {
+				return $results;
+			}
+
+			return $this->matchForMethod($requestUrl, 'GET', $requestPath, $routeIndex);
+		}
+
+		/**
+		 * Pre-filter and fully match candidates for one specific HTTP method.
+		 * @param list<string> $requestUrl Parsed URL segments
+		 * @param string $method HTTP method to match against
+		 * @param string $requestPath Request path, no query string
+		 * @param RouteIndex $routeIndex Complete route index
+		 * @return list<MatchedRoute> Array of matched route objects, empty if no matches found
+		 */
+		private function matchForMethod(array $requestUrl, string $method, string $requestPath, array $routeIndex): array {
 			// Pre-filter the full route index to a smaller candidate set based on
 			// method and static path segments, avoiding full matching on every route
-			$candidates = $this->candidateFilter->getFilteredCandidates(
-				$requestUrl,
-				$request->getMethod(),
-				$routeIndex
-			);
-			
+			$candidates = $this->candidateFilter->getFilteredCandidates($requestUrl, $method, $routeIndex);
+
 			$results = [];
-			
+
 			foreach ($candidates as $route) {
 				// Full match: validates dynamic segments, constraints, and extracts parameters
-				// Pass the raw request URI alongside the parsed URL so the matcher has
-				// access to the query string if a route requires it
-				$match = $this->routeMatcher->matchRoute($route, $requestUrl, $request->getRequestUri(), $request->getMethod());
-				
+				$match = $this->routeMatcher->matchRoute($route, $requestUrl, $requestPath, $method);
+
 				// Null means the candidate didn't survive full validation; skip it
 				if ($match !== null) {
 					$results[] = $match;
 				}
 			}
-			
+
 			// Return all matches rather than the first — caller decides priority/ambiguity
 			return $results;
+		}
+
+		/**
+		 * Collect the HTTP methods actually supported by whatever route's path matches
+		 * the request, regardless of method. Used to distinguish a true 404 (no route's
+		 * path matches at all) from a 405 (the path matches, but not this method).
+		 *
+		 * Declared methods are expanded with the methods Canvas serves implicitly:
+		 * HEAD whenever GET is declared, and OPTIONS whenever anything matches at all.
+		 *
+		 * @param Request $request
+		 * @return list<string> Deduplicated, alphabetically sorted methods; empty if no route's path matches
+		 * @throws AnnotationReaderException
+		 */
+		private function resolvePathAllowedMethods(Request $request): array {
+			$requestUrl = $this->parseRequestUrl($request->getPathInfo());
+			$requestPath = $request->getPathInfo();
+			$routeIndex = $this->getRouteIndex();
+
+			$candidates = $this->candidateFilter->getPathMatchingCandidates($requestUrl, $routeIndex);
+
+			/** @var array<string, true> $methods */
+			$methods = [];
+
+			foreach ($candidates as $route) {
+				if ($this->routeMatcher->matchPath($route, $requestUrl, $requestPath) !== null) {
+					foreach ($route['http_methods'] as $method) {
+						$methods[$method] = true;
+					}
+				}
+			}
+
+			if (empty($methods)) {
+				return [];
+			}
+
+			// HEAD is implicitly served for any path that serves GET (see resolveAll()),
+			// and OPTIONS is implicitly served for any path that matches at all.
+			if (isset($methods['GET'])) {
+				$methods['HEAD'] = true;
+			}
+
+			$methods['OPTIONS'] = true;
+
+			$result = array_keys($methods);
+			sort($result);
+			return $result;
 		}
 		
 		/**
@@ -191,14 +264,12 @@
 				return $this->routeIndex;
 			}
 			
-			// Get all routes (from cache or fresh build)
-			/** @var list<RouteDefinition> $allRoutes */
-			$allRoutes = $this->cacheManager->getCachedRoutes(function () {
-				return $this->routeDiscovery->buildRoutesFromControllers();
+			// Get the built index itself (from cache or fresh build), not just the raw
+			// route list — this avoids rebuilding the index on every single request
+			return $this->routeIndex = $this->cacheManager->getCachedRouteIndex(function () {
+				$allRoutes = $this->routeDiscovery->buildRoutesFromControllers();
+				return $this->candidateFilter->buildRouteIndex($allRoutes);
 			});
-			
-			// Build and cache the index
-			return $this->routeIndex = $this->candidateFilter->buildRouteIndex($allRoutes);
 		}
 		
 		/**

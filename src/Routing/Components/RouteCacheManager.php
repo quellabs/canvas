@@ -11,7 +11,7 @@
 	 * RouteCacheManager
 	 *
 	 * Manages route caching and optimization using the FileCache system to provide
-	 * persistent storage of compiled routes with intelligent cache invalidation based
+	 * persistent storage of the built route index with intelligent cache invalidation based
 	 * on controller file modifications.
 	 *
 	 * Core responsibilities:
@@ -44,7 +44,7 @@
 	 * - Cache hits: Near-instant route loading (microseconds)
 	 * - Cache misses: Full route discovery and compilation (milliseconds)
 	 * - File monitoring: Lightweight timestamp comparisons
-	 * - Memory efficiency: Routes loaded once per application lifecycle
+	 * - Memory efficiency: Built index loaded once per request, cached across requests
 	 *
 	 * The cache manager ensures optimal performance in production while maintaining
 	 * development-friendly behavior with automatic cache invalidation when controllers
@@ -57,12 +57,16 @@
 		private int $defaultTtl;
 		
 		/**
-		 * Cache key for storing compiled routes bundled with their mtime snapshot.
-		 * Structure: ['mtime' => int, 'routes' => array]
+		 * Cache key for storing the built route index bundled with its mtime snapshot.
+		 * Structure: ['mtime' => int, 'routes' => RouteIndex]
 		 * Bundling both values in one key makes reads and writes atomic,
 		 * eliminating the race window that existed when they were stored separately.
+		 *
+		 * Deliberately distinct from the old 'compiled_routes' key (which stored the
+		 * raw route list, not the built index): reusing that key would let a stale
+		 * pre-upgrade cache entry whose mtime still matches be misread as an index.
 		 */
-		private const string ROUTES_CACHE_KEY = 'compiled_routes';
+		private const string ROUTES_CACHE_KEY = 'compiled_route_index';
 		
 		/**
 		 * RouteCacheManager constructor
@@ -81,12 +85,12 @@
 		}
 		
 		/**
-		 * Get cached routes if available and valid, rebuilding if stale or missing.
+		 * Get the cached, fully-built route index if available and valid, rebuilding if stale or missing.
 		 * @template T
-		 * @param callable(): T $builder Callback to build routes if cache miss
-		 * @return T Cached or freshly built routes array
+		 * @param callable(): T $builder Callback to build the route index on a cache miss
+		 * @return T Cached or freshly built route index
 		 */
-		public function getCachedRoutes(callable $builder): mixed {
+		public function getCachedRouteIndex(callable $builder): mixed {
 			$currentMtime = $this->getLastControllerModification();
 			
 			// Fetch cache

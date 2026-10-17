@@ -63,7 +63,8 @@
 	 *     multi_level: array<int, array<string, list<RouteDefinition>>>,
 	 *     segment_count: array<int, list<RouteDefinition>>,
 	 *     http_methods: array<string, list<RouteDefinition>>,
-	 *     prefix_tree: array<string, TrieNode>
+	 *     prefix_tree: array<string, TrieNode>,
+	 *     all_routes: list<RouteDefinition>
 	 * }
 	 *
 	 * @phpstan-type MatchedRoute array{

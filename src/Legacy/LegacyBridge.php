@@ -79,8 +79,11 @@
 		 * @return void
 		 */
 		private static function registerGlobalFunctions(): void {
-			// Only register the function if it doesn't already exist to avoid conflicts
-			if (!function_exists('canvas')) {
+			// The function below is declared without a leading "\", so PHP registers it
+			// under the current namespace (__NAMESPACE__ . '\canvas'), not the global
+			// namespace — the existence check must match that or it never prevents a
+			// second initialize() call in the same process from redeclaring it fatally.
+			if (!function_exists(__NAMESPACE__ . '\\canvas')) {
 				/**
 				 * Global helper function for accessing Canvas services
 				 * @template T of object

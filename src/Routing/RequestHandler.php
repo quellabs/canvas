@@ -12,6 +12,7 @@
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Canvas\AOP\AspectDispatcher;
 	use Quellabs\Canvas\Discover\MethodContextProvider;
+	use Quellabs\Canvas\Exceptions\MethodNotAllowedException;
 	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
 	use Quellabs\Canvas\Kernel;
 	use Quellabs\Canvas\Routing\Context\MethodContext;
@@ -39,28 +40,74 @@
 		 * @param Request $request The incoming HTTP request object
 		 * @param array<string, mixed>|null $urlData
 		 * @return Response HTTP response to be sent back to the client
-		 * @throws AnnotationReaderException|RouteNotFoundException|\ReflectionException
+		 * @throws AnnotationReaderException|RouteNotFoundException|MethodNotAllowedException|\ReflectionException
 		 * @throws \Exception
 		 */
 		public function handle(Request $request, ?array &$urlData): Response {
 			try {
 				return $this->modernResolve($request, $urlData);
+			} catch (MethodNotAllowedException $e) {
+				return $this->resolveMethodNotAllowed($request, $e);
 			} catch (RouteNotFoundException $e) {
 				if (!$this->kernel->isLegacyEnabled()) {
 					throw $e;
 				}
-				
+
 				return $this->legacyResolve($request);
 			}
 		}
-		
+
+		/**
+		 * Handle a request whose path matched a route but not for this HTTP method.
+		 *
+		 * Legacy is file-based and method-agnostic, so — consistent with the plain
+		 * 404 case above — it still gets first refusal when enabled: only once legacy
+		 * also has no matching file do we act on Canvas's own match, either by
+		 * synthesizing an OPTIONS response or by surfacing the 405 for every other method.
+		 *
+		 * @param Request $request The incoming HTTP request object
+		 * @param MethodNotAllowedException $e Carries the methods the matched path actually supports
+		 * @return Response HTTP response to be sent back to the client
+		 * @throws MethodNotAllowedException When the method truly isn't supported and legacy has nothing either
+		 * @throws \Exception
+		 */
+		private function resolveMethodNotAllowed(Request $request, MethodNotAllowedException $e): Response {
+			if ($this->kernel->isLegacyEnabled()) {
+				try {
+					return $this->legacyResolve($request);
+				} catch (RouteNotFoundException) {
+					// Legacy has no file either; fall through to Canvas's own result below.
+				}
+			}
+
+			if ($request->getMethod() === 'OPTIONS') {
+				return $this->buildAutomaticOptionsResponse($e->getAllowedMethods());
+			}
+
+			throw $e;
+		}
+
+		/**
+		 * Build the automatic OPTIONS response for a path that has no explicit OPTIONS route.
+		 * Deliberately limited to Allow + an empty body: CORS policy is a separate concern
+		 * and must not be invented here.
+		 * @param list<string> $allowedMethods HTTP methods the matched path actually supports
+		 * @return Response
+		 */
+		private function buildAutomaticOptionsResponse(array $allowedMethods): Response {
+			$response = new Response('', Response::HTTP_OK);
+			$response->headers->set('Allow', implode(', ', $allowedMethods));
+			return $response;
+		}
+
 		/**
 		 * Resolves routes using modern annotation-based routing system
 		 * @param Request $request The incoming HTTP request to resolve
 		 * @param array<string, mixed>|null $urlData Null on entry, populated with resolved route data on return
 		 * @param-out MatchedRoute $urlData The resolved URL data (never null after execution)
 		 * @return Response The response from the matched route handler
-		 * @throws RouteNotFoundException When no matching route is found
+		 * @throws RouteNotFoundException When no route's path matches the request at all
+		 * @throws MethodNotAllowedException When a route's path matches but not the HTTP method
 		 * @throws AnnotationReaderException|\ReflectionException When annotation parsing fails
 		 */
 		private function modernResolve(Request $request, ?array &$urlData): Response {
