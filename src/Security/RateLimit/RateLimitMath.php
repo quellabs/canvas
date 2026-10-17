@@ -31,9 +31,9 @@
 		 * @param int $limit Maximum requests admitted per window
 		 * @param int $window Window length in seconds
 		 * @param int $now Current Unix timestamp (seconds)
-		 * @return array{0: array<string, mixed>, 1: RateLimitResult}
+		 * @return RateLimitAdmission
 		 */
-		public static function fixedWindow(?array $state, int $limit, int $window, int $now): array {
+		public static function fixedWindow(?array $state, int $limit, int $window, int $now): RateLimitAdmission {
 			$windowStart = intdiv($now, $window) * $window;
 			$resetTime = $windowStart + $window;
 
@@ -46,7 +46,7 @@
 				max(0, $resetTime - $now)
 			);
 
-			return [['count' => $count], $result];
+			return new RateLimitAdmission(['count' => $count], $result);
 		}
 
 		/**
@@ -58,9 +58,9 @@
 		 * @param int $limit Maximum requests admitted per rolling window
 		 * @param int $window Window length in seconds
 		 * @param int $now Current Unix timestamp (seconds)
-		 * @return array{0: array<string, mixed>, 1: RateLimitResult}
+		 * @return RateLimitAdmission
 		 */
-		public static function slidingWindow(?array $state, int $limit, int $window, int $now): array {
+		public static function slidingWindow(?array $state, int $limit, int $window, int $now): RateLimitAdmission {
 			$cutoff = $now - $window;
 
 			$timestamps = is_array($state['timestamps'] ?? null) ? $state['timestamps'] : [];
@@ -91,7 +91,7 @@
 				$exceeded ? max(0, ($oldest + $window) - $now) : 0
 			);
 
-			return [['timestamps' => $timestamps], $result];
+			return new RateLimitAdmission(['timestamps' => $timestamps], $result);
 		}
 
 		/**
@@ -101,9 +101,9 @@
 		 * @param int $limit Bucket capacity (also the refill target over $window seconds)
 		 * @param int $window Seconds to fully refill an empty bucket to $limit tokens
 		 * @param int $now Current Unix timestamp (seconds)
-		 * @return array{0: array<string, mixed>, 1: RateLimitResult}
+		 * @return RateLimitAdmission
 		 */
-		public static function tokenBucket(?array $state, int $limit, int $window, int $now): array {
+		public static function tokenBucket(?array $state, int $limit, int $window, int $now): RateLimitAdmission {
 			$refillRate = $window > 0 ? $limit / $window : (float)$limit;
 
 			if (is_numeric($state['tokens'] ?? null) && is_int($state['last_refill'] ?? null)) {
@@ -131,6 +131,6 @@
 				$retryAfter
 			);
 
-			return [['tokens' => $tokens, 'last_refill' => $now], $result];
+			return new RateLimitAdmission(['tokens' => $tokens, 'last_refill' => $now], $result);
 		}
 	}

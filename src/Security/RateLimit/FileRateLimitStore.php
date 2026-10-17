@@ -65,9 +65,9 @@
 			$stateKey = $key . ':fixed:' . intdiv($now, $window) * $window;
 
 			$result = $this->withLock($stateKey, function ($handle) use ($limit, $window, $now) {
-				[$newState, $result] = RateLimitMath::fixedWindow($this->readState($handle), $limit, $window, $now);
-				$this->writeState($handle, $newState);
-				return $result;
+				$admission = RateLimitMath::fixedWindow($this->readState($handle), $limit, $window, $now);
+				$this->writeState($handle, $admission->getState());
+				return $admission->getResult();
 			});
 
 			$this->maybeGarbageCollect();
@@ -79,9 +79,9 @@
 		 */
 		public function admitSlidingWindow(string $key, int $limit, int $window, int $now): RateLimitResult {
 			$result = $this->withLock($key . ':sliding', function ($handle) use ($limit, $window, $now) {
-				[$newState, $result] = RateLimitMath::slidingWindow($this->readState($handle), $limit, $window, $now);
-				$this->writeState($handle, $newState);
-				return $result;
+				$admission = RateLimitMath::slidingWindow($this->readState($handle), $limit, $window, $now);
+				$this->writeState($handle, $admission->getState());
+				return $admission->getResult();
 			});
 
 			$this->maybeGarbageCollect();
@@ -93,9 +93,9 @@
 		 */
 		public function admitTokenBucket(string $key, int $limit, int $window, int $now): RateLimitResult {
 			$result = $this->withLock($key . ':bucket', function ($handle) use ($limit, $window, $now) {
-				[$newState, $result] = RateLimitMath::tokenBucket($this->readState($handle), $limit, $window, $now);
-				$this->writeState($handle, $newState);
-				return $result;
+				$admission = RateLimitMath::tokenBucket($this->readState($handle), $limit, $window, $now);
+				$this->writeState($handle, $admission->getState());
+				return $admission->getResult();
 			});
 
 			$this->maybeGarbageCollect();

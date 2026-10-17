@@ -89,7 +89,7 @@
 		 * the freshly-read state on a CAS conflict, up to maxCasRetries.
 		 * @param string $cacheKey
 		 * @param int $ttl
-		 * @param callable(array<mixed, mixed>|null): array{0: array<string, mixed>, 1: RateLimitResult} $compute
+		 * @param callable(array<mixed, mixed>|null): RateLimitAdmission $compute
 		 * @return RateLimitResult
 		 * @throws RateLimitStoreUnavailableException
 		 */
@@ -111,17 +111,17 @@
 					);
 				}
 
-				[$newState, $result] = $compute($state);
+				$admission = $compute($state);
 
 				if ($casToken === null) {
 					// No existing value: add() fails if another process created it first,
 					// which is exactly the signal to retry against that process's value.
-					if ($this->memcached->add($cacheKey, $newState, $ttl)) {
-						return $result;
+					if ($this->memcached->add($cacheKey, $admission->getState(), $ttl)) {
+						return $admission->getResult();
 					}
 				} elseif (is_float($casToken) || is_int($casToken)) {
-					if ($this->memcached->cas((float)$casToken, $cacheKey, $newState, $ttl)) {
-						return $result;
+					if ($this->memcached->cas((float)$casToken, $cacheKey, $admission->getState(), $ttl)) {
+						return $admission->getResult();
 					}
 				}
 

@@ -142,9 +142,9 @@
 			$cutoff = $now - $window;
 
 			$raw = $this->eval(self::SLIDING_WINDOW_SCRIPT, [$redisKey], [$cutoff, $now, $window]);
-			[$countRaw, $oldestRaw] = is_array($raw) && count($raw) === 2 ? $raw : [1, $now];
-			$count = $this->toInt($countRaw, 1);
-			$oldest = $this->toInt($oldestRaw, $now);
+			$rawPair = is_array($raw) && count($raw) === 2 ? $raw : [1, $now];
+			$count = $this->toInt($rawPair[0], 1);
+			$oldest = $this->toInt($rawPair[1], $now);
 			$exceeded = $count > $limit;
 
 			return new RateLimitResult(
@@ -163,9 +163,9 @@
 			$refillRate = $window > 0 ? $limit / $window : (float)$limit;
 
 			$raw = $this->eval(self::TOKEN_BUCKET_SCRIPT, [$redisKey], [$limit, $refillRate, $now, $window * 2]);
-			[$exceededFlag, $tokensRaw] = is_array($raw) && count($raw) === 2 ? $raw : [0, $limit];
-			$exceeded = $this->toInt($exceededFlag) === 1;
-			$tokens = $this->toFloat($tokensRaw, (float)$limit);
+			$rawPair = is_array($raw) && count($raw) === 2 ? $raw : [0, $limit];
+			$exceeded = $this->toInt($rawPair[0]) === 1;
+			$tokens = $this->toFloat($rawPair[1], (float)$limit);
 			$retryAfter = $exceeded && $refillRate > 0 ? (int)ceil((1 - $tokens) / $refillRate) : 0;
 
 			return new RateLimitResult(
