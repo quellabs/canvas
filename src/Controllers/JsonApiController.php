@@ -6,7 +6,6 @@
 	use Quellabs\ObjectQuel\Exception\EntityResolutionException;
 	use Quellabs\ObjectQuel\Exception\QuelException;
 	use Quellabs\ObjectQuel\OrmException;
-	use Quellabs\ObjectQuel\ReflectionManagement\PropertyHandler;
 	use Quellabs\ObjectQuel\Serialization\Serializers\JsonApiSerializer;
 	use Quellabs\ObjectQuel\Serialization\UrlBuilders\JsonApiUrlBuilder;
 	use Symfony\Component\HttpFoundation\JsonResponse;
@@ -24,20 +23,15 @@
 	 */
 	abstract class JsonApiController extends BaseController {
 		
-		/** @var PropertyHandler Handler for entity property manipulation via reflection */
-		protected PropertyHandler $propertyHandler;
-		
 		/** @var JsonApiSerializer Serializer for converting entities to JSON:API format */
 		protected JsonApiSerializer $serializer;
-		
+
 		/**
 		 * Constructor - initializes the controller with required dependencies
 		 * @param Container $container Dependency injector
-		 * @param PropertyHandler $propertyHandler Handler for dynamic property access
 		 */
-		public function __construct(Container $container, PropertyHandler $propertyHandler) {
+		public function __construct(Container $container) {
 			parent::__construct($container);
-			$this->propertyHandler = $propertyHandler;
 			$this->serializer = $this->createSerializer();
 		}
 		
@@ -375,39 +369,32 @@
 		}
 
 		/**
-		 * Map JSON:API attributes to entity properties. Every key allowed through
-		 * here was already confirmed by validateAttributes() to exist on the
-		 * entity, so this only decides how to write it: through its setter when
-		 * one exists, or through reflection when the entity has no setter for it.
-		 * Being in the writable-field allowlist is itself the explicit, deliberate
-		 * opt-in for the reflective path — there is no second list to keep in sync.
+		 * Map JSON:API attributes to entity properties, each through its setter
+		 * (naming convention: setPropertyName). A field with no setter is never
+		 * written — there is no reflective fallback.
 		 * @param object $entity The entity instance to update
 		 * @param array<string, mixed> $attributes Associative array of attribute name => value pairs
 		 */
 		protected function mapAttributesToEntity(object $entity, array $attributes): void {
 			foreach ($attributes as $key => $value) {
-				// Try using a setter method first (follows naming convention: setPropertyName)
 				$setterMethod = 'set' . ucfirst($key);
 
 				if (method_exists($entity, $setterMethod)) {
 					$entity->$setterMethod($value);
-				} elseif ($this->propertyHandler->exists($entity, $key)) {
-					$this->propertyHandler->set($entity, $key, $value);
 				}
 			}
 		}
 
 		/**
-		 * Check whether an attribute corresponds to anything on the entity at all —
-		 * a setter, or a plain property reachable through reflection. Mirrors the
-		 * write mechanism mapAttributesToEntity() actually uses, so nothing can pass
+		 * Check whether an attribute has a setter on the entity. Mirrors the write
+		 * mechanism mapAttributesToEntity() actually uses, so nothing can pass
 		 * validation here and then silently fail to be written.
 		 * @param object $entity
 		 * @param string $key
 		 * @return bool
 		 */
 		private function attributeExistsOnEntity(object $entity, string $key): bool {
-			return method_exists($entity, 'set' . ucfirst($key)) || $this->propertyHandler->exists($entity, $key);
+			return method_exists($entity, 'set' . ucfirst($key));
 		}
 
 		/**
