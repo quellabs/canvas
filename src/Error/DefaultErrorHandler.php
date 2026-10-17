@@ -4,6 +4,7 @@
 	
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
+	use Quellabs\Canvas\Exceptions\MethodNotAllowedException;
 	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
 	
 	class DefaultErrorHandler {
@@ -24,14 +25,21 @@
 		 */
 		public function handle(\Throwable $e, Request $request, bool $isDevelopment): Response {
 			$status = $this->resolveStatus($e);
-			
+
 			if ($isDevelopment) {
 				$content = $this->renderDebugErrorPageContent($e);
 			} else {
 				$content = $this->renderProductionErrorPageContent($status);
 			}
-			
-			return new Response($content, $status, ['Content-Type' => 'text/html']);
+
+			$response = new Response($content, $status, ['Content-Type' => 'text/html']);
+
+			if ($e instanceof MethodNotAllowedException) {
+				// RFC 7231 requires a 405 response to list the allowed methods
+				$response->headers->set('Allow', implode(', ', $e->getAllowedMethods()));
+			}
+
+			return $response;
 		}
 		
 		/**
@@ -43,7 +51,8 @@
 			if ($e instanceof RouteNotFoundException) {
 				return Response::HTTP_NOT_FOUND;
 			}
-			
+
+			// Only accept the exception code if it's a valid HTTP status; otherwise fall back to 500
 			$code = $e->getCode();
 			return $code >= 400 && $code <= 599 ? $code : Response::HTTP_INTERNAL_SERVER_ERROR;
 		}

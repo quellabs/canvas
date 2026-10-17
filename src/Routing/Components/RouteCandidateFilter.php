@@ -74,7 +74,8 @@
 				'multi_level'   => [],     // position -> static_value -> routes
 				'segment_count' => [],     // segment_count -> routes
 				'http_methods'  => [],     // http_method -> routes
-				'prefix_tree'   => []      // trie structure for static routes
+				'prefix_tree'   => [],     // trie structure for static routes
+				'all_routes'    => []      // every route, regardless of method (for path-only lookups)
 			];
 			
 			foreach ($routes as $route) {
@@ -103,11 +104,6 @@
 		 * @return list<RouteDefinition> Filtered array of route candidates for matching
 		 */
 		public function getFilteredCandidates(array $requestUrl, string $requestMethod, array $routeIndex): array {
-			// Count the number of segments in the incoming request URL
-			// This is used for segment-based filtering to quickly eliminate
-			// routes that cannot possibly match due to different path lengths
-			$segmentCount = count($requestUrl);
-			
 			// Strategy 1: HTTP Method filtering (fastest elimination)
 			// Check if any routes exist for the requested HTTP method
 			// This is the fastest filter as it uses a simple array lookup
@@ -120,11 +116,49 @@
 				return [];
 			}
 			
+			return $this->getFilteredCandidatesFromPool($requestUrl, $routeIndex, $methodCandidates);
+		}
+		
+		/**
+		 * Get pre-filtered route candidates for a path, ignoring HTTP method entirely.
+		 *
+		 * Used to determine whether a path exists at all (independent of which methods
+		 * it declares) so callers can distinguish a true 404 from a 405, and so
+		 * automatic OPTIONS/HEAD handling can discover which methods a path supports.
+		 *
+		 * @param list<string> $requestUrl Parsed URL segments
+		 * @param RouteIndex $routeIndex Complete route index with all filtering structures
+		 * @return list<RouteDefinition> Filtered array of route candidates for matching, across all methods
+		 */
+		public function getPathMatchingCandidates(array $requestUrl, array $routeIndex): array {
+			$allRoutes = $routeIndex['all_routes'] ?? [];
+			
+			if (empty($allRoutes)) {
+				return [];
+			}
+			
+			return $this->getFilteredCandidatesFromPool($requestUrl, $routeIndex, $allRoutes);
+		}
+		
+		/**
+		 * Shared pre-filtering pipeline used by both method-specific and
+		 * method-agnostic candidate lookups, parameterized by the starting pool of routes.
+		 * @param list<string> $requestUrl Parsed URL segments
+		 * @param RouteIndex $routeIndex Complete route index with all filtering structures
+		 * @param list<RouteDefinition> $pool Starting pool of routes to filter (already method-scoped, or every route)
+		 * @return list<RouteDefinition> Filtered array of route candidates for matching
+		 */
+		private function getFilteredCandidatesFromPool(array $requestUrl, array $routeIndex, array $pool): array {
+			// Count the number of segments in the incoming request URL
+			// This is used for segment-based filtering to quickly eliminate
+			// routes that cannot possibly match due to different path lengths
+			$segmentCount = count($requestUrl);
+			
 			// Strategy 2: Enhanced segment count filtering with wildcard support
 			// Filter routes based on the number of URL segments
 			// This accounts for dynamic segments and wildcard routes that
 			// might match URLs with different segment counts
-			$candidates = $this->getSegmentCountCandidates($segmentCount, $routeIndex, $methodCandidates);
+			$candidates = $this->getSegmentCountCandidates($segmentCount, $routeIndex, $pool);
 			
 			// Early exit if no routes match the segment count criteria
 			// This saves processing time on static and trie filtering
@@ -274,6 +308,11 @@
 				// as the parameter values are unknown at indexing time
 				$this->addToTrieIndex($route, $routePath, $index);
 			}
+
+			// Strategy 5: Method-agnostic index
+			// Every route is recorded once here regardless of the methods it declares,
+			// so a path can be located without pre-filtering on HTTP method at all.
+			$index['all_routes'][] = $route;
 		}
 		
 		/**
@@ -375,7 +414,11 @@
 				// Sort routes by priority within this HTTP method group
 				usort($methodGroup, $sortFn);
 			}
-			
+
+			// Sort the method-agnostic route list the same way, for consistent
+			// ordering when a path is matched independent of HTTP method
+			usort($index['all_routes'], $sortFn);
+
 			// Sort routes within the multi-level positional index
 			// Structure: $index['multi_level'][position][static_segment] = [matching routes]
 			// This ensures higher priority routes are checked first at each position/segment combination
