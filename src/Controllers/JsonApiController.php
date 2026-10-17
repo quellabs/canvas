@@ -122,7 +122,7 @@
 			$entityClass = $this->getEntityClass();
 			$entity = new $entityClass();
 
-			// Resource- or user-specific authorization beyond the static field allowlist
+			// Resource- or user-specific authorization beyond the per-attribute check
 			$authorizationResponse = $this->authorizeAttributeWrite($request, $entity, WriteOperation::Create);
 
 			if ($authorizationResponse) {
@@ -201,7 +201,7 @@
 				return $this->createIdMismatchResponse();
 			}
 
-			// Resource- or user-specific authorization beyond the static field allowlist
+			// Resource- or user-specific authorization beyond the per-attribute check
 			$authorizationResponse = $this->authorizeAttributeWrite($request, $entity, WriteOperation::Update);
 
 			if ($authorizationResponse) {
@@ -333,17 +333,15 @@
 		}
 		
 		/**
-		 * Validate every submitted attribute against the operation's writable-field
-		 * allowlist before anything is mapped onto the entity. Identifier properties
-		 * are always forbidden, regardless of what a concrete controller declares
-		 * writable. An attribute that doesn't correspond to anything on the entity
-		 * at all (typo, stale client field) is silently ignored rather than
-		 * rejected — mapAttributesToEntity() is a no-op for it either way. An
-		 * attribute that exists on the entity but isn't in the allowlist is the
-		 * actual security boundary and always hard-fails. An attribute that IS in
-		 * the allowlist but has no setter is a server-side misconfiguration, not
-		 * a client error — it throws immediately rather than silently no-op'ing
-		 * on every request forever.
+		 * Validate every submitted attribute before anything is mapped onto the
+		 * entity. Identifier properties are always forbidden, regardless of what
+		 * a concrete controller does. An attribute with no setter at all can
+		 * never be written — isAttributeWritable() isn't even consulted for it,
+		 * it's silently ignored (typo, stale client field; mapAttributesToEntity()
+		 * is a no-op for it either way). A setter existing is the entity's own
+		 * declaration that the field is part of its API; isAttributeWritable()
+		 * decides sufficiency on top of that, and a hard rejection from it is the
+		 * actual security boundary.
 		 * @param object $entity The entity instance to validate against
 		 * @param array<string, mixed> $attributes Associative array of attribute name => value pairs
 		 * @param WriteOperation $operation Whether this is a create or an update
@@ -352,8 +350,6 @@
 		 */
 		protected function validateAttributes(object $entity, array $attributes, WriteOperation $operation): ?JsonResponse {
 			$metadata = $this->em()->getEntityStore()->getMetadata($entity);
-			$writableFields = $this->resolveWritableFields($operation);
-
 			$forbiddenAttributes = [];
 
 			foreach ($attributes as $key => $value) {
@@ -362,21 +358,11 @@
 					continue;
 				}
 
-				$hasSetter = $this->attributeExistsOnEntity($entity, $key);
-				$isWritable = in_array($key, $writableFields, true);
-
-				if ($isWritable && !$hasSetter) {
-					throw new \LogicException(sprintf(
-						"'%s' is declared writable by %s::getWritableFields%s(), but %s has no set%s() method.",
-						$key,
-						static::class,
-						$operation === WriteOperation::Create ? 'ForCreate' : 'ForUpdate',
-						get_class($entity),
-						ucfirst($key)
-					));
+				if (!$this->attributeExistsOnEntity($entity, $key)) {
+					continue;
 				}
 
-				if ($hasSetter && !$isWritable) {
+				if (!$this->isAttributeWritable($entity, $key, $operation)) {
 					$forbiddenAttributes[] = $key;
 				}
 			}
@@ -418,22 +404,10 @@
 		}
 
 		/**
-		 * Resolve the writable-field allowlist for the given operation.
-		 * @param WriteOperation $operation
-		 * @return list<string>
-		 */
-		private function resolveWritableFields(WriteOperation $operation): array {
-			return match ($operation) {
-				WriteOperation::Create => $this->getWritableFieldsForCreate(),
-				WriteOperation::Update => $this->getWritableFieldsForUpdate(),
-			};
-		}
-
-		/**
 		 * Authorize a write before any attribute is validated or mapped. The default
 		 * allows every create/update; override to add resource- or user-specific
-		 * checks (ownership, role, current entity state) that the static field
-		 * allowlist can't express — for example, rejecting an update to a resource
+		 * checks (ownership, role, current entity state) that a per-attribute
+		 * decision can't express — for example, rejecting an update to a resource
 		 * the current user doesn't own, regardless of which fields were submitted.
 		 * @param Request $request The incoming HTTP request
 		 * @param object $entity The entity being created or updated
@@ -445,9 +419,10 @@
 		}
 
 		/**
-		 * Create a standardized 403 response for attributes that exist on the entity
-		 * but aren't declared writable for this operation (including identifiers,
-		 * which are never writable regardless of what a controller declares).
+		 * Create a standardized 403 response for attributes that exist on the
+		 * entity but are denied for this operation — either by isAttributeWritable()
+		 * or because the attribute is an identifier, which is never writable
+		 * regardless of what a controller does.
 		 * @param list<string> $attributeNames
 		 * @return JsonResponse
 		 */
@@ -508,37 +483,21 @@
 		abstract protected function getResourceType(): string;
 
 		/**
-		 * Get the attribute names writable for both create and update. Empty by
-		 * default — deny by default, with no permissive fallback. Never list
-		 * identifier, ownership, role, timestamp or status fields here — they're
-		 * meant to be server-owned, not client-supplied. Override this when create
-		 * and update accept the same fields; override getWritableFieldsForCreate()
-		 * and/or getWritableFieldsForUpdate() directly when they need to differ.
-		 * @return list<string>
+		 * Decide whether a specific attribute may be written for the given
+		 * operation. Only ever called for an attribute that already has a setter
+		 * — the setter is the entity's own declaration that the field is part of
+		 * its API, so a setter existing is sufficient by default. Override to
+		 * deny specific fields, operations or circumstances a plain setter can't
+		 * express (ownership, role, current entity state) — for example:
+		 * `return $key !== 'role';` to keep a field server-owned despite having
+		 * a setter, or `$operation !== WriteOperation::Update` to allow it only
+		 * on create.
+		 * @param object $entity The entity being created or updated
+		 * @param string $key The attribute name (already confirmed to have a setter)
+		 * @param WriteOperation $operation Whether this is a create or an update
+		 * @return bool Whether the client may set this attribute for this operation
 		 */
-		protected function getWritableFields(): array {
-			return [];
-		}
-
-		/**
-		 * Get the attribute names writable when creating a new resource (POST).
-		 * Defaults to getWritableFields(); override only when create needs a
-		 * different set than update.
-		 * @return list<string>
-		 */
-		protected function getWritableFieldsForCreate(): array {
-			return $this->getWritableFields();
-		}
-
-		/**
-		 * Get the attribute names writable when updating an existing resource (PUT/PATCH).
-		 * Defaults to getWritableFields(); override only when update needs a
-		 * different set than create. Checked independently from
-		 * getWritableFieldsForCreate() — a field writable on create is not
-		 * automatically writable on update, or vice versa.
-		 * @return list<string>
-		 */
-		protected function getWritableFieldsForUpdate(): array {
-			return $this->getWritableFields();
+		protected function isAttributeWritable(object $entity, string $key, WriteOperation $operation): bool {
+			return true;
 		}
 	}
