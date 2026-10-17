@@ -340,7 +340,10 @@
 		 * at all (typo, stale client field) is silently ignored rather than
 		 * rejected — mapAttributesToEntity() is a no-op for it either way. An
 		 * attribute that exists on the entity but isn't in the allowlist is the
-		 * actual security boundary and always hard-fails.
+		 * actual security boundary and always hard-fails. An attribute that IS in
+		 * the allowlist but has no setter is a server-side misconfiguration, not
+		 * a client error — it throws immediately rather than silently no-op'ing
+		 * on every request forever.
 		 * @param object $entity The entity instance to validate against
 		 * @param array<string, mixed> $attributes Associative array of attribute name => value pairs
 		 * @param WriteOperation $operation Whether this is a create or an update
@@ -356,7 +359,24 @@
 			foreach ($attributes as $key => $value) {
 				if ($metadata->isIdentifierKey($key)) {
 					$forbiddenAttributes[] = $key;
-				} elseif ($this->attributeExistsOnEntity($entity, $key) && !in_array($key, $writableFields, true)) {
+					continue;
+				}
+
+				$hasSetter = $this->attributeExistsOnEntity($entity, $key);
+				$isWritable = in_array($key, $writableFields, true);
+
+				if ($isWritable && !$hasSetter) {
+					throw new \LogicException(sprintf(
+						"'%s' is declared writable by %s::getWritableFields%s(), but %s has no set%s() method.",
+						$key,
+						static::class,
+						$operation === WriteOperation::Create ? 'ForCreate' : 'ForUpdate',
+						get_class($entity),
+						ucfirst($key)
+					));
+				}
+
+				if ($hasSetter && !$isWritable) {
 					$forbiddenAttributes[] = $key;
 				}
 			}
