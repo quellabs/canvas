@@ -217,25 +217,26 @@
 		 */
 		public function hasPartialVariable(string $segment): bool {
 			// Check if the segment contains any variable pattern (text within curly braces)
-			$hasVariable = preg_match('/\{[^}]+}/', $segment);
-			
-			// Determine if the entire segment is a complete variable
-			// A complete variable starts with '{' and ends with '}'
-			$isCompleteVariable = !empty($segment) && $segment[0] === '{' && str_ends_with($segment, '}');
-			
-			// Return true only if segment has variables but is NOT a complete variable
-			// This identifies partial variables like "user{id}" or "v{id:int}"
-			// but excludes complete variables like "{id}" or "{name:string}"
-			return $hasVariable && !$isCompleteVariable;
+			$hasVariable = preg_match('/\{[^}]+}/', $segment) === 1;
+
+			// Return true only if segment has variables but is NOT itself a single complete variable
+			// This identifies partial variables like "user{id}" or "v{id:int}", and segments with
+			// more than one variable and no separating literal like "{id}{slug}" or "{id}-{id}",
+			// but excludes genuine complete variables like "{id}" or "{name:string}"
+			return $hasVariable && !$this->isVariable($segment);
 		}
-		
+
 		/**
-		 * Determines if a route segment is a variable placeholder
+		 * Determines if a route segment is a single, complete variable placeholder —
+		 * i.e. exactly one brace pair spanning the whole segment, with no other
+		 * braces inside. A segment like "{id}-{id}" starts with '{' and ends with
+		 * '}' too, but is NOT a single variable; it must be classified as a
+		 * partial variable so each embedded variable is parsed individually.
 		 * @param string $segment Route segment to check
-		 * @return bool True if the segment is a variable placeholder
+		 * @return bool True if the segment is a single variable placeholder
 		 */
 		public function isVariable(string $segment): bool {
-			return !empty($segment) && $segment[0] === '{' && str_ends_with($segment, '}');
+			return preg_match('/^\{[^{}]*}$/', $segment) === 1;
 		}
 		
 		/**
