@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Security\RateLimit;
 
 	use Memcached;
+	use Random\RandomException;
 	use Quellabs\Canvas\Exceptions\RateLimitStoreUnavailableException;
 
 	/**
@@ -82,16 +83,17 @@
 				fn(?array $state) => RateLimitMath::tokenBucket($state, $limit, $window, $now)
 			);
 		}
-
+		
 		/**
 		 * Read the current state and its CAS token, compute the next state via $compute,
 		 * and write it back only if the key hasn't changed since the read. Retries against
 		 * the freshly-read state on a CAS conflict, up to maxCasRetries.
 		 * @param string $cacheKey
 		 * @param int $ttl
-		 * @param callable(array<mixed, mixed>|null): RateLimitAdmission $compute
+		 * @param callable(array<string, mixed>|null): RateLimitAdmission $compute
 		 * @return RateLimitResult
 		 * @throws RateLimitStoreUnavailableException
+		 * @throws RandomException
 		 */
 		private function casUpdate(string $cacheKey, int $ttl, callable $compute): RateLimitResult {
 			for ($attempt = 0; $attempt < $this->maxCasRetries; $attempt++) {
@@ -102,8 +104,7 @@
 					$state = null;
 					$casToken = null;
 				} elseif ($resultCode === Memcached::RES_SUCCESS && is_array($existing)) {
-					$value = $existing['value'] ?? null;
-					$state = is_array($value) ? $value : null;
+					$state = $this->asStringKeyedArray($existing['value'] ?? null);
 					$casToken = $existing['cas'] ?? null;
 				} else {
 					throw new RateLimitStoreUnavailableException(
@@ -136,6 +137,32 @@
 		}
 
 		/**
+		 * Validates that $data is an array keyed entirely by strings, as the state
+		 * this class itself caches always is. A cached value is untrusted - data from
+		 * a corrupted or foreign-format cache entry is treated as no state at all
+		 * rather than passed through with an unverified key type.
+		 * @param mixed $data
+		 * @return array<string, mixed>|null
+		 */
+		private function asStringKeyedArray(mixed $data): ?array {
+			if (!is_array($data)) {
+				return null;
+			}
+
+			$result = [];
+
+			foreach ($data as $key => $value) {
+				if (!is_string($key)) {
+					return null;
+				}
+
+				$result[$key] = $value;
+			}
+
+			return $result;
+		}
+
+		/**
 		 * Build the full Memcached key for a rate limit key
 		 * @param string $key
 		 * @return string
@@ -165,10 +192,12 @@
 		 */
 		private function initializeConnection(array $config): void {
 			$persistentId = $config['persistent_id'] ?? null;
-
-			$this->memcached = is_string($persistentId) && $persistentId !== ''
-				? new Memcached($persistentId)
-				: new Memcached();
+			
+			if (is_string($persistentId) && $persistentId !== '') {
+				$this->memcached = new Memcached($persistentId);
+			} else {
+				$this->memcached = new Memcached();
+			}
 
 			if (empty($this->memcached->getServerList())) {
 				$servers = is_array($config['servers']) ? $config['servers'] : [];

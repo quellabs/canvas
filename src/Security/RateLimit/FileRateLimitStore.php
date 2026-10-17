@@ -2,6 +2,7 @@
 
 	namespace Quellabs\Canvas\Security\RateLimit;
 
+	use Random\RandomException;
 	use Quellabs\Canvas\Exceptions\RateLimitStoreUnavailableException;
 	use Quellabs\Support\ComposerUtils;
 
@@ -50,10 +51,12 @@
 			$this->staleAfterSeconds = is_int($staleAfter) && $staleAfter > 0 ? $staleAfter : self::DEFAULT_STALE_AFTER_SECONDS;
 
 			$path = $config['path'] ?? null;
-
-			$this->basePath = is_string($path) && $path !== ''
-				? rtrim($path, '/\\')
-				: rtrim(ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'rate_limit', '/\\');
+			
+			if (is_string($path) && $path !== '') {
+				$this->basePath = rtrim($path, '/\\');
+			} else {
+				$this->basePath = rtrim(ComposerUtils::getProjectRoot() . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'rate_limit', '/\\');
+			}
 
 			$this->ensureDirectoryExists();
 		}
@@ -153,7 +156,7 @@
 		/**
 		 * Read the current state from an already-locked handle.
 		 * @param resource $handle
-		 * @return array<mixed, mixed>|null
+		 * @return array<string, mixed>|null
 		 */
 		private function readState($handle): ?array {
 			fseek($handle, 0);
@@ -171,7 +174,33 @@
 			}
 
 			$data = @unserialize($contents);
-			return is_array($data) ? $data : null;
+			return $this->asStringKeyedArray($data);
+		}
+
+		/**
+		 * Validates that $data is an array keyed entirely by strings, as the state
+		 * this class itself serializes always is. Deserialized data is untrusted -
+		 * a corrupted or foreign-format state file is treated as no state at all
+		 * rather than passed through with an unverified key type.
+		 * @param mixed $data
+		 * @return array<string, mixed>|null
+		 */
+		private function asStringKeyedArray(mixed $data): ?array {
+			if (!is_array($data)) {
+				return null;
+			}
+
+			$result = [];
+
+			foreach ($data as $key => $value) {
+				if (!is_string($key)) {
+					return null;
+				}
+
+				$result[$key] = $value;
+			}
+
+			return $result;
 		}
 
 		/**
@@ -196,12 +225,13 @@
 		private function statePath(string $stateKey): string {
 			return $this->basePath . DIRECTORY_SEPARATOR . hash('sha256', $stateKey) . '.state';
 		}
-
+		
 		/**
 		 * Probabilistic passive cleanup of state files whose key has gone inactive
 		 * (e.g. a fixed window that will never be read again). Runs on roughly 1 in
 		 * GC_PROBABILITY admission calls instead of requiring an external cron job.
 		 * @return void
+		 * @throws RandomException
 		 */
 		private function maybeGarbageCollect(): void {
 			if (random_int(1, self::GC_PROBABILITY) !== 1) {

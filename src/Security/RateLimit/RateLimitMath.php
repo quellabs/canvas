@@ -27,7 +27,7 @@
 		/**
 		 * Fixed window: the window boundary is floor(now / window) * window, so every
 		 * caller within the same window computes the same boundary without coordination.
-		 * @param array<mixed, mixed>|null $state Previously persisted state for this window, or null
+		 * @param array<string, mixed>|null $state Previously persisted state for this window, or null
 		 * @param int $limit Maximum requests admitted per window
 		 * @param int $window Window length in seconds
 		 * @param int $now Current Unix timestamp (seconds)
@@ -54,7 +54,7 @@
 		 * continuously rather than resetting at fixed boundaries. Caps how many
 		 * timestamps are retained so sustained abuse can't grow state unboundedly -
 		 * once well past the limit, the exact count no longer changes the decision.
-		 * @param array<mixed, mixed>|null $state Previously persisted timestamps for this key, or null
+		 * @param array<string, mixed>|null $state Previously persisted timestamps for this key, or null
 		 * @param int $limit Maximum requests admitted per rolling window
 		 * @param int $window Window length in seconds
 		 * @param int $now Current Unix timestamp (seconds)
@@ -97,7 +97,7 @@
 		/**
 		 * Token bucket: refills continuously at limit/window tokens per second, up to
 		 * $limit tokens, and consumes one token per admitted request.
-		 * @param array<mixed, mixed>|null $state Previously persisted bucket state, or null
+		 * @param array<string, mixed>|null $state Previously persisted bucket state, or null
 		 * @param int $limit Bucket capacity (also the refill target over $window seconds)
 		 * @param int $window Seconds to fully refill an empty bucket to $limit tokens
 		 * @param int $now Current Unix timestamp (seconds)
