@@ -11,9 +11,20 @@
 		
 		/** @var array<int, array{string, string}> Default error messages */
 		const array ERRORS = [
+			400 => ['Bad Request', 'The request could not be understood by the server.'],
+			401 => ['Unauthorized', 'You must be authenticated to access this page.'],
 			403 => ['Access Denied', 'You do not have permission to access this page.'],
 			404 => ['Page Not Found', 'The page you requested could not be found.'],
+			405 => ['Method Not Allowed', 'The HTTP method used is not supported for this resource.'],
+			408 => ['Request Timeout', 'The server timed out waiting for the request.'],
+			409 => ['Conflict', 'The request conflicts with the current state of the resource.'],
+			410 => ['Gone', 'The page you requested is no longer available.'],
+			422 => ['Unprocessable Entity', 'The request was well-formed but contains invalid data.'],
+			429 => ['Too Many Requests', 'You have sent too many requests. Please try again later.'],
 			500 => ['Server Error', 'Something went wrong. Please try again later.'],
+			502 => ['Bad Gateway', 'The server received an invalid response from an upstream server.'],
+			503 => ['Service Unavailable', 'The service is temporarily unavailable. Please try again later.'],
+			504 => ['Gateway Timeout', 'The server did not receive a timely response from an upstream server.'],
 		];
 		
 		/**
@@ -24,16 +35,19 @@
 		 * @return Response The error response
 		 */
 		public function handle(\Throwable $e, Request $request, bool $isDevelopment): Response {
+			// Fetch the http status
 			$status = $this->resolveStatus($e);
 
+			// Build error response
 			if ($isDevelopment) {
 				$content = $this->renderDebugErrorPageContent($e);
 			} else {
 				$content = $this->renderProductionErrorPageContent($status);
 			}
-
+			
+			// Create and return the Symfony response object
 			$response = new Response($content, $status, ['Content-Type' => 'text/html']);
-
+			
 			if ($e instanceof MethodNotAllowedException) {
 				// RFC 7231 requires a 405 response to list the allowed methods
 				$response->headers->set('Allow', implode(', ', $e->getAllowedMethods()));
