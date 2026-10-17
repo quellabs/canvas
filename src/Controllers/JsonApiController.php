@@ -35,10 +35,7 @@
 		 * @param Container $container Dependency injector
 		 * @param PropertyHandler $propertyHandler Handler for dynamic property access
 		 */
-		public function __construct(
-			Container       $container,
-			PropertyHandler $propertyHandler
-		) {
+		public function __construct(Container $container, PropertyHandler $propertyHandler) {
 			parent::__construct($container);
 			$this->propertyHandler = $propertyHandler;
 			$this->serializer = $this->createSerializer();
@@ -55,8 +52,7 @@
 		}
 		
 		/**
-		 * Get the base URL for API endpoints
-		 * Can be overriden
+		 * Get the base URL for API endpoints. Can be overriden
 		 * @return string The base URL (e.g., "https://api.example.com")
 		 */
 		protected function getBaseUrl(): string {
@@ -74,7 +70,7 @@
 		 * Generic GET method for retrieving a single resource by ID
 		 * @param int $id The unique identifier of the resource to retrieve
 		 * @return JsonResponse JSON:API formatted response containing the resource or error
-		 * @throws QuelException
+		 * @throws QuelException|EntityResolutionException
 		 */
 		protected function getResource(int $id): JsonResponse {
 			// Fetch entity manager
@@ -344,12 +340,13 @@
 		
 		/**
 		 * Validate every submitted attribute against the operation's writable-field
-		 * allowlist before anything is mapped onto the entity. Checked in order:
-		 * identifier properties are always forbidden (a request body must never be
-		 * able to change an entity's own identity, regardless of what a concrete
-		 * controller declares writable), then attributes unknown to the entity
-		 * entirely, then attributes that exist but aren't declared writable for
-		 * this operation.
+		 * allowlist before anything is mapped onto the entity. Identifier properties
+		 * are always forbidden, regardless of what a concrete controller declares
+		 * writable. An attribute that doesn't correspond to anything on the entity
+		 * at all (typo, stale client field) is silently ignored rather than
+		 * rejected — mapAttributesToEntity() is a no-op for it either way. An
+		 * attribute that exists on the entity but isn't in the allowlist is the
+		 * actual security boundary and always hard-fails.
 		 * @param object $entity The entity instance to validate against
 		 * @param array<string, mixed> $attributes Associative array of attribute name => value pairs
 		 * @param WriteOperation $operation Whether this is a create or an update
@@ -358,17 +355,14 @@
 		 */
 		protected function validateAttributes(object $entity, array $attributes, WriteOperation $operation): ?JsonResponse {
 			$metadata = $this->em()->getEntityStore()->getMetadata($entity);
-			$writableFields = $this->getWritableFields($operation);
+			$writableFields = $this->resolveWritableFields($operation);
 
-			$unknownAttributes = [];
 			$forbiddenAttributes = [];
 
 			foreach ($attributes as $key => $value) {
 				if ($metadata->isIdentifierKey($key)) {
 					$forbiddenAttributes[] = $key;
-				} elseif (!$this->attributeExistsOnEntity($entity, $key)) {
-					$unknownAttributes[] = $key;
-				} elseif (!in_array($key, $writableFields, true)) {
+				} elseif ($this->attributeExistsOnEntity($entity, $key) && !in_array($key, $writableFields, true)) {
 					$forbiddenAttributes[] = $key;
 				}
 			}
@@ -377,57 +371,43 @@
 				return $this->createForbiddenAttributesResponse($forbiddenAttributes);
 			}
 
-			if (!empty($unknownAttributes)) {
-				return $this->createUnknownAttributesResponse($unknownAttributes);
-			}
-
 			return null;
 		}
 
 		/**
-		 * Map JSON:API attributes to entity properties.
-		 * Every key here has already passed validateAttributes(), so this only
-		 * decides how to write it: through its setter when one exists, or through
-		 * reflection only for properties the concrete controller explicitly opted
-		 * into via getReflectivelyWritableFields().
+		 * Map JSON:API attributes to entity properties. Every key allowed through
+		 * here was already confirmed by validateAttributes() to exist on the
+		 * entity, so this only decides how to write it: through its setter when
+		 * one exists, or through reflection when the entity has no setter for it.
+		 * Being in the writable-field allowlist is itself the explicit, deliberate
+		 * opt-in for the reflective path — there is no second list to keep in sync.
 		 * @param object $entity The entity instance to update
 		 * @param array<string, mixed> $attributes Associative array of attribute name => value pairs
 		 */
 		protected function mapAttributesToEntity(object $entity, array $attributes): void {
-			$reflectivelyWritable = $this->getReflectivelyWritableFields();
-
 			foreach ($attributes as $key => $value) {
 				// Try using a setter method first (follows naming convention: setPropertyName)
 				$setterMethod = 'set' . ucfirst($key);
 
 				if (method_exists($entity, $setterMethod)) {
-					// Use the setter method if it exists (preferred approach)
 					$entity->$setterMethod($value);
-				} elseif (in_array($key, $reflectivelyWritable, true) && $this->propertyHandler->exists($entity, $key)) {
-					// Reflective fallback only for properties explicitly opted in —
-					// an existing private property must never, by itself, grant write access
+				} elseif ($this->propertyHandler->exists($entity, $key)) {
 					$this->propertyHandler->set($entity, $key, $value);
 				}
 			}
 		}
 
 		/**
-		 * Check whether an attribute corresponds to anything on the entity at all: a
-		 * setter, or — only when explicitly opted into reflective writes — a plain
-		 * property. Mirrors the write mechanism mapAttributesToEntity() actually uses,
-		 * so nothing can pass validation here and then silently fail to be written.
+		 * Check whether an attribute corresponds to anything on the entity at all —
+		 * a setter, or a plain property reachable through reflection. Mirrors the
+		 * write mechanism mapAttributesToEntity() actually uses, so nothing can pass
+		 * validation here and then silently fail to be written.
 		 * @param object $entity
 		 * @param string $key
 		 * @return bool
 		 */
 		private function attributeExistsOnEntity(object $entity, string $key): bool {
-			if (method_exists($entity, 'set' . ucfirst($key))) {
-				return true;
-			}
-
-			return
-				in_array($key, $this->getReflectivelyWritableFields(), true) &&
-				$this->propertyHandler->exists($entity, $key);
+			return method_exists($entity, 'set' . ucfirst($key)) || $this->propertyHandler->exists($entity, $key);
 		}
 
 		/**
@@ -435,7 +415,7 @@
 		 * @param WriteOperation $operation
 		 * @return list<string>
 		 */
-		private function getWritableFields(WriteOperation $operation): array {
+		private function resolveWritableFields(WriteOperation $operation): array {
 			return match ($operation) {
 				WriteOperation::Create => $this->getWritableFieldsForCreate(),
 				WriteOperation::Update => $this->getWritableFieldsForUpdate(),
@@ -475,23 +455,6 @@
 			], 403);
 		}
 
-		/**
-		 * Create a standardized 422 response for attributes that don't correspond
-		 * to anything on the entity at all.
-		 * @param list<string> $attributeNames
-		 * @return JsonResponse
-		 */
-		protected function createUnknownAttributesResponse(array $attributeNames): JsonResponse {
-			return $this->json([
-				"errors" => array_map(fn(string $name) => [
-					"status" => "422",
-					"title"  => "Unknown attribute",
-					"detail" => "Attribute '{$name}' does not exist on this resource",
-					"source" => ["pointer" => "/data/attributes/{$name}"]
-				], $attributeNames)
-			], 422);
-		}
-		
 		/**
 		 * Create a standardized 404 Not Found response following JSON:API error format
 		 * @param string $resourceType The type of resource that was not found
@@ -538,31 +501,37 @@
 		abstract protected function getResourceType(): string;
 
 		/**
-		 * Get the attribute names writable when creating a new resource (POST).
-		 * There is no permissive fallback: an attribute not listed here is rejected,
-		 * even if the entity has a public setter for it. Never list identifier,
-		 * ownership, role, timestamp or status fields here — they're meant to be
-		 * server-owned, not client-supplied.
+		 * Get the attribute names writable for both create and update. Empty by
+		 * default — deny by default, with no permissive fallback. Never list
+		 * identifier, ownership, role, timestamp or status fields here — they're
+		 * meant to be server-owned, not client-supplied. Override this when create
+		 * and update accept the same fields; override getWritableFieldsForCreate()
+		 * and/or getWritableFieldsForUpdate() directly when they need to differ.
 		 * @return list<string>
 		 */
-		abstract protected function getWritableFieldsForCreate(): array;
+		protected function getWritableFields(): array {
+			return [];
+		}
+
+		/**
+		 * Get the attribute names writable when creating a new resource (POST).
+		 * Defaults to getWritableFields(); override only when create needs a
+		 * different set than update.
+		 * @return list<string>
+		 */
+		protected function getWritableFieldsForCreate(): array {
+			return $this->getWritableFields();
+		}
 
 		/**
 		 * Get the attribute names writable when updating an existing resource (PUT/PATCH).
-		 * Checked independently from getWritableFieldsForCreate() — a field writable
-		 * on create is not automatically writable on update, or vice versa.
+		 * Defaults to getWritableFields(); override only when update needs a
+		 * different set than create. Checked independently from
+		 * getWritableFieldsForCreate() — a field writable on create is not
+		 * automatically writable on update, or vice versa.
 		 * @return list<string>
 		 */
-		abstract protected function getWritableFieldsForUpdate(): array;
-
-		/**
-		 * Get attribute names that may be written via reflection when the entity has
-		 * no setter for them. Empty by default: a private property existing on the
-		 * entity must never, by itself, grant write access — only an explicit,
-		 * deliberate opt-in here does.
-		 * @return list<string>
-		 */
-		protected function getReflectivelyWritableFields(): array {
-			return [];
+		protected function getWritableFieldsForUpdate(): array {
+			return $this->getWritableFields();
 		}
 	}
