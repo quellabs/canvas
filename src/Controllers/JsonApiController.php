@@ -6,6 +6,7 @@
 	use Quellabs\ObjectQuel\Exception\EntityResolutionException;
 	use Quellabs\ObjectQuel\Exception\QuelException;
 	use Quellabs\ObjectQuel\OrmException;
+	use Quellabs\ObjectQuel\ReflectionManagement\PropertyHandler;
 	use Quellabs\ObjectQuel\Serialization\Serializers\JsonApiSerializer;
 	use Quellabs\ObjectQuel\Serialization\UrlBuilders\JsonApiUrlBuilder;
 	use Symfony\Component\HttpFoundation\JsonResponse;
@@ -26,12 +27,17 @@
 		/** @var JsonApiSerializer Serializer for converting entities to JSON:API format */
 		protected JsonApiSerializer $serializer;
 
+		/** @var PropertyHandler Handler for writing entity properties that have no setter */
+		protected PropertyHandler $propertyHandler;
+
 		/**
 		 * Constructor - initializes the controller with required dependencies
 		 * @param Container $container Dependency injector
+		 * @param PropertyHandler $propertyHandler Handler for dynamic property access
 		 */
-		public function __construct(Container $container) {
+		public function __construct(Container $container, PropertyHandler $propertyHandler) {
 			parent::__construct($container);
+			$this->propertyHandler = $propertyHandler;
 			$this->serializer = $this->createSerializer();
 		}
 		
@@ -334,14 +340,13 @@
 		
 		/**
 		 * Validate every submitted attribute before anything is mapped onto the
-		 * entity. Identifier properties are always forbidden, regardless of what
-		 * a concrete controller does. An attribute with no setter at all can
-		 * never be written — isAttributeWritable() isn't even consulted for it,
-		 * it's silently ignored (typo, stale client field; mapAttributesToEntity()
-		 * is a no-op for it either way). A setter existing is the entity's own
-		 * declaration that the field is part of its API; isAttributeWritable()
-		 * decides sufficiency on top of that, and a hard rejection from it is the
-		 * actual security boundary.
+		 * entity. The primary key is always forbidden, regardless of what a
+		 * concrete controller does — a client can never reassign which row a
+		 * request writes to. An attribute that isn't a property on the entity at
+		 * all is silently ignored (typo, stale client field; mapAttributesToEntity()
+		 * is a no-op for it either way). Everything else — whether or not it has
+		 * a setter — is decided solely by isAttributeWritable(); that's the one
+		 * and only write gate.
 		 * @param object $entity The entity instance to validate against
 		 * @param array<string, mixed> $attributes Associative array of attribute name => value pairs
 		 * @param WriteOperation $operation Whether this is a create or an update
@@ -375,9 +380,9 @@
 		}
 
 		/**
-		 * Map JSON:API attributes to entity properties, each through its setter
-		 * (naming convention: setPropertyName). A field with no setter is never
-		 * written — there is no reflective fallback.
+		 * Map JSON:API attributes to entity properties: through the setter when
+		 * one exists (naming convention: setPropertyName), otherwise directly via
+		 * reflection. A key that isn't a property on the entity at all is a no-op.
 		 * @param object $entity The entity instance to update
 		 * @param array<string, mixed> $attributes Associative array of attribute name => value pairs
 		 */
@@ -387,12 +392,15 @@
 
 				if (method_exists($entity, $setterMethod)) {
 					$entity->$setterMethod($value);
+				} elseif ($this->propertyHandler->exists($entity, $key)) {
+					$this->propertyHandler->set($entity, $key, $value);
 				}
 			}
 		}
 
 		/**
-		 * Check whether an attribute has a setter on the entity. Mirrors the write
+		 * Check whether an attribute corresponds to a real property on the
+		 * entity, through a setter or through reflection. Mirrors the write
 		 * mechanism mapAttributesToEntity() actually uses, so nothing can pass
 		 * validation here and then silently fail to be written.
 		 * @param object $entity
@@ -400,7 +408,7 @@
 		 * @return bool
 		 */
 		private function attributeExistsOnEntity(object $entity, string $key): bool {
-			return method_exists($entity, 'set' . ucfirst($key));
+			return method_exists($entity, 'set' . ucfirst($key)) || $this->propertyHandler->exists($entity, $key);
 		}
 
 		/**
@@ -421,7 +429,7 @@
 		/**
 		 * Create a standardized 403 response for attributes that exist on the
 		 * entity but are denied for this operation — either by isAttributeWritable()
-		 * or because the attribute is an identifier, which is never writable
+		 * or because the attribute is the primary key, which is never writable
 		 * regardless of what a controller does.
 		 * @param list<string> $attributeNames
 		 * @return JsonResponse
@@ -484,16 +492,15 @@
 
 		/**
 		 * Decide whether a specific attribute may be written for the given
-		 * operation. Only ever called for an attribute that already has a setter
-		 * — the setter is the entity's own declaration that the field is part of
-		 * its API, so a setter existing is sufficient by default. Override to
-		 * deny specific fields, operations or circumstances a plain setter can't
-		 * express (ownership, role, current entity state) — for example:
-		 * `return $key !== 'role';` to keep a field server-owned despite having
-		 * a setter, or `$operation !== WriteOperation::Update` to allow it only
-		 * on create.
+		 * operation. Only ever called for an attribute that already exists on
+		 * the entity (via a setter or directly as a property) — this is the
+		 * only write gate; a setter's presence or absence plays no role in the
+		 * decision. Defaults to allowing everything; override to deny specific
+		 * fields, operations or circumstances — for example: `return $key !== 'role';`
+		 * to keep a field server-owned, or `$operation !== WriteOperation::Update`
+		 * to allow it only on create.
 		 * @param object $entity The entity being created or updated
-		 * @param string $key The attribute name (already confirmed to have a setter)
+		 * @param string $key The attribute name (already confirmed to exist on the entity)
 		 * @param WriteOperation $operation Whether this is a create or an update
 		 * @return bool Whether the client may set this attribute for this operation
 		 */
