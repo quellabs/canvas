@@ -159,9 +159,7 @@
 					'fixed_window' => $this->store->incrementFixedWindow($key, $this->limit, $this->window, $currentTime),
 					'sliding_window' => $this->store->admitSlidingWindow($key, $this->limit, $this->window, $currentTime),
 					'token_bucket' => $this->store->admitTokenBucket($key, $this->limit, $this->window, $currentTime),
-					default => throw new \LogicException(
-						"Unhandled rate limit strategy: {$this->strategy}"
-					)
+					default => throw new \LogicException("Unhandled rate limit strategy: {$this->strategy}")
 				};
 			} catch (RateLimitStoreUnavailableException $e) {
 				if ($this->onStoreFailure === 'open') {
