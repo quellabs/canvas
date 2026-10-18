@@ -56,6 +56,15 @@
 		 * @param Response $response The response to modify
 		 */
 		public function after(MethodContextInterface $context, Response $response): void {
-			$this->policy->apply($context->getRequest(), $response);
+			// Fetch the request
+			$request = $context->getRequest();
+			
+			// Apply the policy
+			$this->policy->apply($request, $response);
+
+			// Tells Kernel's blanket apply of the app-wide default to skip this
+			// response: this route already got a policy, even NullSecurityHeaderPolicy
+			// opting out on purpose, and that choice must not be overridden.
+			$request->attributes->set('security_headers_applied', true);
 		}
 	}

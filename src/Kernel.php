@@ -318,6 +318,8 @@
 				$this->injectDebugBar($debugCollector, $request, $response);
 			}
 
+			$this->applyDefaultSecurityHeaderPolicyUnlessAlreadyApplied($request, $response);
+
 			// HEAD must never carry a body (RFC 9110 9.3.2), regardless of which route
 			// or error path produced the response, so this is enforced at the single
 			// point every response passes through rather than in each controller/handler.
@@ -327,6 +329,22 @@
 
 			// Return response
 			return $response;
+		}
+
+		/**
+		 * Security headers are opt-out, not opt-in: every response gets the application-wide
+		 * default policy here, unless its route already ran SecurityHeadersAspect
+		 * (SecureController, an explicit policyClass, or even an explicit
+		 * NullSecurityHeaderPolicy opt-out) - that choice, not this baseline, decides
+		 * the route's headers.
+		 * @param Request $request The request, needed to decide HSTS eligibility (HTTPS only)
+		 * @param Response $response The response to modify
+		 * @return void
+		 */
+		private function applyDefaultSecurityHeaderPolicyUnlessAlreadyApplied(Request $request, Response $response): void {
+			if (!$request->attributes->get('security_headers_applied', false)) {
+				$this->defaultSecurityHeaderPolicy->apply($request, $response);
+			}
 		}
 
 		/**
