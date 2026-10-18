@@ -2,6 +2,7 @@
 
 	namespace Quellabs\Canvas\Exceptions;
 
+	use Quellabs\Canvas\Error\ProvidesResponseHeaders;
 	use Throwable;
 
 	/**
@@ -9,9 +10,11 @@
 	 *
 	 * Distinguishing this from RouteNotFoundException lets the kernel return a 405
 	 * (with an Allow header listing the methods that path actually supports) instead
-	 * of masking the mismatch as a plain 404.
+	 * of masking the mismatch as a plain 404. Implementing ProvidesResponseHeaders lets
+	 * DefaultErrorHandler apply that Allow header generically, the same way it does for
+	 * any other exception that carries response headers.
 	 */
-	class MethodNotAllowedException extends HttpException {
+	class MethodNotAllowedException extends HttpException implements ProvidesResponseHeaders {
 
 		/** @var list<string> HTTP methods the matched path actually supports */
 		private array $allowedMethods;
@@ -39,5 +42,13 @@
 		 */
 		public function getAllowedMethods(): array {
 			return $this->allowedMethods;
+		}
+
+		/**
+		 * RFC 7231 requires a 405 response to list the allowed methods via Allow
+		 * @return array<string, string>
+		 */
+		public function getHeaders(): array {
+			return ['Allow' => implode(', ', $this->allowedMethods)];
 		}
 	}

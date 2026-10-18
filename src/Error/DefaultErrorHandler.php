@@ -1,21 +1,32 @@
 <?php
 	
 	namespace Quellabs\Canvas\Error;
-	
+
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
-	use Quellabs\Canvas\Exceptions\MethodNotAllowedException;
 	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
-	
+	use Quellabs\Canvas\Security\SecurityHeaderPolicyInterface;
+
 	class DefaultErrorHandler {
-		
+
 		/** @var array<int, array{string, string}> Default error messages */
 		const array ERRORS = [
 			403 => ['Access Denied', 'You do not have permission to access this page.'],
 			404 => ['Page Not Found', 'The page you requested could not be found.'],
 			500 => ['Server Error', 'Something went wrong. Please try again later.'],
 		];
-		
+
+		/** @var SecurityHeaderPolicyInterface|null Application-wide security header policy, null when not configured */
+		private ?SecurityHeaderPolicyInterface $securityHeaderPolicy;
+
+		/**
+		 * Constructor
+		 * @param SecurityHeaderPolicyInterface|null $securityHeaderPolicy Policy to apply to every error response, or null to skip
+		 */
+		public function __construct(?SecurityHeaderPolicyInterface $securityHeaderPolicy = null) {
+			$this->securityHeaderPolicy = $securityHeaderPolicy;
+		}
+
 		/**
 		 * Default error reporting
 		 * @param \Throwable $e Exception that was thrown
@@ -34,10 +45,17 @@
 
 			$response = new Response($content, $status, ['Content-Type' => 'text/html']);
 
-			if ($e instanceof MethodNotAllowedException) {
-				// RFC 7231 requires a 405 response to list the allowed methods
-				$response->headers->set('Allow', implode(', ', $e->getAllowedMethods()));
+			if ($e instanceof ProvidesResponseHeaders) {
+				// The exception computed these itself (e.g. RateLimitException's Retry-After,
+				// MethodNotAllowedException's Allow); this handler never recalculates them.
+				foreach ($e->getHeaders() as $name => $value) {
+					$response->headers->set((string)$name, (string)$value);
+				}
 			}
+
+			// No route/controller ran for this response, so no SecurityHeadersAspect could
+			// have applied these; only ever sets a header that isn't already present above.
+			$this->securityHeaderPolicy?->apply($request, $response);
 
 			return $response;
 		}

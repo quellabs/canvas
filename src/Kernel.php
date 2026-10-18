@@ -38,8 +38,11 @@
 	use Quellabs\Canvas\Inspector\Inspector;
 	use Quellabs\Canvas\Legacy\LegacyBridge;
 	use Quellabs\Canvas\Legacy\LegacyHandler;
+	use Quellabs\Canvas\Security\Policies\BasicSecurityHeaderPolicy;
+	use Quellabs\Canvas\Security\Policies\NullSecurityHeaderPolicy;
 	use Quellabs\Canvas\Security\RateLimit\RateLimitStoreFactory;
 	use Quellabs\Canvas\Security\RateLimit\RateLimitStoreInterface;
+	use Quellabs\Canvas\Security\SecurityHeaderPolicyInterface;
 	use Quellabs\Contracts\Configuration\ConfigProviderInterface;
 	use Quellabs\Contracts\Configuration\ConfigurationInterface;
 	use Quellabs\DependencyInjection\Container;
@@ -81,7 +84,10 @@
 		
 		/** @var array<int, class-string<ErrorHandlerInterface>> */
 		private array $errorHandlers;
-		
+
+		/** @var SecurityHeaderPolicyInterface Application-wide default, resolved from config/app.php's security_header_policy */
+		private SecurityHeaderPolicyInterface $defaultSecurityHeaderPolicy;
+
 		/**
 		 * Kernel constructor
 		 * @param array<string, mixed> $configuration
@@ -152,6 +158,43 @@
 
 			// Initialize legacy support
 			$this->initializeLegacySupport();
+
+			// Application-wide default policy: the single source of truth both
+			// SecurityHeadersAspect (when no $policyClass override is given) and
+			// DefaultErrorHandler apply, so a route's headers and an error page's
+			// headers never silently diverge. config/app.php can point this at a
+			// custom class, including NullSecurityHeaderPolicy to opt out of
+			// security headers entirely; the key itself must resolve to a real
+			// policy, so an explicit null is rejected rather than treated as "disabled".
+			$securityHeaderPolicyClass = $this->configuration->has('security_header_policy')
+				? $this->configuration->get('security_header_policy')
+				: BasicSecurityHeaderPolicy::class;
+
+			if ($securityHeaderPolicyClass === null) {
+				throw new \RuntimeException(sprintf(
+					"config/app.php's security_header_policy must not be null; use %s::class to disable security headers.",
+					NullSecurityHeaderPolicy::class
+				));
+			}
+
+			if (!class_exists($securityHeaderPolicyClass)) {
+				throw new \RuntimeException(sprintf(
+					"Configured security_header_policy class '%s' does not exist.",
+					$securityHeaderPolicyClass
+				));
+			}
+
+			$policy = $this->dependencyInjector->make($securityHeaderPolicyClass);
+
+			if (!$policy instanceof SecurityHeaderPolicyInterface) {
+				throw new \RuntimeException(sprintf(
+					"Configured security_header_policy class '%s' must implement %s.",
+					$securityHeaderPolicyClass,
+					SecurityHeaderPolicyInterface::class
+				));
+			}
+
+			$this->defaultSecurityHeaderPolicy = $policy;
 		}
 		
 		/**
@@ -184,6 +227,14 @@
 		 */
 		public function getDependencyInjector(): Container {
 			return $this->dependencyInjector;
+		}
+
+		/**
+		 * Returns the application-wide default security header policy
+		 * @return SecurityHeaderPolicyInterface
+		 */
+		public function getDefaultSecurityHeaderPolicy(): SecurityHeaderPolicyInterface {
+			return $this->defaultSecurityHeaderPolicy;
 		}
 		
 		/**
@@ -255,7 +306,7 @@
 				$this->dependencyInjector->unregister($sessionBinding);
 				$this->dependencyInjector->unregister($requestBinding);
 			}
-			
+
 			// Publish request telemetry
 			$route = $urlData !== null && $urlData['route'] instanceof Route ? $urlData['route'] : null;
 			
@@ -275,6 +326,8 @@
 				$this->injectDebugBar($debugCollector, $request, $response);
 			}
 
+			$this->applyDefaultSecurityHeaderPolicyUnlessAlreadyApplied($request, $response);
+
 			// HEAD must never carry a body (RFC 9110 9.3.2), regardless of which route
 			// or error path produced the response, so this is enforced at the single
 			// point every response passes through rather than in each controller/handler.
@@ -284,6 +337,22 @@
 
 			// Return response
 			return $response;
+		}
+
+		/**
+		 * Security headers are opt-out, not opt-in: every response gets the application-wide
+		 * default policy here, unless its route already ran SecurityHeadersAspect
+		 * (SecureController, an explicit policyClass, or even an explicit
+		 * NullSecurityHeaderPolicy opt-out) - that choice, not this baseline, decides
+		 * the route's headers.
+		 * @param Request $request The request, needed to decide HSTS eligibility (HTTPS only)
+		 * @param Response $response The response to modify
+		 * @return void
+		 */
+		private function applyDefaultSecurityHeaderPolicyUnlessAlreadyApplied(Request $request, Response $response): void {
+			if (!$request->attributes->get('security_headers_applied', false)) {
+				$this->defaultSecurityHeaderPolicy->apply($request, $response);
+			}
 		}
 
 		/**
@@ -344,7 +413,7 @@
 			
 			// No custom handler found. Show a generic message
 			$isDevelopment = $this->configuration->get('debug_mode', false);
-			$defaultHandler = new DefaultErrorHandler();
+			$defaultHandler = new DefaultErrorHandler($this->defaultSecurityHeaderPolicy);
 			return $defaultHandler->handle($exception, $request, $isDevelopment);
 		}
 		

@@ -2,6 +2,7 @@
 	
 	namespace Quellabs\Canvas\Exceptions;
 	
+	use Quellabs\Canvas\Error\ProvidesResponseHeaders;
 	use Throwable;
 	
 	/**
@@ -11,12 +12,11 @@
 	 * and the current request violates the configured rate limiting policy.
 	 *
 	 * The exception contains detailed metadata about the current rate limiting state,
-	 * including retry timing, remaining quota, strategy, and response headers. This
-	 * allows centralized exception handlers to generate standards-compliant HTTP 429
-	 * responses without recalculating rate limit state.
-	 *
+	 * including retry timing, remaining quota, strategy, and response headers. Implementing
+	 * ProvidesResponseHeaders lets DefaultErrorHandler apply those headers (including
+	 * Retry-After) to the 429 response without knowing this class specifically.
 	 */
-	class RateLimitException extends HttpException {
+	class RateLimitException extends HttpException implements ProvidesResponseHeaders {
 		
 		/**
 		 * Create a new rate limit exception instance.
