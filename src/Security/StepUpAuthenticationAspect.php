@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Security;
 
 	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
+	use Quellabs\Canvas\AOP\Contracts\NonStackableAspectInterface;
 	use Quellabs\Canvas\Exceptions\StepUpAuthenticationException;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Symfony\Component\HttpFoundation\Response;
@@ -24,7 +25,7 @@
 	 * @InterceptWith(Quellabs\Canvas\Security\JwtAuthenticationAspect::class)
 	 * @InterceptWith(Quellabs\Canvas\Security\StepUpAuthenticationAspect::class, maxAge=300, requiredMethods={"pwd"})
 	 */
-	readonly class StepUpAuthenticationAspect implements BeforeAspectInterface {
+	readonly class StepUpAuthenticationAspect implements BeforeAspectInterface, NonStackableAspectInterface {
 
 		/**
 		 * Required freshness window in seconds

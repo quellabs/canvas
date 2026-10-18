@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Security;
 
 	use Quellabs\Canvas\AOP\Contracts\AfterAspectInterface;
+	use Quellabs\Canvas\AOP\Contracts\NonStackableAspectInterface;
 	use Quellabs\Canvas\Kernel;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Symfony\Component\HttpFoundation\Response;
@@ -21,7 +22,7 @@
 	 * using the same application-wide default policy; a before-aspect short circuit
 	 * is neither - whatever short-circuited the route is responsible for its own headers.
 	 */
-	class SecurityHeadersAspect implements AfterAspectInterface {
+	class SecurityHeadersAspect implements AfterAspectInterface, NonStackableAspectInterface {
 
 		/** @var SecurityHeaderPolicyInterface Policy applied to the response */
 		private SecurityHeaderPolicyInterface $policy;
