@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Security;
 	
 	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
+	use Quellabs\Canvas\AOP\Contracts\NonStackableAspectInterface;
 	use Quellabs\Canvas\Exceptions\JwtAuthenticationException;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Quellabs\Contracts\Configuration\ConfigProviderInterface;
@@ -39,7 +40,7 @@
 	 * @InterceptWith(Quellabs\Canvas\Security\JwtAuthenticationAspect::class, throwOnFailure=true)
 	 * @InterceptWith(Quellabs\Canvas\Security\JwtAuthenticationAspect::class, secret="service-secret", issuer="service-a")
 	 */
-	class JwtAuthenticationAspect implements BeforeAspectInterface {
+	class JwtAuthenticationAspect implements BeforeAspectInterface, NonStackableAspectInterface {
 		
 		/**
 		 * HMAC secret used to verify the token signature
