@@ -4,6 +4,7 @@
 
 	use Quellabs\Canvas\AOP\Contracts\AfterAspectInterface;
 	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
+	use Quellabs\Canvas\AOP\Contracts\NonStackableAspectInterface;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Quellabs\Canvas\Exceptions\RateLimitException;
 	use Quellabs\Canvas\Exceptions\RateLimitStoreUnavailableException;
@@ -21,7 +22,7 @@
 	 * let concurrent requests read the same count and both be admitted - atomic
 	 * individual cache operations don't make that two-call sequence atomic.
 	 */
-	readonly class RateLimitAspect implements BeforeAspectInterface, AfterAspectInterface {
+	readonly class RateLimitAspect implements BeforeAspectInterface, AfterAspectInterface, NonStackableAspectInterface {
 
 		/** @var string[] Valid rate limiting strategies */
 		private const array VALID_STRATEGIES = ['fixed_window', 'sliding_window', 'token_bucket'];
