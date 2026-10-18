@@ -184,24 +184,29 @@
 		 * @return void
 		 */
 		public function after(MethodContextInterface $context, Response $response): void {
+			$this->applyHeadersFromRequest($context->getRequest(), $response);
+		}
+
+		/**
+		 * Apply rate limit headers stored on the request (by before()) to the given response.
+		 * @param Request $request The request that carries rate_limit_headers, if any.
+		 * @param Response $response HTTP response being returned to the client.
+		 * @return void
+		 */
+		private function applyHeadersFromRequest(Request $request, Response $response): void {
 			// Retrieve rate limit headers prepared during the before() phase.
-			// These are stored on the request attributes to share state between
-			// the before and after aspect lifecycle stages.
-			$headers = $context
-				->getRequest()
-				->attributes
-				->get('rate_limit_headers');
-			
+			$headers = $request->attributes->get('rate_limit_headers');
+
 			// If no headers are present, there is nothing to apply.
 			if ($headers === null) {
 				return;
 			}
-			
+
 			// Assert the type stored in the before() phase. Malformed cache entries are skipped.
 			if (!is_array($headers)) {
 				return;
 			}
-			
+
 			// Apply each prepared rate limit header to the outgoing response.
 			// Values are cast to string to ensure compatibility with the
 			// Symfony response header bag implementation.
