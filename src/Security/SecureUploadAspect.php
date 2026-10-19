@@ -400,7 +400,7 @@
 		 * first and only invoke this method when that returns an empty errors array.
 		 * This method never throws; move and post-move failures are returned in 'errors'.
 		 * @param UploadedFile $file The uploaded file to store (must already be validated)
-		 * @return array{success: bool, errors: array<int, string>, warnings: array<int, string>, original_name: string, filename?: string, path?: string, relative_path?: string, size?: int|false, mime_type?: string|null, extension?: string, uploaded_at?: string}
+		 * @return array{success: true, errors: array<int, string>, warnings: array<int, string>, original_name: string, filename: string, path: string, relative_path: string, size: int|false, mime_type: string|null, extension: string, uploaded_at: string}|array{success: false, errors: array<int, string>, warnings: array<int, string>, original_name: string}
 		 */
 		private function processSingleFile(UploadedFile $file): array {
 			// Captured before the move: moving the file (rename()/move_uploaded_file())
