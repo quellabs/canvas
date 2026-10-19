@@ -199,6 +199,9 @@
 		 * Each record contains a 'success' flag and an 'errors' array so consumers can
 		 * handle partial batch failures without catching exceptions.
 		 *
+		 * Files are validated, then their target locations are pre-flighted, before any file
+		 * is moved — so a missing/uncreatable or non-writable target never needs a rollback.
+		 *
 		 * The return value always has three keys:
 		 * - 'batch_error': a string if a batch-level check failed (e.g. too many files), null otherwise
 		 * - 'warnings':    aggregated, deduplicated warning messages across all files
@@ -227,26 +230,62 @@
 			
 			// Pass 1: validate every file without touching storage.
 			// Keyed identically to $files so we can pair validation results with
-			// the original UploadedFile objects in pass 2.
+			// the original UploadedFile objects in later passes.
 			$validationResults = [];
 			$batchHasErrors = false;
-			
+
 			foreach ($files as $fieldName => $file) {
 				$validationResults[$fieldName] = [];
 				$fileList = is_array($file) ? $file : [$file];
-				
+
 				foreach ($fileList as $singleFile) {
 					$validation = $this->collectValidationResult($singleFile);
 					$validationResults[$fieldName][] = $validation;
-					
+
 					if (!empty($validation['errors'])) {
 						$batchHasErrors = true;
 					}
 				}
 			}
-			
-			// Pass 2: if any file failed validation, return failure records for the entire
-			// batch without storing anything. This prevents partial writes where some files
+
+			// Pass 2: pre-flight the target location for every file before moving any of them.
+			// Catches a missing/uncreatable or non-writable directory up front, so those failures
+			// never require unwinding files that were already moved for real.
+			$targetPaths = [];
+			$preflightErrors = [];
+			$preflightFailed = false;
+
+			if (!$batchHasErrors) {
+				foreach ($files as $fieldName => $file) {
+					$targetPaths[$fieldName] = [];
+					$preflightErrors[$fieldName] = [];
+					$fileList = is_array($file) ? $file : [$file];
+
+					foreach ($fileList as $singleFile) {
+						try {
+							$targetPath = $this->generateTargetPath($singleFile);
+						} catch (RuntimeException|RandomException $e) {
+							// Placeholder, never read: $preflightFailed being true means the final
+							// loop always takes the pre-flight-failure branch for this whole batch.
+							$targetPaths[$fieldName][] = '';
+							$preflightErrors[$fieldName][] = $e->getMessage();
+							$preflightFailed = true;
+							continue;
+						}
+
+						$error = $this->checkTargetWritable($targetPath);
+						$targetPaths[$fieldName][] = $targetPath;
+						$preflightErrors[$fieldName][] = $error;
+
+						if ($error !== null) {
+							$preflightFailed = true;
+						}
+					}
+				}
+			}
+
+			// Pass 3: if any file failed validation or pre-flight, return failure records for the
+			// entire batch without storing anything. This prevents partial writes where some files
 			// land in permanent storage while others were rejected.
 			$processedFiles = [];
 			$allMoveWarnings = [];
@@ -273,8 +312,20 @@
 						continue;
 					}
 
-					// All files passed validation — move this file to permanent storage
-					$fileResult = $this->processSingleFile($singleFile);
+					if ($preflightFailed) {
+						// At least one file's target location failed pre-flight — do not store
+						// any file. Nothing has moved yet, so there's nothing to roll back here.
+						$processedFiles[$fieldName][] = [
+							'success'       => false,
+							'errors'        => array_values(array_filter([$preflightErrors[$fieldName][$index]])), // empty for files whose own target was fine
+							'original_name' => $singleFile->getClientOriginalName(),
+						];
+
+						continue;
+					}
+
+					// All files passed validation and pre-flight — move this file to permanent storage
+					$fileResult = $this->processSingleFile($singleFile, $targetPaths[$fieldName][$index]);
 					$allMoveWarnings = array_merge($allMoveWarnings, $fileResult['warnings']);
 					unset($fileResult['warnings']);
 					$processedFiles[$fieldName][] = $fileResult;
@@ -317,7 +368,7 @@
 
 			// Aggregate all warnings into a batch-level list:
 			// - validation warnings (e.g. virus scan skipped) come from pass 1
-			// - move warnings (e.g. chmod failed) come from pass 2
+			// - move warnings (e.g. chmod failed) come from pass 3
 			// Built with an explicit loop: array_column()/spread loses the string[] type
 			// through PHPStan's inference and @var assertions do not reliably recover it.
 			$allWarnings = $allMoveWarnings;
@@ -395,12 +446,15 @@
 		/**
 		 * Moves a validated file to permanent storage and returns its metadata.
 		 * Validation is intentionally absent here — callers must run collectValidationResult()
-		 * first and only invoke this method when that returns an empty errors array.
+		 * first and only invoke this method when that returns an empty errors array. The target
+		 * path is precomputed by the caller's pre-flight pass, not generated here, so every file
+		 * in a batch has its target checked before any of them moves.
 		 * This method never throws; move failures are returned in 'errors' instead.
 		 * @param UploadedFile $file The uploaded file to store (must already be validated)
+		 * @param string $targetPath Final storage path, as produced by generateTargetPath() during pre-flight
 		 * @return array{success: true, errors: array<int, string>, warnings: array<int, string>, original_name: string, filename: string, path: string, relative_path: string, size: int|false, mime_type: string|null, extension: string, uploaded_at: string}|array{success: false, errors: array<int, string>, warnings: array<int, string>, original_name: string}
 		 */
-		private function processSingleFile(UploadedFile $file): array {
+		private function processSingleFile(UploadedFile $file, string $targetPath): array {
 			// Captured before the move: moving the file (rename()/move_uploaded_file())
 			// invalidates PHP's stat cache for the original path, so calling getSize() or
 			// getMimeType() on $file afterwards would stat a path that no longer exists.
@@ -409,20 +463,16 @@
 			$extension = strtolower($file->getClientOriginalExtension());
 
 			try {
-				// Determine the final storage path, then move the file out of PHP's temp directory.
-				// generateTargetPath() applies the configured directory structure and filename strategy.
+				// Move the file out of PHP's temp directory to the pre-flighted target path.
 				// moveUploadedFile() performs the move and sets permissions; any chmod warnings are returned.
-				$targetPath = $this->generateTargetPath($file);
-
-				// Move the file to the ultimate destination
 				$moveResult = $this->moveUploadedFile($file, $targetPath);
 
 				// Record the file data
 				$movedFile = $moveResult['path'];
 				$moveWarnings = $moveResult['warnings'];
 			} catch (\Exception $e) {
-				// Storage failed (e.g. disk full, permission denied). Return a failure record
-				// rather than throwing so the caller can handle it without a try/catch.
+				// Storage failed despite passing pre-flight (e.g. a race with another process).
+				// Return a failure record rather than throwing so the caller can handle it without a try/catch.
 				return [
 					'success'       => false,
 					'errors'        => [$e->getMessage()],
@@ -654,6 +704,7 @@
 		 * @param UploadedFile $file The uploaded file
 		 * @return string Full target path
 		 * @throws RandomException
+		 * @throws RuntimeException If the upload directory cannot be created
 		 */
 		private function generateTargetPath(UploadedFile $file): string {
 			// Create upload dir
@@ -682,7 +733,24 @@
 			
 			return $targetDir . '/' . $filename;
 		}
-		
+
+		/**
+		 * Checks that a pre-flighted target path's directory is writable, without touching
+		 * the uploaded file. generateTargetPath() already created the directory if it was
+		 * missing; this additionally catches a directory that exists but denies writes.
+		 * @param string $targetPath Full target path, as produced by generateTargetPath()
+		 * @return string|null Error message, or null if the target is writable
+		 */
+		private function checkTargetWritable(string $targetPath): ?string {
+			$targetDir = dirname($targetPath);
+
+			if (!is_writable($targetDir)) {
+				return "Upload directory is not writable: {$targetDir}";
+			}
+
+			return null;
+		}
+
 		/**
 		 * Moves uploaded file to target location
 		 * @param UploadedFile $file The uploaded file
