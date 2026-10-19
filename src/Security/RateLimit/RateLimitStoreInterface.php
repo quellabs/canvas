@@ -5,13 +5,10 @@
 	/**
 	 * Atomic admission storage for rate limiting.
 	 *
-	 * RateLimitAspect previously read a counter through CacheInterface::get() and wrote
-	 * it back through set() as two separate calls; atomic individual cache operations
-	 * don't make that read-modify-write sequence atomic, so concurrent requests could
-	 * read the same count and both be admitted. Each method here performs one complete
-	 * admission decision - read, decide, write - as a single atomic operation against
-	 * the backing store, so the count, the admit/reject decision, and the persisted
-	 * state can never be observed or left inconsistent between concurrent callers.
+	 * Each method performs one complete admission decision - read, decide, write -
+	 * as a single atomic operation against the backing store, so the count, the
+	 * admit/reject decision, and the persisted state can never be observed or left
+	 * inconsistent between concurrent callers.
 	 *
 	 * Timestamp precision: whole Unix seconds. $now is supplied by the caller (rather
 	 * than each implementation calling time() itself) so strategy tests can use a

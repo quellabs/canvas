@@ -17,10 +17,8 @@
 	 * Rate limiting aspect using various strategies
 	 *
 	 * Admission itself (read count, decide, write count back) is delegated to a
-	 * RateLimitStoreInterface as a single atomic operation. This aspect used to
-	 * perform that as two separate CacheInterface calls (get() then set()), which
-	 * let concurrent requests read the same count and both be admitted - atomic
-	 * individual cache operations don't make that two-call sequence atomic.
+	 * RateLimitStoreInterface as a single atomic operation, so concurrent requests
+	 * can never read the same count and both be admitted.
 	 */
 	readonly class RateLimitAspect implements BeforeAspectInterface, AfterAspectInterface, NonStackableAspectInterface {
 
@@ -133,7 +131,8 @@
 		 * Middleware method that executes before the main request handler
 		 * Implements rate limiting with multiple strategies and HTTP header management
 		 * @param MethodContextInterface $context The request context containing request data
-		 * @return Response|null Returns Response if rate limit exceeded, null to continue
+		 * @return Response|null Always null; writes rate_limit_* request attributes and, when the
+		 *                        limit is exceeded and throwOnFailure is true, throws RateLimitException instead
 		 * @throws RateLimitStoreUnavailableException When the store is unavailable and onStoreFailure is 'closed'
 		 */
 		public function before(MethodContextInterface $context): ?Response {
@@ -328,23 +327,33 @@
 
 		/**
 		 * Sanitize cache key component to prevent collisions and ensure compatibility
+		 *
+		 * Replacing disallowed characters with '_' is lossy (e.g. "a:b" and "a/b" would
+		 * both become "a_b"), so a hash of the original value is appended whenever that
+		 * replacement actually changes the component. Two different raw components can
+		 * then never sanitize to the same cache key.
+		 *
 		 * @param string $component The component to sanitize
 		 * @return string Sanitized component safe for cache keys
 		 */
 		private function sanitizeKeyComponent(string $component): string {
-			// Remove or replace potentially problematic characters
 			// Most cache systems have restrictions on key characters
 			$sanitized = preg_replace('/[^a-zA-Z0-9._-]/', '_', $component);
 
 			// Prevent empty components which could cause collisions
-			if (empty($sanitized)) {
+			if ($sanitized === '') {
 				$sanitized = 'empty';
+			}
+
+			// The replacement above is lossy; disambiguate with a hash of the original
+			// so distinct components that sanitize to the same string can't collide
+			if ($sanitized !== $component) {
+				$sanitized .= '_' . substr(hash('sha256', $component), 0, 16);
 			}
 
 			// Limit length to prevent excessively long keys
 			if (strlen($sanitized) > 50) {
-				// Use hash for long identifiers to ensure uniqueness
-				$sanitized = substr($sanitized, 0, 30) . '_' . md5($component);
+				$sanitized = substr($sanitized, 0, 30) . '_' . substr(hash('sha256', $component), 0, 16);
 			}
 
 			return $sanitized;

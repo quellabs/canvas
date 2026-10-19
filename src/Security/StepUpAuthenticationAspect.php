@@ -46,15 +46,24 @@
 		private bool $throwOnFailure;
 
 		/**
+		 * Seconds of clock skew tolerated when auth_time is ahead of this server's clock.
+		 * Must be >= 0.
+		 * @var int
+		 */
+		private int $clockSkew;
+
+		/**
 		 * StepUpAuthenticationAspect constructor
 		 * @param int $maxAge Required freshness window in seconds
 		 * @param string[] $requiredMethods When non-empty, at least one must be present in auth_methods
 		 * @param bool $throwOnFailure If true, throws StepUpAuthenticationException instead of writing to request attributes
+		 * @param int $clockSkew Seconds of tolerance for auth_time being ahead of this server's clock
 		 */
 		public function __construct(
 			int $maxAge = 300,
 			array $requiredMethods = [],
-			bool $throwOnFailure = false
+			bool $throwOnFailure = false,
+			int $clockSkew = 5
 		) {
 			// A non-positive window can never be satisfied, which is almost
 			// certainly misconfiguration rather than an intentional lockout
@@ -62,9 +71,16 @@
 				throw new \InvalidArgumentException("maxAge must be > 0, got {$maxAge}.");
 			}
 
+			// A negative skew would reject auth_time values the authenticator itself
+			// considers current, which is almost certainly misconfiguration
+			if ($clockSkew < 0) {
+				throw new \InvalidArgumentException("clockSkew must be >= 0, got {$clockSkew}.");
+			}
+
 			$this->maxAge = $maxAge;
 			$this->requiredMethods = $requiredMethods;
 			$this->throwOnFailure = $throwOnFailure;
+			$this->clockSkew = $clockSkew;
 		}
 
 		/**
@@ -88,7 +104,11 @@
 				$presentedMethods = array_values(array_filter($presentedMethods, 'is_string'));
 			}
 
-			$isRecent = is_numeric($authTime) && (time() - (int)$authTime) <= $this->maxAge;
+			// Bound both directions: too far in the past fails the freshness window,
+			// and too far in the future (beyond tolerated clock skew) would otherwise
+			// satisfy this check indefinitely for any auth_time the caller supplies
+			$age = is_numeric($authTime) ? (time() - (int)$authTime) : null;
+			$isRecent = $age !== null && $age >= -$this->clockSkew && $age <= $this->maxAge;
 			$hasRequiredMethod = empty($this->requiredMethods) || !empty(array_intersect($this->requiredMethods, $presentedMethods));
 
 			if (!$isRecent || !$hasRequiredMethod) {

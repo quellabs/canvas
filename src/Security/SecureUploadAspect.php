@@ -252,14 +252,16 @@
 			// land in permanent storage while others were rejected.
 			$processedFiles = [];
 			$allMoveWarnings = [];
-			
+			$movedPaths = [];
+			$storageFailed = false;
+
 			foreach ($files as $fieldName => $file) {
 				$processedFiles[$fieldName] = [];
 				$fileList = is_array($file) ? $file : [$file];
-				
+
 				foreach ($fileList as $index => $singleFile) {
 					$validation = $validationResults[$fieldName][$index];
-					
+
 					if ($batchHasErrors) {
 						// At least one file in the batch failed — do not store any file.
 						// success=false on every record signals the all-or-nothing outcome;
@@ -269,18 +271,52 @@
 							'errors'        => $validation['errors'], // empty for files that passed validation
 							'original_name' => $singleFile->getClientOriginalName(),
 						];
-						
+
 						continue;
 					}
-					
+
 					// All files passed validation — move this file to permanent storage
 					$fileResult = $this->processSingleFile($singleFile);
 					$allMoveWarnings = array_merge($allMoveWarnings, $fileResult['warnings']);
 					unset($fileResult['warnings']);
 					$processedFiles[$fieldName][] = $fileResult;
+
+					if ($fileResult['success']) {
+						$movedPaths[] = $fileResult['path'];
+					} else {
+						// A storage failure here (disk full, permission denied, ...) must not leave
+						// earlier files in this batch permanently stored while this one is reported
+						// as failed — roll the whole batch back below.
+						$storageFailed = true;
+					}
 				}
 			}
-			
+
+			if ($storageFailed) {
+				// Remove every file this batch actually moved to storage so the batch
+				// is all-or-nothing even when the failure happens mid-move rather than
+				// during validation.
+				foreach ($movedPaths as $movedPath) {
+					@unlink($movedPath);
+				}
+
+				foreach ($processedFiles as &$fieldResults) {
+					foreach ($fieldResults as &$fileResult) {
+						if ($fileResult['success']) {
+							$fileResult['success'] = false;
+							$fileResult['errors'][] = 'Upload rolled back because another file in the batch failed to store';
+							unset(
+								$fileResult['filename'], $fileResult['path'], $fileResult['relative_path'],
+								$fileResult['size'], $fileResult['mime_type'], $fileResult['extension'],
+								$fileResult['uploaded_at']
+							);
+						}
+					}
+				}
+
+				unset($fieldResults, $fileResult);
+			}
+
 			// Aggregate all warnings into a batch-level list:
 			// - validation warnings (e.g. virus scan skipped) come from pass 1
 			// - move warnings (e.g. chmod failed) come from pass 2
@@ -367,15 +403,22 @@
 		 * @return array{success: bool, errors: array<int, string>, warnings: array<int, string>, original_name: string, filename?: string, path?: string, relative_path?: string, size?: int|false, mime_type?: string|null, extension?: string, uploaded_at?: string}
 		 */
 		private function processSingleFile(UploadedFile $file): array {
+			// Captured before the move: moving the file (rename()/move_uploaded_file())
+			// invalidates PHP's stat cache for the original path, so calling getSize() or
+			// getMimeType() on $file afterwards would stat a path that no longer exists.
+			$size = $file->getSize();
+			$mimeType = $file->getMimeType();
+			$extension = strtolower($file->getClientOriginalExtension());
+
 			try {
 				// Determine the final storage path, then move the file out of PHP's temp directory.
 				// generateTargetPath() applies the configured directory structure and filename strategy.
 				// moveUploadedFile() performs the move and sets permissions; any chmod warnings are returned.
 				$targetPath = $this->generateTargetPath($file);
-				
+
 				// Move the file to the ultimate destination
 				$moveResult = $this->moveUploadedFile($file, $targetPath);
-				
+
 				// Record the file data
 				$movedFile = $moveResult['path'];
 				$moveWarnings = $moveResult['warnings'];
@@ -389,11 +432,11 @@
 					'original_name' => $file->getClientOriginalName(),
 				];
 			}
-			
+
 			// Strip the absolute project root from the stored path so controllers get a
 			// portable relative path they can store in a database without embedding server layout.
 			$relativePath = str_replace(ComposerUtils::getProjectRoot() . '/', '', $movedFile);
-			
+
 			return [
 				'success'       => true,
 				'errors'        => [],
@@ -402,9 +445,9 @@
 				'filename'      => basename($movedFile),           // Randomized or sanitized name on disk
 				'path'          => $movedFile,                     // Absolute path
 				'relative_path' => $relativePath,                  // Path relative to project root
-				'size'          => $file->getSize(),               // Bytes
-				'mime_type'     => $file->getMimeType(),           // Server-detected, not client-supplied
-				'extension'     => strtolower($file->getClientOriginalExtension()), // Normalised to lowercase
+				'size'          => $size,                          // Bytes, captured before the move
+				'mime_type'     => $mimeType,                      // Server-detected, captured before the move
+				'extension'     => $extension,                     // Normalised to lowercase
 				'uploaded_at'   => date('Y-m-d H:i:s'),
 			];
 		}
@@ -543,7 +586,8 @@
 			
 			// Extract width and height from the image info array
 			// getimagesize() returns [width, height, type, attr] format
-			[$width, $height] = $imageInfo;
+			$width = $imageInfo[0];
+			$height = $imageInfo[1];
 			
 			// Check if either dimension exceeds the configured maximum limits
 			if ($width > $this->maxImageWidth || $height > $this->maxImageHeight) {
