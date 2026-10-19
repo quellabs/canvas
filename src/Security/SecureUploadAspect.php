@@ -23,14 +23,12 @@
 	 * - Filename sanitization to prevent directory traversal
 	 * - Virus scanning integration (if available)
 	 * - Content validation for image files
-	 * - Execution prevention via .htaccess (Apache only — see note below)
 	 *
 	 * Deployment requirements:
-	 * - Upload directory SHOULD be outside the public web root. This is the primary execution
-	 *   prevention layer and works on all web servers (Apache, Nginx, Caddy, Swoole, etc.).
-	 * - The .htaccess protection written by this class is a secondary defence layer that only
-	 *   works on Apache with AllowOverride enabled. It provides NO protection on Nginx, Caddy,
-	 *   RoadRunner, Swoole, or any other server. Do not rely on it as your sole protection.
+	 * - Upload directory MUST be outside the public web root. This is the only execution
+	 *   prevention layer this class relies on, and it works on all web servers (Apache,
+	 *   Nginx, Caddy, Swoole, etc.). Server-level config (e.g. a webroot location block
+	 *   that denies execution) is the right place for defense-in-depth, not this class.
 	 *
 	 * Failure modes:
 	 * - Default (throwOnFailure = false): writes upload_successful = false, the per-file results,
@@ -280,10 +278,14 @@
 					$allMoveWarnings = array_merge($allMoveWarnings, $fileResult['warnings']);
 					unset($fileResult['warnings']);
 					$processedFiles[$fieldName][] = $fileResult;
+					$resultIndex = array_key_last($processedFiles[$fieldName]);
 
-					if ($fileResult['success']) {
-						$movedPaths[] = $fileResult['path'];
-					} else {
+					// Track every file that reached disk, success or not, so a later failure in this batch can roll it back too.
+					if (isset($fileResult['path'])) {
+						$movedPaths[] = ['field' => $fieldName, 'index' => $resultIndex, 'path' => $fileResult['path']];
+					}
+
+					if (!$fileResult['success']) {
 						// A storage failure here (disk full, permission denied, ...) must not leave
 						// earlier files in this batch permanently stored while this one is reported
 						// as failed — roll the whole batch back below.
@@ -293,28 +295,24 @@
 			}
 
 			if ($storageFailed) {
-				// Remove every file this batch actually moved to storage so the batch
-				// is all-or-nothing even when the failure happens mid-move rather than
-				// during validation.
-				foreach ($movedPaths as $movedPath) {
-					@unlink($movedPath);
-				}
+				// Remove every file this batch moved to storage so it's all-or-nothing; the unlink result is checked so a failed removal is reported accurately.
+				foreach ($movedPaths as $moved) {
+					$fileResult = &$processedFiles[$moved['field']][$moved['index']];
 
-				foreach ($processedFiles as &$fieldResults) {
-					foreach ($fieldResults as &$fileResult) {
-						if ($fileResult['success']) {
-							$fileResult['success'] = false;
-							$fileResult['errors'][] = 'Upload rolled back because another file in the batch failed to store';
-							unset(
-								$fileResult['filename'], $fileResult['path'], $fileResult['relative_path'],
-								$fileResult['size'], $fileResult['mime_type'], $fileResult['extension'],
-								$fileResult['uploaded_at']
-							);
-						}
+					if (@unlink($moved['path'])) {
+						$fileResult['errors'][] = 'File removed from storage because the upload batch failed';
+					} else {
+						$fileResult['errors'][] = "File could not be removed from storage after the upload batch failed; it remains on disk at {$moved['path']}";
 					}
-				}
 
-				unset($fieldResults, $fileResult);
+					$fileResult['success'] = false;
+					unset(
+						$fileResult['filename'], $fileResult['path'], $fileResult['relative_path'],
+						$fileResult['size'], $fileResult['mime_type'], $fileResult['extension'],
+						$fileResult['uploaded_at']
+					);
+					unset($fileResult);
+				}
 			}
 
 			// Aggregate all warnings into a batch-level list:
@@ -398,7 +396,7 @@
 		 * Moves a validated file to permanent storage and returns its metadata.
 		 * Validation is intentionally absent here — callers must run collectValidationResult()
 		 * first and only invoke this method when that returns an empty errors array.
-		 * This method never throws; move and post-move failures are returned in 'errors'.
+		 * This method never throws; move failures are returned in 'errors' instead.
 		 * @param UploadedFile $file The uploaded file to store (must already be validated)
 		 * @return array{success: true, errors: array<int, string>, warnings: array<int, string>, original_name: string, filename: string, path: string, relative_path: string, size: int|false, mime_type: string|null, extension: string, uploaded_at: string}|array{success: false, errors: array<int, string>, warnings: array<int, string>, original_name: string}
 		 */
@@ -695,11 +693,11 @@
 		private function moveUploadedFile(UploadedFile $file, string $targetPath): array {
 			try {
 				$warnings = [];
-				
+
 				// Move the uploaded file from temporary location to the target path
 				// dirname() gets the directory path, basename() gets the filename
 				$file->move(dirname($targetPath), basename($targetPath));
-				
+
 				// Set secure file permissions (owner: read/write, group/others: read only)
 				// 0644 = rw-r--r-- prevents execution while allowing read access
 				// Failure is non-fatal: the file is stored, but permissions may be too permissive
@@ -707,63 +705,16 @@
 					// chmod can legitimately fail on some filesystems (e.g. FAT, network mounts, object storage)
 					$warnings[] = "chmod failed on {$targetPath}: file permissions could not be set to 0644";
 				}
-				
-				// Write Apache-specific .htaccess protection to the upload directory.
-				// This is a secondary defense — uploads should ideally live outside the web root.
-				// Has no effect on Nginx, Caddy, RoadRunner, Swoole, or any other server.
-				$this->createHtaccessProtection(dirname($targetPath));
-				
+
 				// Return result
 				return ['path' => $targetPath, 'warnings' => $warnings];
-				
+
 			} catch (\Exception $e) {
 				// Re-throw any errors as a more specific RuntimeException
 				// This provides better error handling context for calling code
 				throw new RuntimeException("Failed to move uploaded file: " . $e->getMessage());
 			}
 		}
-		
-		/**
-		 * Creates .htaccess file to prevent script execution
-		 * @param string $directory Directory to protect
-		 */
-		private function createHtaccessProtection(string $directory): void {
-			// Build the full path to the .htaccess file
-			$htaccessPath = $directory . '/.htaccess';
-			
-			// Only create the file if it doesn't already exist to avoid overwriting existing rules
-			if (file_exists($htaccessPath)) {
-				return;
-			}
-			
-			// Start building the Apache configuration content
-			$content = "# Prevent script execution\n";
-			
-			// Remove handler associations for common script file extensions
-			// This tells Apache to stop treating these files as executable scripts
-			$content .= "RemoveHandler .php .phtml .php3 .php4 .php5 .pl .py .jsp .asp .sh .cgi\n";
-			
-			// Remove MIME type associations for the same extensions
-			// Double protection by also removing the content-type mappings
-			$content .= "RemoveType .php .phtml .php3 .php4 .php5 .pl .py .jsp .asp .sh .cgi\n";
-			
-			// Create a FilesMatch directive to explicitly deny access to script files
-			// This is a third layer of protection using pattern matching
-			$content .= "<FilesMatch \"\.(php|phtml|php3|php4|php5|pl|py|jsp|asp|sh|cgi)$\">\n";
-			
-			// Deny all access to files matching the above pattern
-			// This ensures even if handlers/types are somehow restored, access is still blocked
-			$content .= "    Deny from all\n";
-			$content .= "</FilesMatch>\n";
-			
-			// Write the protection rules to the .htaccess file
-			// Failure here is not silently ignored: if the file cannot be written, uploaded files in
-			// this directory may become executable on Apache, which is a security risk
-			if (file_put_contents($htaccessPath, $content) === false) {
-				throw new RuntimeException("Failed to write .htaccess protection to: {$htaccessPath}");
-			}
-		}
-		
 		/**
 		 * Checks if file extension matches MIME type
 		 *

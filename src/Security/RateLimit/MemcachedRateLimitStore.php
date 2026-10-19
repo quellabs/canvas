@@ -105,12 +105,9 @@
 					$casToken = null;
 				} elseif ($resultCode === Memcached::RES_SUCCESS && is_array($existing)) {
 					$rawValue = $existing['value'] ?? null;
-					$state = $rawValue === null ? null : $this->asStringKeyedArray($rawValue);
 
-					if ($state === null && $rawValue !== null) {
-						// A key exists but doesn't decode into the shape this class itself
-						// caches - a corrupted or foreign-format entry. Report it as
-						// unavailable instead of silently resetting the counter.
+					// This store never caches a null value, so a null read-back is corrupt or foreign data, not a fresh key - treating it as fresh could reset the counter or refill a bucket.
+					if ($rawValue === null || ($state = $this->asStringKeyedArray($rawValue)) === null) {
 						throw new RateLimitStoreUnavailableException(
 							"Memcached rate limit cache entry for key '{$cacheKey}' contains corrupt or unexpected data"
 						);

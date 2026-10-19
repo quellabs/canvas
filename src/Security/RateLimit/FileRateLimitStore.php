@@ -238,7 +238,8 @@
 		 * Overwrite the state on an already-locked handle in place. Every step is
 		 * checked: a request must never be admitted on the strength of a write that
 		 * silently failed or only partially landed, leaving stale or truncated state
-		 * for the next request.
+		 * for the next request. Writes before truncating so a failed write leaves
+		 * old content intact or corrupt, never an empty file readState() would mistake for a new key.
 		 * @param resource $handle
 		 * @param array<string, mixed> $state
 		 * @return void
@@ -249,8 +250,8 @@
 
 			if (
 				fseek($handle, 0) !== 0 ||
-				ftruncate($handle, 0) === false ||
 				fwrite($handle, $serialized) !== strlen($serialized) ||
+				ftruncate($handle, strlen($serialized)) === false ||
 				fflush($handle) === false
 			) {
 				throw new RateLimitStoreUnavailableException('Could not persist rate limit state');
@@ -285,7 +286,7 @@
 				$mtime = @filemtime($file);
 
 				if ($mtime !== false && $mtime < $staleBefore) {
-					$this->deleteIfUnlocked($file);
+					$this->deleteIfUnlocked($file, $staleBefore);
 				}
 			}
 		}
@@ -294,10 +295,13 @@
 		 * Deletes $file only while holding its exclusive lock, so a key that
 		 * withLock() still has open for an in-progress admission - which holds that
 		 * same lock for its entire operation - is never removed out from under it.
+		 * Age is rechecked here under the lock since a request can refresh the key
+		 * between the caller's unlocked check and the lock being acquired here.
 		 * @param string $file
+		 * @param int $staleBefore Modification times before this are considered stale
 		 * @return void
 		 */
-		private function deleteIfUnlocked(string $file): void {
+		private function deleteIfUnlocked(string $file, int $staleBefore): void {
 			$handle = @fopen($file, 'r+');
 
 			if ($handle === false) {
@@ -306,7 +310,12 @@
 
 			try {
 				if (flock($handle, LOCK_EX | LOCK_NB)) {
-					@unlink($file);
+					clearstatcache(true, $file);
+					$mtime = @filemtime($file);
+
+					if ($mtime !== false && $mtime < $staleBefore) {
+						@unlink($file);
+					}
 				}
 			} finally {
 				flock($handle, LOCK_UN);

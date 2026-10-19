@@ -326,13 +326,8 @@
 		}
 
 		/**
-		 * Sanitize cache key component to prevent collisions and ensure compatibility
-		 *
-		 * Replacing disallowed characters with '_' is lossy (e.g. "a:b" and "a/b" would
-		 * both become "a_b"), so a hash of the original value is appended whenever that
-		 * replacement actually changes the component. Two different raw components can
-		 * then never sanitize to the same cache key.
-		 *
+		 * Sanitize cache key component to prevent collisions and ensure compatibility.
+		 * A hash of the original is always appended (not only when replacement changes the value), otherwise a raw input could collide with another component's sanitized-plus-hash output.
 		 * @param string $component The component to sanitize
 		 * @return string Sanitized component safe for cache keys
 		 */
@@ -345,11 +340,8 @@
 				$sanitized = 'empty';
 			}
 
-			// The replacement above is lossy; disambiguate with a hash of the original
-			// so distinct components that sanitize to the same string can't collide
-			if ($sanitized !== $component) {
-				$sanitized .= '_' . substr(hash('sha256', $component), 0, 16);
-			}
+			// Always disambiguate with a hash of the original, regardless of whether the replacement above changed anything
+			$sanitized .= '_' . substr(hash('sha256', $component), 0, 16);
 
 			// Limit length to prevent excessively long keys
 			if (strlen($sanitized) > 50) {
