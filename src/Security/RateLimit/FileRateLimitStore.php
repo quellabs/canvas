@@ -64,6 +64,7 @@
 		 */
 		public function incrementFixedWindow(string $key, int $limit, int $window, int $now): RateLimitResult {
 			$this->assertWindowFitsRetention($window);
+			
 			$stateKey = $key . ':fixed:' . intdiv($now, $window) * $window;
 
 			$result = $this->withLock($stateKey, function ($handle) use ($limit, $window, $now) {
@@ -247,10 +248,10 @@
 			$serialized = serialize($state);
 
 			if (
-				fseek($handle, 0) !== 0
-				|| ftruncate($handle, 0) === false
-				|| fwrite($handle, $serialized) !== strlen($serialized)
-				|| fflush($handle) === false
+				fseek($handle, 0) !== 0 ||
+				ftruncate($handle, 0) === false ||
+				fwrite($handle, $serialized) !== strlen($serialized) ||
+				fflush($handle) === false
 			) {
 				throw new RateLimitStoreUnavailableException('Could not persist rate limit state');
 			}

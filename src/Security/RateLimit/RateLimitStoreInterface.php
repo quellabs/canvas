@@ -2,6 +2,8 @@
 
 	namespace Quellabs\Canvas\Security\RateLimit;
 
+	use Quellabs\Canvas\Exceptions\RateLimitStoreUnavailableException;
+	
 	/**
 	 * Atomic admission storage for rate limiting.
 	 *
@@ -38,7 +40,7 @@
 		 * @param int $window Window length in seconds
 		 * @param int $now Current Unix timestamp (seconds)
 		 * @return RateLimitResult
-		 * @throws \Quellabs\Canvas\Exceptions\RateLimitStoreUnavailableException
+		 * @throws RateLimitStoreUnavailableException
 		 */
 		public function incrementFixedWindow(string $key, int $limit, int $window, int $now): RateLimitResult;
 
@@ -49,7 +51,7 @@
 		 * @param int $window Window length in seconds
 		 * @param int $now Current Unix timestamp (seconds)
 		 * @return RateLimitResult
-		 * @throws \Quellabs\Canvas\Exceptions\RateLimitStoreUnavailableException
+		 * @throws RateLimitStoreUnavailableException
 		 */
 		public function admitSlidingWindow(string $key, int $limit, int $window, int $now): RateLimitResult;
 
@@ -60,7 +62,7 @@
 		 * @param int $window Seconds to fully refill an empty bucket to $limit tokens
 		 * @param int $now Current Unix timestamp (seconds)
 		 * @return RateLimitResult
-		 * @throws \Quellabs\Canvas\Exceptions\RateLimitStoreUnavailableException
+		 * @throws RateLimitStoreUnavailableException
 		 */
 		public function admitTokenBucket(string $key, int $limit, int $window, int $now): RateLimitResult;
 	}

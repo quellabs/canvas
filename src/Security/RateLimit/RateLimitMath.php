@@ -88,9 +88,11 @@
 			// retry_after must wait for enough of the *oldest* entries to expire that
 			// admitting one more request would no longer exceed $limit - not just for
 			// the single oldest entry, which can still leave the window full.
-			$expiringTimestamp = $exceeded && is_int($timestamps[$count - $limit] ?? null)
-				? $timestamps[$count - $limit]
-				: $now;
+			if ($exceeded && is_int($timestamps[$count - $limit] ?? null)) {
+				$expiringTimestamp = $timestamps[$count - $limit];
+			} else {
+				$expiringTimestamp = $now;
+			}
 
 			$result = new RateLimitResult(
 				$count,
