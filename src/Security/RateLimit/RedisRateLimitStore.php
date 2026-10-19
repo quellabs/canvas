@@ -12,8 +12,11 @@
 	 * atomic step on Redis's single-threaded command execution - no PHP-side
 	 * locking is needed, unlike FileRateLimitStore/MemcachedRateLimitStore.
 	 *
-	 * The math mirrors RateLimitMath exactly, but implemented in Lua since it
-	 * must run server-side to be atomic; RateLimitMath isn't reused here.
+	 * The math mirrors RateLimitMath's admission logic, but implemented in Lua
+	 * since it must run server-side to be atomic; RateLimitMath isn't reused
+	 * here. One difference: the sliding-window sorted set has no equivalent of
+	 * RateLimitMath's tracked-timestamp cap, so its entry count under sustained
+	 * abuse is unbounded within the window.
 	 */
 	class RedisRateLimitStore implements RateLimitStoreInterface {
 
@@ -30,18 +33,26 @@
 			local cutoff = ARGV[1]
 			local now = ARGV[2]
 			local window = ARGV[3]
+			local limit = tonumber(ARGV[4])
 			redis.call('ZREMRANGEBYSCORE', key, '-inf', cutoff)
 			local seq = redis.call('INCR', key .. ':seq')
 			redis.call('ZADD', key, now, now .. '-' .. seq)
 			redis.call('EXPIRE', key, window)
 			redis.call('EXPIRE', key .. ':seq', window)
 			local count = redis.call('ZCARD', key)
-			local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
-			local oldestScore = now
-			if oldest[2] ~= nil then
-				oldestScore = oldest[2]
+			-- When the limit is exceeded, retrying before enough of the *oldest*
+			-- entries expire still leaves the window full - report the timestamp of
+			-- the entry whose expiry actually frees a slot, not just the single
+			-- oldest one.
+			local target = now
+			if count > limit then
+				local idx = count - limit
+				local entries = redis.call('ZRANGE', key, idx, idx, 'WITHSCORES')
+				if entries[2] ~= nil then
+					target = entries[2]
+				end
 			end
-			return {count, oldestScore}
+			return {count, target}
 			LUA;
 
 		private const string TOKEN_BUCKET_SCRIPT = <<<'LUA'
@@ -107,6 +118,7 @@
 
 		/**
 		 * Close Redis connection
+		 * @return void
 		 */
 		public function __destruct() {
 			try {
@@ -124,7 +136,13 @@
 			$resetTime = $windowStart + $window;
 			$redisKey = $this->buildKey($key . ':fixed:' . $windowStart);
 
-			$count = $this->toInt($this->eval(self::FIXED_WINDOW_SCRIPT, [$redisKey], [$window]));
+			$raw = $this->eval(self::FIXED_WINDOW_SCRIPT, [$redisKey], [$window]);
+
+			if (!is_numeric($raw)) {
+				throw new RateLimitStoreUnavailableException('Redis fixed-window script returned an unexpected result');
+			}
+
+			$count = (int)$raw;
 
 			return new RateLimitResult(
 				$count,
@@ -141,17 +159,21 @@
 			$redisKey = $this->buildKey($key . ':sliding');
 			$cutoff = $now - $window;
 
-			$raw = $this->eval(self::SLIDING_WINDOW_SCRIPT, [$redisKey], [$cutoff, $now, $window]);
-			$rawPair = is_array($raw) && count($raw) === 2 ? $raw : [1, $now];
-			$count = $this->toInt($rawPair[0], 1);
-			$oldest = $this->toInt($rawPair[1], $now);
+			$raw = $this->eval(self::SLIDING_WINDOW_SCRIPT, [$redisKey], [$cutoff, $now, $window, $limit]);
+
+			if (!is_array($raw) || count($raw) !== 2 || !is_numeric($raw[0]) || !is_numeric($raw[1])) {
+				throw new RateLimitStoreUnavailableException('Redis sliding-window script returned an unexpected result');
+			}
+
+			$count = (int)$raw[0];
+			$target = (int)$raw[1];
 			$exceeded = $count > $limit;
 
 			return new RateLimitResult(
 				$count,
 				$exceeded,
 				$now + $window,
-				$exceeded ? max(0, ($oldest + $window) - $now) : 0
+				$exceeded ? max(0, ($target + $window) - $now) : 0
 			);
 		}
 
@@ -163,9 +185,13 @@
 			$refillRate = $window > 0 ? $limit / $window : (float)$limit;
 
 			$raw = $this->eval(self::TOKEN_BUCKET_SCRIPT, [$redisKey], [$limit, $refillRate, $now, $window * 2]);
-			$rawPair = is_array($raw) && count($raw) === 2 ? $raw : [0, $limit];
-			$exceeded = $this->toInt($rawPair[0]) === 1;
-			$tokens = $this->toFloat($rawPair[1], (float)$limit);
+
+			if (!is_array($raw) || count($raw) !== 2 || !is_numeric($raw[0]) || !is_numeric($raw[1])) {
+				throw new RateLimitStoreUnavailableException('Redis token-bucket script returned an unexpected result');
+			}
+
+			$exceeded = (int)$raw[0] === 1;
+			$tokens = (float)$raw[1];
 			$retryAfter = $exceeded && $refillRate > 0 ? (int)ceil((1 - $tokens) / $refillRate) : 0;
 
 			return new RateLimitResult(
@@ -174,26 +200,6 @@
 				$now + $retryAfter,
 				$retryAfter
 			);
-		}
-
-		/**
-		 * Narrow a Lua script's mixed return value to int, without ever casting mixed directly
-		 * @param mixed $value
-		 * @param int $default
-		 * @return int
-		 */
-		private function toInt(mixed $value, int $default = 0): int {
-			return is_numeric($value) ? (int)$value : $default;
-		}
-
-		/**
-		 * Narrow a Lua script's mixed return value to float, without ever casting mixed directly
-		 * @param mixed $value
-		 * @param float $default
-		 * @return float
-		 */
-		private function toFloat(mixed $value, float $default = 0.0): float {
-			return is_numeric($value) ? (float)$value : $default;
 		}
 
 		/**
@@ -254,6 +260,7 @@
 
 		/**
 		 * Check if redis extension and class are available
+		 * @return void
 		 * @throws RateLimitStoreUnavailableException If redis extension is not available
 		 */
 		private function checkExtension(): void {
@@ -268,6 +275,7 @@
 		/**
 		 * Initialize the Redis connection with the given configuration
 		 * @param array<string, mixed> $config
+		 * @return void
 		 * @throws RateLimitStoreUnavailableException If connection fails
 		 */
 		private function initializeConnection(array $config): void {

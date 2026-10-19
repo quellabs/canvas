@@ -20,8 +20,10 @@
 		/** @var int Floor on how many fixed-window/sliding-window multiples to retain state for */
 		private const int MIN_TRACKED_TIMESTAMPS = 100;
 
+		/**
+		 * Static-only: pure functions, no instance state.
+		 */
 		private function __construct() {
-			// Static-only: pure functions, no instance state.
 		}
 
 		/**
@@ -71,7 +73,7 @@
 
 			// Bound memory under sustained abuse: once far past the limit, trimming the
 			// oldest excess only makes retry_after's "oldest" estimate more conservative
-			// (shorter), never incorrectly permissive.
+			// (longer), never incorrectly permissive.
 			$maxTracked = max($limit * 4, self::MIN_TRACKED_TIMESTAMPS);
 
 			if (count($timestamps) > $maxTracked) {
@@ -82,13 +84,19 @@
 
 			$count = count($timestamps);
 			$exceeded = $count > $limit;
-			$oldest = is_int($timestamps[0] ?? null) ? $timestamps[0] : $now;
+
+			// retry_after must wait for enough of the *oldest* entries to expire that
+			// admitting one more request would no longer exceed $limit - not just for
+			// the single oldest entry, which can still leave the window full.
+			$expiringTimestamp = $exceeded && is_int($timestamps[$count - $limit] ?? null)
+				? $timestamps[$count - $limit]
+				: $now;
 
 			$result = new RateLimitResult(
 				$count,
 				$exceeded,
 				$now + $window,
-				$exceeded ? max(0, ($oldest + $window) - $now) : 0
+				$exceeded ? max(0, ($expiringTimestamp + $window) - $now) : 0
 			);
 
 			return new RateLimitAdmission(['timestamps' => $timestamps], $result);

@@ -8,14 +8,12 @@
 
 	/**
 	 * File-backed rate limit store that holds a single exclusive lock across the
-	 * entire read-decide-write cycle for a key, rather than two separate cache
-	 * get()/set() calls - that two-call sequence is exactly what let concurrent
-	 * requests read the same count and both be admitted.
+	 * entire read-decide-write cycle for a key, so a concurrent request for the
+	 * same key blocks until the first is fully committed instead of racing it.
 	 *
 	 * One state file per key (fixed-window instance, sliding-window key, or
-	 * bucket key); the lock is held on that same file handle for the entire
-	 * operation, so a concurrent request for the same key blocks until the
-	 * first is fully committed instead of racing it.
+	 * bucket key); the lock is held on that same file handle for the whole
+	 * operation.
 	 */
 	class FileRateLimitStore implements RateLimitStoreInterface {
 
@@ -65,6 +63,7 @@
 		 * @inheritDoc
 		 */
 		public function incrementFixedWindow(string $key, int $limit, int $window, int $now): RateLimitResult {
+			$this->assertWindowFitsRetention($window);
 			$stateKey = $key . ':fixed:' . intdiv($now, $window) * $window;
 
 			$result = $this->withLock($stateKey, function ($handle) use ($limit, $window, $now) {
@@ -81,6 +80,8 @@
 		 * @inheritDoc
 		 */
 		public function admitSlidingWindow(string $key, int $limit, int $window, int $now): RateLimitResult {
+			$this->assertWindowFitsRetention($window);
+
 			$result = $this->withLock($key . ':sliding', function ($handle) use ($limit, $window, $now) {
 				$admission = RateLimitMath::slidingWindow($this->readState($handle), $limit, $window, $now);
 				$this->writeState($handle, $admission->getState());
@@ -95,6 +96,8 @@
 		 * @inheritDoc
 		 */
 		public function admitTokenBucket(string $key, int $limit, int $window, int $now): RateLimitResult {
+			$this->assertWindowFitsRetention($window);
+
 			$result = $this->withLock($key . ':bucket', function ($handle) use ($limit, $window, $now) {
 				$admission = RateLimitMath::tokenBucket($this->readState($handle), $limit, $window, $now);
 				$this->writeState($handle, $admission->getState());
@@ -103,6 +106,23 @@
 
 			$this->maybeGarbageCollect();
 			return $result;
+		}
+
+		/**
+		 * Guards the constructor's documented invariant that stale_after must exceed
+		 * the longest configured window, otherwise garbage collection could sweep an
+		 * in-progress window's state as if it were abandoned.
+		 * @param int $window Window length in seconds for the current admission call
+		 * @return void
+		 * @throws RateLimitStoreUnavailableException
+		 */
+		private function assertWindowFitsRetention(int $window): void {
+			if ($window >= $this->staleAfterSeconds) {
+				throw new RateLimitStoreUnavailableException(
+					"Rate limit window ({$window}s) must be smaller than the store's stale_after ({$this->staleAfterSeconds}s), " .
+					"otherwise garbage collection can sweep an in-progress window"
+				);
+			}
 		}
 
 		/**
@@ -154,9 +174,13 @@
 		}
 
 		/**
-		 * Read the current state from an already-locked handle.
+		 * Read the current state from an already-locked handle. A size of zero means
+		 * the key has no state yet, which is the only case treated as "fresh" - any
+		 * state that exists but cannot be read back as the shape this class itself
+		 * wrote is reported as unavailable rather than silently reset.
 		 * @param resource $handle
 		 * @return array<string, mixed>|null
+		 * @throws RateLimitStoreUnavailableException
 		 */
 		private function readState($handle): ?array {
 			fseek($handle, 0);
@@ -170,11 +194,17 @@
 			$contents = fread($handle, $size);
 
 			if ($contents === false || $contents === '') {
-				return null;
+				throw new RateLimitStoreUnavailableException('Could not read rate limit state file');
 			}
 
 			$data = @unserialize($contents);
-			return $this->asStringKeyedArray($data);
+			$state = is_array($data) ? $this->asStringKeyedArray($data) : null;
+
+			if ($state === null) {
+				throw new RateLimitStoreUnavailableException('Rate limit state file contains corrupt or unexpected data');
+			}
+
+			return $state;
 		}
 
 		/**
@@ -204,17 +234,26 @@
 		}
 
 		/**
-		 * Overwrite the state on an already-locked handle in place.
+		 * Overwrite the state on an already-locked handle in place. Every step is
+		 * checked: a request must never be admitted on the strength of a write that
+		 * silently failed or only partially landed, leaving stale or truncated state
+		 * for the next request.
 		 * @param resource $handle
 		 * @param array<string, mixed> $state
 		 * @return void
+		 * @throws RateLimitStoreUnavailableException
 		 */
 		private function writeState($handle, array $state): void {
 			$serialized = serialize($state);
-			fseek($handle, 0);
-			ftruncate($handle, 0);
-			fwrite($handle, $serialized);
-			fflush($handle);
+
+			if (
+				fseek($handle, 0) !== 0
+				|| ftruncate($handle, 0) === false
+				|| fwrite($handle, $serialized) !== strlen($serialized)
+				|| fflush($handle) === false
+			) {
+				throw new RateLimitStoreUnavailableException('Could not persist rate limit state');
+			}
 		}
 
 		/**
@@ -245,8 +284,32 @@
 				$mtime = @filemtime($file);
 
 				if ($mtime !== false && $mtime < $staleBefore) {
+					$this->deleteIfUnlocked($file);
+				}
+			}
+		}
+
+		/**
+		 * Deletes $file only while holding its exclusive lock, so a key that
+		 * withLock() still has open for an in-progress admission - which holds that
+		 * same lock for its entire operation - is never removed out from under it.
+		 * @param string $file
+		 * @return void
+		 */
+		private function deleteIfUnlocked(string $file): void {
+			$handle = @fopen($file, 'r+');
+
+			if ($handle === false) {
+				return;
+			}
+
+			try {
+				if (flock($handle, LOCK_EX | LOCK_NB)) {
 					@unlink($file);
 				}
+			} finally {
+				flock($handle, LOCK_UN);
+				fclose($handle);
 			}
 		}
 

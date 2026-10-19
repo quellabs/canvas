@@ -104,7 +104,18 @@
 					$state = null;
 					$casToken = null;
 				} elseif ($resultCode === Memcached::RES_SUCCESS && is_array($existing)) {
-					$state = $this->asStringKeyedArray($existing['value'] ?? null);
+					$rawValue = $existing['value'] ?? null;
+					$state = $rawValue === null ? null : $this->asStringKeyedArray($rawValue);
+
+					if ($state === null && $rawValue !== null) {
+						// A key exists but doesn't decode into the shape this class itself
+						// caches - a corrupted or foreign-format entry. Report it as
+						// unavailable instead of silently resetting the counter.
+						throw new RateLimitStoreUnavailableException(
+							"Memcached rate limit cache entry for key '{$cacheKey}' contains corrupt or unexpected data"
+						);
+					}
+
 					$casToken = $existing['cas'] ?? null;
 				} else {
 					throw new RateLimitStoreUnavailableException(
@@ -174,6 +185,7 @@
 
 		/**
 		 * Check if the memcached extension and class are available
+		 * @return void
 		 * @throws RateLimitStoreUnavailableException If the memcached extension is not available
 		 */
 		private function checkExtension(): void {
@@ -188,6 +200,7 @@
 		/**
 		 * Initialize the Memcached connection with the given configuration
 		 * @param array<string, mixed> $config
+		 * @return void
 		 * @throws RateLimitStoreUnavailableException If connection fails
 		 */
 		private function initializeConnection(array $config): void {
