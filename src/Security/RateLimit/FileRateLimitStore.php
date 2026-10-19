@@ -14,6 +14,11 @@
 	 * One state file per key (fixed-window instance, sliding-window key, or
 	 * bucket key); the lock is held on that same file handle for the whole
 	 * operation.
+	 *
+	 * Known limitation: if a key's very first write fails completely (no bytes land), the
+	 * resulting empty file is indistinguishable from a never-written key, so readState()
+	 * admits again instead of failing closed - accepted as-is, since nothing short of a
+	 * successful write can record that the attempt happened.
 	 */
 	class FileRateLimitStore implements RateLimitStoreInterface {
 
@@ -126,32 +131,64 @@
 			}
 		}
 
+		/** @var int Bound on retries when the opened file turns out to be orphaned by a concurrent GC unlink */
+		private const int MAX_ORPHANED_HANDLE_RETRIES = 10;
+
 		/**
 		 * Open the state file for $stateKey, hold an exclusive lock across the whole
-		 * operation, and run $operation against that single locked handle.
+		 * operation, and run $operation against that single locked handle. Retries on a
+		 * fresh handle if maybeGarbageCollect() unlinked $path between fopen() and flock(),
+		 * which would otherwise leave this handle locking an inode $path no longer resolves to - see sameFile().
 		 * @template T
 		 * @param string $stateKey
 		 * @param callable(resource): T $operation
 		 * @return T
+		 * @throws RateLimitStoreUnavailableException
 		 */
 		private function withLock(string $stateKey, callable $operation): mixed {
 			$path = $this->statePath($stateKey);
-			$handle = @fopen($path, 'c+');
 
-			if ($handle === false) {
-				throw new RateLimitStoreUnavailableException("Could not open rate limit state file for key: {$stateKey}");
-			}
+			for ($attempt = 0; $attempt < self::MAX_ORPHANED_HANDLE_RETRIES; $attempt++) {
+				$handle = @fopen($path, 'c+');
 
-			try {
-				if (!$this->acquireExclusiveLock($handle)) {
-					throw new RateLimitStoreUnavailableException("Could not acquire rate limit lock for key: {$stateKey}");
+				if ($handle === false) {
+					throw new RateLimitStoreUnavailableException("Could not open rate limit state file for key: {$stateKey}");
 				}
 
-				return $operation($handle);
-			} finally {
-				flock($handle, LOCK_UN);
-				fclose($handle);
+				try {
+					if (!$this->acquireExclusiveLock($handle)) {
+						throw new RateLimitStoreUnavailableException("Could not acquire rate limit lock for key: {$stateKey}");
+					}
+
+					if (!$this->sameFile($handle, $path)) {
+						continue;
+					}
+
+					return $operation($handle);
+				} finally {
+					flock($handle, LOCK_UN);
+					fclose($handle);
+				}
 			}
+
+			throw new RateLimitStoreUnavailableException("Could not obtain a stable rate limit lock for key: {$stateKey}");
+		}
+
+		/**
+		 * Detects whether $path still refers to the inode $handle has locked - see withLock(). A stat failure counts as "not the same file" so the caller retries.
+		 * @param resource $handle
+		 * @param string $path
+		 * @return bool
+		 */
+		private function sameFile($handle, string $path): bool {
+			$handleStats = fstat($handle);
+			$pathStats = @stat($path);
+
+			if (!is_array($handleStats) || !is_array($pathStats)) {
+				return false;
+			}
+
+			return $handleStats['dev'] === $pathStats['dev'] && $handleStats['ino'] === $pathStats['ino'];
 		}
 
 		/**
@@ -175,10 +212,10 @@
 		}
 
 		/**
-		 * Read the current state from an already-locked handle. A size of zero means
-		 * the key has no state yet, which is the only case treated as "fresh" - any
-		 * state that exists but cannot be read back as the shape this class itself
-		 * wrote is reported as unavailable rather than silently reset.
+		 * Read the current state from an already-locked handle. A size of zero is treated as
+		 * "fresh" (see the class docblock's known limitation for the one case that's wrong);
+		 * any state that exists but cannot be read back as the shape this class itself wrote
+		 * is reported as unavailable rather than silently reset.
 		 * @param resource $handle
 		 * @return array<string, mixed>|null
 		 * @throws RateLimitStoreUnavailableException
@@ -235,11 +272,10 @@
 		}
 
 		/**
-		 * Overwrite the state on an already-locked handle in place. Every step is
-		 * checked: a request must never be admitted on the strength of a write that
-		 * silently failed or only partially landed, leaving stale or truncated state
-		 * for the next request. Writes before truncating so a failed write leaves
-		 * old content intact or corrupt, never an empty file readState() would mistake for a new key.
+		 * Overwrite the state on an already-locked handle in place. Every step is checked, and
+		 * writing before truncating means a failed write leaves old content intact or corrupt,
+		 * never empty - except on a key's first-ever write, which has no old content to fall
+		 * back to; see the class docblock's known limitation.
 		 * @param resource $handle
 		 * @param array<string, mixed> $state
 		 * @return void

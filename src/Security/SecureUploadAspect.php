@@ -37,9 +37,14 @@
 	 * - throwOnFailure = true: throws UploadException, which carries the full per-file result set
 	 *   and the batch error so the framework's exception handler (or a catching controller) can
 	 *   surface granular error information without re-running validation.
+	 * - Batch rollback is best-effort: if unlinking an already-moved file fails, it stays on
+	 *   disk, marked unsuccessful, with 'path' kept so the caller can clean it up.
 	 */
 	class SecureUploadAspect implements BeforeAspectInterface {
-		
+
+		/** @var string[] Valid policies for when a target destination is already taken */
+		private const array VALID_DUPLICATE_DESTINATION_POLICIES = ['reject', 'rename'];
+
 		/** @var string Base upload directory path */
 		private string $uploadPath;
 		
@@ -72,7 +77,10 @@
 		
 		/** @var bool If true, throws UploadException on validation failure instead of writing failure info to request attributes */
 		private bool $throwOnFailure;
-		
+
+		/** @var string How a deterministic (randomizeFilenames: false) filename is stored: 'rename' (always unique) or 'reject' (exact name or fail the batch) */
+		private string $onDuplicateDestination;
+
 		/**
 		 * Constructor
 		 * @param string $uploadPath Base directory for uploads (relative to project root)
@@ -86,6 +94,9 @@
 		 * @param bool $randomizeFilenames Generate random filenames
 		 * @param string $directoryStructure Directory structure pattern (Y/m/d for date-based)
 		 * @param bool $throwOnFailure If true, throws UploadException on validation failure
+		 * @param string $onDuplicateDestination Only affects randomizeFilenames: false. 'rename'
+		 *   (default) always appends a unique suffix to the name; 'reject' keeps the exact name
+		 *   and fails the batch on a collision.
 		 */
 		public function __construct(
 			string $uploadPath = 'storage/uploads',
@@ -102,7 +113,8 @@
 			int    $maxImageHeight = 2048,
 			bool   $randomizeFilenames = true,
 			string $directoryStructure = 'Y/m/d',
-			bool   $throwOnFailure = false
+			bool   $throwOnFailure = false,
+			string $onDuplicateDestination = 'rename'
 		) {
 			$this->uploadPath = rtrim($uploadPath, '/');
 			$this->allowedExtensions = array_map('strtolower', $allowedExtensions);
@@ -115,6 +127,14 @@
 			$this->randomizeFilenames = $randomizeFilenames;
 			$this->directoryStructure = $directoryStructure;
 			$this->throwOnFailure = $throwOnFailure;
+			$this->onDuplicateDestination = $onDuplicateDestination;
+
+			// Validate duplicate-destination policy
+			if (!in_array($onDuplicateDestination, self::VALID_DUPLICATE_DESTINATION_POLICIES, true)) {
+				throw new \InvalidArgumentException(
+					"Invalid onDuplicateDestination '{$onDuplicateDestination}'. Valid options: " . implode(', ', self::VALID_DUPLICATE_DESTINATION_POLICIES)
+				);
+			}
 		}
 		
 		/**
@@ -248,12 +268,11 @@
 				}
 			}
 
-			// Pass 2: pre-flight the target location for every file before moving any of them.
-			// Catches a missing/uncreatable or non-writable directory up front, so those failures
-			// never require unwinding files that were already moved for real.
+			// Pass 2: pre-flight every target before moving any file, so an unwritable directory or a colliding destination never requires unwinding a file already moved for real.
 			$targetPaths = [];
 			$preflightErrors = [];
 			$preflightFailed = false;
+			$usedTargetPaths = [];
 
 			if (!$batchHasErrors) {
 				foreach ($files as $fieldName => $file) {
@@ -265,15 +284,14 @@
 						try {
 							$targetPath = $this->generateTargetPath($singleFile);
 						} catch (RuntimeException|RandomException $e) {
-							// Placeholder, never read: $preflightFailed being true means the final
-							// loop always takes the pre-flight-failure branch for this whole batch.
+							// Placeholder, never read: $preflightFailed takes the whole batch down the failure branch below.
 							$targetPaths[$fieldName][] = '';
 							$preflightErrors[$fieldName][] = $e->getMessage();
 							$preflightFailed = true;
 							continue;
 						}
 
-						$error = $this->checkTargetWritable($targetPath);
+						$error = $this->checkTargetAvailable($targetPath, $usedTargetPaths);
 						$targetPaths[$fieldName][] = $targetPath;
 						$preflightErrors[$fieldName][] = $error;
 
@@ -313,8 +331,7 @@
 					}
 
 					if ($preflightFailed) {
-						// At least one file's target location failed pre-flight — do not store
-						// any file. Nothing has moved yet, so there's nothing to roll back here.
+						// Nothing has moved yet, so there's nothing to roll back here.
 						$processedFiles[$fieldName][] = [
 							'success'       => false,
 							'errors'        => array_values(array_filter([$preflightErrors[$fieldName][$index]])), // empty for files whose own target was fine
@@ -346,24 +363,7 @@
 			}
 
 			if ($storageFailed) {
-				// Remove every file this batch moved to storage so it's all-or-nothing; the unlink result is checked so a failed removal is reported accurately.
-				foreach ($movedPaths as $moved) {
-					$fileResult = &$processedFiles[$moved['field']][$moved['index']];
-
-					if (@unlink($moved['path'])) {
-						$fileResult['errors'][] = 'File removed from storage because the upload batch failed';
-					} else {
-						$fileResult['errors'][] = "File could not be removed from storage after the upload batch failed; it remains on disk at {$moved['path']}";
-					}
-
-					$fileResult['success'] = false;
-					unset(
-						$fileResult['filename'], $fileResult['path'], $fileResult['relative_path'],
-						$fileResult['size'], $fileResult['mime_type'], $fileResult['extension'],
-						$fileResult['uploaded_at']
-					);
-					unset($fileResult);
-				}
+				$this->rollbackMovedFiles($movedPaths, $processedFiles);
 			}
 
 			// Aggregate all warnings into a batch-level list:
@@ -390,7 +390,33 @@
 				'files'       => $processedFiles,
 			];
 		}
-		
+
+		/**
+		 * Best-effort rollback of every file a failed batch already moved to storage; keeps 'path' when the unlink itself fails so the caller can still clean it up.
+		 * @param array<int, array{field: string, index: int, path: string}> $movedPaths Every file the batch moved, success or not
+		 * @param array<string, array<int, array{success: bool, errors: array<int, string>, ...}>> $processedFiles Per-field, per-file result records, modified in place
+		 * @return void
+		 */
+		private function rollbackMovedFiles(array $movedPaths, array &$processedFiles): void {
+			foreach ($movedPaths as $moved) {
+				$fileResult = &$processedFiles[$moved['field']][$moved['index']];
+				$fileResult['success'] = false;
+
+				if (@unlink($moved['path'])) {
+					$fileResult['errors'][] = 'File removed from storage because the upload batch failed';
+					unset(
+						$fileResult['filename'], $fileResult['path'], $fileResult['relative_path'],
+						$fileResult['size'], $fileResult['mime_type'], $fileResult['extension'],
+						$fileResult['uploaded_at']
+					);
+				} else {
+					$fileResult['errors'][] = "File could not be removed from storage after the upload batch failed; it remains on disk at {$moved['path']}";
+				}
+
+				unset($fileResult);
+			}
+		}
+
 		/**
 		 * Checks whether the uploaded file is an image based on its MIME type
 		 * @param UploadedFile $file The uploaded file
@@ -446,9 +472,8 @@
 		/**
 		 * Moves a validated file to permanent storage and returns its metadata.
 		 * Validation is intentionally absent here — callers must run collectValidationResult()
-		 * first and only invoke this method when that returns an empty errors array. The target
-		 * path is precomputed by the caller's pre-flight pass, not generated here, so every file
-		 * in a batch has its target checked before any of them moves.
+		 * first and only invoke this method when that returns an empty errors array. $targetPath
+		 * is precomputed by the caller's pre-flight pass, not generated here.
 		 * This method never throws; move failures are returned in 'errors' instead.
 		 * @param UploadedFile $file The uploaded file to store (must already be validated)
 		 * @param string $targetPath Final storage path, as produced by generateTargetPath() during pre-flight
@@ -730,25 +755,56 @@
 			$filename = $this->randomizeFilenames
 				? bin2hex(random_bytes(16)) . '.' . $extension
 				: $this->sanitizeFilename($file->getClientOriginalName());
-			
-			return $targetDir . '/' . $filename;
+
+			$targetPath = $targetDir . '/' . $filename;
+
+			// 'rename' always suffixes a deterministic name, unconditionally, so it can never collide by construction.
+			if (!$this->randomizeFilenames && $this->onDuplicateDestination === 'rename') {
+				$targetPath = $this->withUniqueSuffix($targetPath);
+			}
+
+			return $targetPath;
 		}
 
 		/**
-		 * Checks that a pre-flighted target path's directory is writable, without touching
-		 * the uploaded file. generateTargetPath() already created the directory if it was
-		 * missing; this additionally catches a directory that exists but denies writes.
+		 * Checks that a pre-flighted target is writable, not already on disk, and not claimed earlier in this batch.
 		 * @param string $targetPath Full target path, as produced by generateTargetPath()
-		 * @return string|null Error message, or null if the target is writable
+		 * @param array<string, true> $usedTargetPaths Target paths already claimed earlier in this batch; $targetPath is added to it when it passes every check
+		 * @return string|null Error message, or null if the target is available
 		 */
-		private function checkTargetWritable(string $targetPath): ?string {
+		private function checkTargetAvailable(string $targetPath, array &$usedTargetPaths): ?string {
 			$targetDir = dirname($targetPath);
 
 			if (!is_writable($targetDir)) {
 				return "Upload directory is not writable: {$targetDir}";
 			}
 
+			if (isset($usedTargetPaths[$targetPath])) {
+				return "Another file in this upload batch already targets: {$targetPath}";
+			}
+
+			if (file_exists($targetPath)) {
+				return "A file already exists at the target destination: {$targetPath}";
+			}
+
+			$usedTargetPaths[$targetPath] = true;
 			return null;
+		}
+
+		/**
+		 * Inserts a short random suffix before the extension, e.g. "photo.png" becomes "photo-a1b2c3.png".
+		 * @param string $targetPath
+		 * @return string
+		 * @throws RandomException
+		 */
+		private function withUniqueSuffix(string $targetPath): string {
+			$directory = dirname($targetPath);
+			$base = pathinfo($targetPath, PATHINFO_FILENAME);
+			$extension = pathinfo($targetPath, PATHINFO_EXTENSION);
+			$suffix = bin2hex(random_bytes(3));
+			$suffixedName = $extension !== '' ? "{$base}-{$suffix}.{$extension}" : "{$base}-{$suffix}";
+
+			return $directory . '/' . $suffixedName;
 		}
 
 		/**
