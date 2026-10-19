@@ -29,6 +29,9 @@ Legacy files using `header()`, `die()`, and `exit()` are automatically preproces
 
 Migrate one route at a time. When a Canvas controller claims a URL, it takes precedence over the legacy file. When every route is migrated, set `legacy_enabled` to `false`.
 
+## Templating
+Canvas uses [Smarty](https://www.smarty.net/) as its default template engine. Twig, Latte, Blade, Plates, and Handlebars are each available as a separate package and can be swapped in without touching controller code.
+
 ## Cross-cutting concerns without the mess
 
 Canvas separates cross-cutting concerns — auth, caching, rate limiting, logging — into aspects: reusable classes applied via annotations instead of tangled into business logic.
@@ -90,8 +93,6 @@ class BlogController extends BaseController {
 ```
 
 Controllers are discovered automatically through Composer metadata. Routes are defined with annotations. Typed route parameters (`{id:int}`) are validated before your method runs. No configuration files, no route registration.
-
-Canvas uses [Smarty](https://www.smarty.net/) as its default template engine. Twig, Latte, Blade, Plates, and Handlebars are each available as a separate package and can be swapped in without touching controller code.
 
 ## Features
 
