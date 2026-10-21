@@ -341,18 +341,11 @@
 		
 		/**
 		 * Validate every submitted attribute before anything is mapped onto the
-		 * entity, in four independent steps, each able to reject the whole
-		 * request on its own: (1) the key must name a real property or setter
-		 * on the entity, case-insensitively, or it's unknown (422) — a typo or
-		 * stale client field; (2) its casing must exactly match that real
-		 * property or setter, or it's forbidden (403) — a case variant is
-		 * never silently treated as the same attribute, since there's no
-		 * reliable way to recover the "correct" casing from an acronym setter
-		 * (e.g. `setID()` could be property `id` or `iD`); (3) the primary key
-		 * is always forbidden, regardless of what a concrete controller does —
-		 * a client can never reassign which row a request writes to; (4)
-		 * everything else is decided solely by isAttributeWritable(), the one
-		 * and only write gate once the key is known to be real and exact.
+		 * entity. Only declared entity properties are attributes; setters are
+		 * used to apply values, not to define additional attributes. Unknown
+		 * names receive 422, and differently cased property names receive 403.
+		 * Identifiers are never writable. Other properties are checked by
+		 * isAttributeWritable() before any value is mapped.
 		 * @param object $entity The entity instance to validate against
 		 * @param array<string, mixed> $attributes Associative array of attribute name => value pairs
 		 * @param WriteOperation $operation Whether this is a create or an update
@@ -366,30 +359,22 @@
 
 			foreach ($attributes as $key => $value) {
 				$matchedProperty = $this->findMatchingProperty($metadata, $key);
-				$matchedSetter = $matchedProperty === null ? $this->findMatchingSetter($entity, $key) : null;
 
-				// 1) Present on the entity at all, through a property or a setter?
-				if ($matchedProperty === null && $matchedSetter === null) {
+				if ($matchedProperty === null) {
 					$unknownAttributes[] = $key;
 					continue;
 				}
 
-				// 2) Does the request key's own casing exactly match the real one?
-				$realName = $matchedProperty ?? $matchedSetter;
-				$ownName = $matchedProperty !== null ? $key : ('set' . ucfirst($key));
-
-				if ($ownName !== $realName) {
+				if ($key !== $matchedProperty) {
 					$forbiddenAttributes[] = $key;
 					continue;
 				}
 
-				// 3) The primary key is always forbidden.
 				if ($metadata->isIdentifierKey($key)) {
 					$forbiddenAttributes[] = $key;
 					continue;
 				}
 
-				// 4) Everything else is decided solely by isAttributeWritable().
 				if (!$this->isAttributeWritable($entity, $key, $operation)) {
 					$forbiddenAttributes[] = $key;
 				}
@@ -414,14 +399,19 @@
 		 * isn't a property on the entity at all is a no-op.
 		 * @param object $entity The entity instance to update
 		 * @param array<string, mixed> $attributes Associative array of attribute name => value pairs
+		 * @return void
 		 */
 		protected function mapAttributesToEntity(object $entity, array $attributes): void {
 			foreach ($attributes as $key => $value) {
+				if (!$this->propertyHandler->exists($entity, $key)) {
+					continue;
+				}
+
 				$setterMethod = 'set' . ucfirst($key);
 
 				if (method_exists($entity, $setterMethod)) {
 					$entity->$setterMethod($value);
-				} elseif ($this->propertyHandler->exists($entity, $key)) {
+				} else {
 					$this->propertyHandler->set($entity, $key, $value);
 				}
 			}
@@ -434,27 +424,13 @@
 		 * @return string|null The property's real declared name, or null if none matches
 		 */
 		private function findMatchingProperty(EntityMetadataRecord $metadata, string $key): ?string {
+			if (in_array($key, $metadata->properties, true)) {
+				return $key;
+			}
+
 			foreach ($metadata->properties as $property) {
 				if (strcasecmp($property, $key) === 0) {
 					return $property;
-				}
-			}
-
-			return null;
-		}
-
-		/**
-		 * Find the entity's setter method matching a request key case-insensitively.
-		 * @param object $entity
-		 * @param string $key
-		 * @return string|null The setter's real declared method name, or null if none matches
-		 */
-		private function findMatchingSetter(object $entity, string $key): ?string {
-			$wanted = 'set' . ucfirst($key);
-
-			foreach (get_class_methods($entity) as $method) {
-				if (strcasecmp($method, $wanted) === 0) {
-					return $method;
 				}
 			}
 
@@ -496,8 +472,8 @@
 		}
 
 		/**
-		 * Create a standardized 422 response for attributes that don't correspond
-		 * to any property on the entity, through a setter or directly.
+		 * Create a standardized 422 response for names that do not correspond
+		 * to a declared entity property.
 		 * @param list<string> $attributeNames
 		 * @return JsonResponse
 		 */
@@ -559,10 +535,9 @@
 
 		/**
 		 * Decide whether a specific attribute may be written for the given
-		 * operation. Only ever called for an attribute that already exists on
-		 * the entity (via a setter or directly as a property) — this is the
-		 * only write gate; a setter's presence or absence plays no role in the
-		 * decision. Defaults to allowing everything; override to deny specific
+		 * operation. Only called for a declared entity property; a setter's
+		 * presence or absence plays no role in the decision. Defaults to
+		 * allowing everything; override to deny specific
 		 * fields, operations or circumstances — for example: `return $key !== 'role';`
 		 * to keep a field server-owned, or `$operation !== WriteOperation::Update`
 		 * to allow it only on create.
