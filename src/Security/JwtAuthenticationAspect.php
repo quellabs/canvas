@@ -233,7 +233,9 @@
 				throw new JwtAuthenticationException('Malformed JWT structure');
 			}
 			
-			[$headerB64, $payloadB64, $signatureB64] = $parts;
+			$headerB64 = $parts[0];
+			$payloadB64 = $parts[1];
+			$signatureB64 = $parts[2];
 			
 			// Decode and validate the header before touching the signature or payload;
 			// a malformed or mismatched header should fail immediately
@@ -270,37 +272,41 @@
 		 */
 		private function decodeSegment(string $segment): array {
 			$decoded = $this->base64UrlDecode($segment);
-			
+
 			// base64UrlDecode returns false on malformed input (illegal characters, bad padding)
 			if ($decoded === false) {
 				throw new JwtAuthenticationException('Invalid JWT segment encoding');
 			}
-			
+
 			try {
-				// JSON_THROW_ON_ERROR ensures malformed JSON throws rather than returning null,
-				// avoiding a separate null check and making the failure reason explicit
-				$data = json_decode($decoded, true, 512, JSON_THROW_ON_ERROR);
+				// Decode without assoc mode first: with assoc=true, both "{}" and "[]" decode
+				// to an empty PHP array and array_is_list() can no longer tell them apart.
+				// Keeping objects as stdClass preserves that distinction until the check below.
+				$decodedValue = json_decode($decoded, false, 512, JSON_THROW_ON_ERROR);
 			} catch (\JsonException) {
 				throw new JwtAuthenticationException('Invalid JWT segment JSON');
 			}
-			
-			// With assoc=true, both JSON objects and JSON arrays decode to PHP arrays.
-			// JWT headers and payloads must be JSON objects per RFC 7519 §3, so list
-			// arrays (i.e. JSON arrays) are explicitly rejected here.
-			if (!is_array($data) || array_is_list($data)) {
+
+			// JWT headers and payloads must be JSON objects per RFC 7519 §3; a JSON array,
+			// string, number, bool, or null is rejected here, while any JSON object —
+			// including the empty object "{}" — is accepted.
+			if (!$decodedValue instanceof \stdClass) {
 				throw new JwtAuthenticationException('Invalid JWT segment JSON');
 			}
-			
+
+			/** @var array<string, mixed> $data */
+			$data = (array)$decodedValue;
+
 			// Reject any segment where a key is not a string — JWT claim names are always
 			// strings per RFC 7519, so a non-string key indicates a malformed token rather
-			// than something we should silently drop
+			// than something we should silently drop. (array) cast coerces a numeric-string
+			// property name like "0" to an int array key, so this still catches that case.
 			foreach (array_keys($data) as $key) {
 				if (!is_string($key)) {
 					throw new JwtAuthenticationException('Invalid JWT segment');
 				}
 			}
-			
-			/** @var array<string, mixed> $data */
+
 			return $data;
 		}
 		
@@ -393,10 +399,17 @@
 			}
 			
 			if (isset($payload['iat'])) {
-				// Accept both int and float for the same interoperability reason as exp;
-				// iat carries no enforcement logic here but must be a valid numeric type
+				// Accept both int and float for the same interoperability reason as exp
 				if (!is_int($payload['iat']) && !is_float($payload['iat'])) {
 					throw new JwtAuthenticationException('Invalid iat claim');
+				}
+
+				// iat is copied verbatim into the 'auth_time' request attribute, which
+				// StepUpAuthenticationAspect treats as proof of a recent authentication.
+				// An unbounded future iat would satisfy that freshness check indefinitely,
+				// so it is bound by the same clock skew used for exp/nbf.
+				if ((int)$payload['iat'] > ($now + $this->clockSkew)) {
+					throw new JwtAuthenticationException('JWT iat claim is in the future');
 				}
 			}
 			

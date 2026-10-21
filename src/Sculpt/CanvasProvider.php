@@ -18,6 +18,7 @@
 				SchedulerListCommand::class,
 				CacheInitCommand::class,
 				JwtInitCommand::class,
+				RateLimitInitCommand::class,
 			]);
 		}
 	}

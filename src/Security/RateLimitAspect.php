@@ -1,56 +1,69 @@
 <?php
-	
+
 	namespace Quellabs\Canvas\Security;
-	
+
 	use Quellabs\Canvas\AOP\Contracts\AfterAspectInterface;
 	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
+	use Quellabs\Canvas\AOP\Contracts\NonStackableAspectInterface;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Quellabs\Canvas\Exceptions\RateLimitException;
-	use Quellabs\Contracts\Cache\CacheInterface;
+	use Quellabs\Canvas\Exceptions\RateLimitStoreUnavailableException;
+	use Quellabs\Canvas\Security\RateLimit\RateLimitResult;
+	use Quellabs\Canvas\Security\RateLimit\RateLimitStoreInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
-	
+
 	/**
 	 * Rate limiting aspect using various strategies
+	 *
+	 * Admission itself (read count, decide, write count back) is delegated to a
+	 * RateLimitStoreInterface as a single atomic operation, so concurrent requests
+	 * can never read the same count and both be admitted.
 	 */
-	readonly class RateLimitAspect implements BeforeAspectInterface, AfterAspectInterface {
-		
+	readonly class RateLimitAspect implements BeforeAspectInterface, AfterAspectInterface, NonStackableAspectInterface {
+
 		/** @var string[] Valid rate limiting strategies */
 		private const array VALID_STRATEGIES = ['fixed_window', 'sliding_window', 'token_bucket'];
-		
+
 		/** @var string[] Valid rate limiting scopes */
 		private const array VALID_SCOPES = ['ip', 'user', 'api_key', 'global', 'custom'];
-		
-		/** @var CacheInterface */
-		private CacheInterface $cache;
-		
+
+		/** @var string[] Valid policies for when the store itself is unavailable */
+		private const array VALID_STORE_FAILURE_POLICIES = ['closed', 'open'];
+
+		/** @var RateLimitStoreInterface Atomic admission storage */
+		private RateLimitStoreInterface $store;
+
 		/** @var int Requests per window */
 		private int $limit;
-		
+
 		/** @var int Window in seconds */
 		private int $window;
-		
+
 		/** @var string Rate limiting strategy */
 		private string $strategy;
-		
+
 		/** @var string Rate limiting scope */
 		private string $scope;
-		
+
 		/** @var string Custom identifier */
 		private string $identifier;
-		
+
 		/** @var string[] HTTP methods exempt from rate limiting */
 		private array $exemptMethods;
-		
+
 		/** @var string Rate limit header prefix */
 		private string $headerPrefix;
-		
+
 		/** @var bool If true, throws RateLimitException on failure instead of writing to request attributes */
 		private bool $throwOnFailure;
-		
+
+		/** @var string What to do when the store itself is unavailable: 'closed' (block) or 'open' (bypass) */
+		private string $onStoreFailure;
+
 		/**
 		 * RateLimitAspect constructor
-		 * @param CacheInterface $cache
+		 * @param RateLimitStoreInterface $store
 		 * @param int $limit
 		 * @param int $window
 		 * @param string $strategy
@@ -59,19 +72,23 @@
 		 * @param string[] $exemptMethods
 		 * @param string $headerPrefix
 		 * @param bool $throwOnFailure If true, throws RateLimitException on failure
+		 * @param string $onStoreFailure 'closed' blocks the request when the store is unavailable
+		 *   (safe default for limits protecting sensitive operations); 'open' bypasses rate limiting
+		 *   for that request instead, without inventing or resetting any counter
 		 */
 		public function __construct(
-			CacheInterface $cache,
-			int            $limit = 60,
-			int            $window = 3600,
-			string         $strategy = 'fixed_window',
-			string         $scope = 'ip',
-			string         $identifier = '',
-			array          $exemptMethods = ['GET', 'HEAD', 'OPTIONS'],
-			string         $headerPrefix = 'X-RateLimit',
-			bool           $throwOnFailure = false
+			RateLimitStoreInterface $store,
+			int                     $limit = 60,
+			int                     $window = 3600,
+			string                  $strategy = 'fixed_window',
+			string                  $scope = 'ip',
+			string                  $identifier = '',
+			array                   $exemptMethods = ['GET', 'HEAD', 'OPTIONS'],
+			string                  $headerPrefix = 'X-RateLimit',
+			bool                    $throwOnFailure = false,
+			string                  $onStoreFailure = 'closed'
 		) {
-			$this->cache = $cache;
+			$this->store = $store;
 			$this->limit = $limit;
 			$this->window = $window;
 			$this->strategy = $strategy;
@@ -80,103 +97,109 @@
 			$this->exemptMethods = $exemptMethods;
 			$this->headerPrefix = $headerPrefix;
 			$this->throwOnFailure = $throwOnFailure;
-			
+			$this->onStoreFailure = $onStoreFailure;
+
 			// Validate limit and window correctness
 			if ($limit <= 0 || $window <= 0) {
 				throw new \InvalidArgumentException('Limit and window must be positive integers');
 			}
-			
+
 			// Validate strategy
 			if (!in_array($strategy, self::VALID_STRATEGIES, true)) {
 				throw new \InvalidArgumentException('Invalid strategy: ' . $strategy);
 			}
-			
+
 			// Validate scope
 			if (!in_array($scope, self::VALID_SCOPES, true)) {
 				throw new \InvalidArgumentException("Invalid scope '{$scope}'. Valid options: " . implode(', ', self::VALID_SCOPES));
 			}
-			
+
 			// Validate custom scope has identifier
 			if ($scope === 'custom' && empty($identifier)) {
 				throw new \InvalidArgumentException("Custom scope requires a non-empty identifier");
 			}
+
+			// Validate store failure policy
+			if (!in_array($onStoreFailure, self::VALID_STORE_FAILURE_POLICIES, true)) {
+				throw new \InvalidArgumentException(
+					"Invalid onStoreFailure '{$onStoreFailure}'. Valid options: " . implode(', ', self::VALID_STORE_FAILURE_POLICIES)
+				);
+			}
 		}
-		
+
 		/**
 		 * Middleware method that executes before the main request handler
 		 * Implements rate limiting with multiple strategies and HTTP header management
 		 * @param MethodContextInterface $context The request context containing request data
-		 * @return Response|null Returns Response if rate limit exceeded, null to continue
+		 * @return Response|null Always null; writes rate_limit_* request attributes and, when the
+		 *                        limit is exceeded and throwOnFailure is true, throws RateLimitException instead
+		 * @throws RateLimitStoreUnavailableException When the store is unavailable and onStoreFailure is 'closed'
 		 */
 		public function before(MethodContextInterface $context): ?Response {
 			// Fetch the request from the MethodContext
 			$request = $context->getRequest();
-			
+
 			// Skip rate limiting for exempt HTTP methods (e.g., OPTIONS, HEAD)
 			// This allows certain methods to bypass rate limiting entirely
 			if (in_array($request->getMethod(), $this->exemptMethods, true)) {
 				return null; // No rate limiting applied, continue processing
 			}
-			
+
 			// Generate a unique key for this request (typically based on IP, user ID, etc.)
 			$key = $this->generateKey($context);
-			
+
 			// Get current timestamp for rate limit calculations
 			$currentTime = time();
-			
-			// Apply the selected rate limiting strategy using match expression
-			// Each strategy returns an array with 'count', 'exceeded', and 'reset_time'
-			$result = match ($this->strategy) {
-				'fixed_window' => $this->fixedWindowStrategy($key, $currentTime),
-				'sliding_window' => $this->slidingWindowStrategy($key, $currentTime),
-				'token_bucket' => $this->tokenBucketStrategy($key, $currentTime),
-				default => throw new \LogicException(
-					"Unhandled rate limit strategy: {$this->strategy}"
-				)
-			};
-			
+
+			// Delegate the admission decision to the store as a single atomic operation.
+			// A storage failure never falls through to a fabricated result: it's either
+			// bypassed explicitly (onStoreFailure='open') or propagated (the default).
+			try {
+				$result = match ($this->strategy) {
+					'fixed_window' => $this->store->incrementFixedWindow($key, $this->limit, $this->window, $currentTime),
+					'sliding_window' => $this->store->admitSlidingWindow($key, $this->limit, $this->window, $currentTime),
+					'token_bucket' => $this->store->admitTokenBucket($key, $this->limit, $this->window, $currentTime),
+					default => throw new \LogicException("Unhandled rate limit strategy: {$this->strategy}")
+				};
+			} catch (RateLimitStoreUnavailableException $e) {
+				if ($this->onStoreFailure === 'open') {
+					// Fail open: bypass rate limiting for this request. Deliberately does not
+					// write any rate_limit_* attributes, since no admission decision was made.
+					return null;
+				}
+
+				// Fail closed (default): the backend outage itself surfaces as a 503,
+				// through the same exception-handling path as any other HttpException.
+				throw $e;
+			}
+
 			// Prepare rate limit headers for the response
 			// These headers inform the client about their current rate limit status
-			$headers = [
-				// Maximum number of requests allowed in the time window
-				"{$this->headerPrefix}-Limit"     => $this->limit,
-				
-				// Number of requests remaining in the current window
-				// Ensures it never goes below 0 for clean header values
-				"{$this->headerPrefix}-Remaining" => max(0, $this->limit - $result['count']),
-				
-				// Timestamp when the rate limit resets (Unix timestamp)
-				"{$this->headerPrefix}-Reset"     => $result['reset_time'],
-			];
-			
-			// Inform the user when a retry may be attempted when limit was exceeded
-			if ($result['exceeded']) {
-				$headers['Retry-After'] = $result['retry_after'];
-			}
-			
+			$headers = $this->buildHeaders($result);
+
 			// Set result
 			$request->attributes->set('rate_limit_headers', $headers);
 			$request->attributes->set('rate_limit_result', $result);
 			$request->attributes->set('rate_limit_strategy', $this->strategy);
-			$request->attributes->set('rate_limit_exceeded', $result['exceeded']);
-			
+			$request->attributes->set('rate_limit_exceeded', $result->isExceeded());
+
 			// Throw exception if exceeded
-			if ($result['exceeded'] && $this->throwOnFailure) {
+			if ($result->isExceeded() && $this->throwOnFailure) {
 				throw new RateLimitException(
 					limit: $this->limit,
-					remaining: max(0, $this->limit - $result['count']),
-					retryAfter: $result['retry_after'],
-					resetTime: $result['reset_time'],
+					remaining: max(0, $this->limit - $result->getCount()),
+					retryAfter: $result->getRetryAfter(),
+					resetTime: $result->getResetTime(),
 					strategy: $this->strategy,
 					scope: $this->scope,
 					headers: $headers
 				);
 			}
-			
+
 			// Continue to controller
 			return null;
 		}
-		
+
 		/**
 		 * Apply rate limit headers to the outgoing HTTP response.
 		 * @param MethodContextInterface $context Current method execution context.
@@ -218,213 +241,33 @@
 				$response->headers->set((string)$name, is_scalar($value) ? (string)$value : '');
 			}
 		}
-		
+
 		/**
-		 * Fixed window strategy - resets counter at fixed intervals
-		 *
-		 * This strategy divides time into fixed windows (e.g., every 60 seconds) and counts
-		 * requests within each window. When a window expires, the counter resets to 0.
-		 *
-		 * Pros: Simple, predictable, memory efficient
-		 * Cons: Can allow burst traffic at window boundaries (up to 2x limit)
-		 *
-		 * @param string $key The unique identifier for this rate limit instance
-		 * @param int $currentTime Current Unix timestamp
-		 * @return array{count: int, exceeded: bool, reset_time: int, retry_after: int}
+		 * Build the response headers describing the current rate limit state
+		 * @param RateLimitResult $result
+		 * @return array<string, int|string>
 		 */
-		private function fixedWindowStrategy(string $key, int $currentTime): array {
-			// Calculate the start of the current window by rounding down to nearest window boundary
-			// Example: if window=60 and currentTime=1625097123, windowStart=1625097120
-			$windowStart = intdiv($currentTime, $this->window) * $this->window;
-			
-			// Create a unique cache key that includes the window start time
-			// This ensures each window has its own counter
-			$cacheKey = "{$key}:fixed:{$windowStart}";
-			
-			// Get current count for this window (defaults to 0 if not found)
-			$count = $this->cache->get($cacheKey, 0);
-			
-			// Cache always stores int here; assert to satisfy static analysis.
-			if (!is_int($count)) {
-				$count = 0;
-			}
-			
-			// Increment the counter for this request
-			$count++;
-			
-			// Calculate TTL: how many seconds until this window expires
-			// This ensures the cache entry is automatically cleaned up when window ends
-			$ttl = ($windowStart + $this->window) - $currentTime;
-			
-			// Store the updated count with TTL equal to remaining window duration
-			$this->cache->set($cacheKey, $count, (int)$ttl);
-			
-			return [
-				'count'       => $count,                                               // Current request count in this window
-				'exceeded'    => $count > $this->limit,                                // Whether limit is exceeded
-				'reset_time'  => (int)($windowStart + $this->window),                  // When the window resets (Unix timestamp)
-				'retry_after' => (int)(($windowStart + $this->window) - $currentTime)  // Seconds until reset
+		private function buildHeaders(RateLimitResult $result): array {
+			$headers = [
+				// Maximum number of requests allowed in the time window
+				"{$this->headerPrefix}-Limit"     => $this->limit,
+
+				// Number of requests remaining in the current window
+				// Ensures it never goes below 0 for clean header values
+				"{$this->headerPrefix}-Remaining" => max(0, $this->limit - $result->getCount()),
+
+				// Timestamp when the rate limit resets (Unix timestamp)
+				"{$this->headerPrefix}-Reset"     => $result->getResetTime(),
 			];
-		}
-		
-		/**
-		 * Sliding window strategy - maintains a rolling window of requests
-		 *
-		 * This strategy tracks individual request timestamps within a rolling time window.
-		 * Unlike fixed windows, this provides smooth rate limiting without boundary burst issues.
-		 *
-		 * Pros: Accurate rate limiting, no burst traffic at boundaries, fair distribution
-		 * Cons: Higher memory usage (stores all timestamps), more complex cleanup logic
-		 *
-		 * Example: With 60-second window and 10 req/min limit:
-		 * - At 12:00:30, counts requests from 11:59:30 to 12:00:30
-		 * - At 12:00:45, counts requests from 11:59:45 to 12:00:45
-		 *
-		 * @param string $key The unique identifier for this rate limit instance
-		 * @param int $currentTime Current Unix timestamp
-		 * @return array{count: int, exceeded: bool, reset_time: int, retry_after: int}
-		 */
-		private function slidingWindowStrategy(string $key, int $currentTime): array {
-			// Create cache key for storing the sliding window timestamps
-			// No window start time needed since we store individual timestamps
-			$cacheKey = "{$key}:sliding";
-			
-			// Calculate cutoff time - requests older than this are outside the window
-			// Example: if window=60 and currentTime=1625097123, cutoff=1625097063
-			$cutoff = $currentTime - $this->window;
-			
-			// Retrieve existing timestamps array from cache (empty array if not found)
-			$timestamps = $this->cache->get($cacheKey, []);
-			
-			// Cache always stores int[] here; assert to satisfy static analysis.
-			if (!is_array($timestamps)) {
-				$timestamps = [];
+
+			// Inform the user when a retry may be attempted when limit was exceeded
+			if ($result->isExceeded()) {
+				$headers['Retry-After'] = $result->getRetryAfter();
 			}
-			
-			// Remove expired timestamps that fall outside the current sliding window
-			// This cleanup ensures we only count requests within the time window
-			$timestamps = array_values(array_filter(
-				$timestamps,
-				fn($ts) => $ts > $cutoff
-			));
-			
-			// Add the current request timestamp to the window
-			$timestamps[] = $currentTime;
-			
-			// Store the updated timestamps array back to cache
-			// TTL is set to window duration since older timestamps will be filtered out
-			$this->cache->set($cacheKey, $timestamps, $this->window);
-			
-			// Count total requests in the current sliding window
-			$count = count($timestamps);
-			
-			// Calculate retry_after: if exceeded, wait until oldest request expires.
-			// $timestamps contains only int values (added as $currentTime above and in prior
-			// requests), but array element access returns mixed; extract with a type guard.
-			$oldestTimestamp = isset($timestamps[0]) && is_int($timestamps[0]) ? $timestamps[0] : $currentTime;
-			
-			return [
-				'count'       => $count,                         // Current request count in sliding window
-				'exceeded'    => $count > $this->limit,          // Whether limit is exceeded
-				'reset_time'  => $currentTime + $this->window,   // When current window fully expires
-				'retry_after' => $count > $this->limit ? ($oldestTimestamp + $this->window) - $currentTime : 0
-			];
+
+			return $headers;
 		}
-		
-		/**
-		 * Token bucket strategy - allows bursts up to bucket size
-		 *
-		 * This strategy maintains a "bucket" of tokens that refills at a constant rate.
-		 * Each request consumes one token. When the bucket is empty, requests are rejected.
-		 *
-		 * Pros: Allows controlled bursts, smooth rate limiting, handles irregular traffic well
-		 * Cons: More complex logic, requires floating-point calculations, persistent state
-		 *
-		 * Example: With 60-second window and 10 req/min limit:
-		 * - Bucket starts with 10 tokens
-		 * - Refills at 10/60 = 0.167 tokens per second
-		 * - Client can burst 10 requests immediately, then wait for refill
-		 *
-		 * @param string $key The unique identifier for this rate limit instance
-		 * @param int $currentTime Current Unix timestamp
-		 * @return array{count: int, exceeded: bool, reset_time: int, retry_after: int}
-		 */
-		private function tokenBucketStrategy(string $key, int $currentTime): array {
-			// Create cache key for storing the token bucket state
-			$cacheKey = "{$key}:bucket";
-			
-			// Calculate refill rate: how many tokens are added per second
-			// Example: 10 requests per 60 seconds = 0.167 tokens per second
-			$refillRate = $this->limit / $this->window;
-			
-			// Get existing bucket state or initialize new bucket
-			$bucket = $this->cache->get($cacheKey, [
-				'tokens'      => $this->limit,   // Start with full bucket
-				'last_refill' => $currentTime    // Track when bucket was last refilled
-			]);
-			
-			// Cache always stores the bucket array; assert the shape for static analysis.
-			if (
-				!is_array($bucket) ||
-				!isset($bucket['tokens'], $bucket['last_refill']) ||
-				!is_int($bucket['last_refill']) ||
-				(
-					!is_int($bucket['tokens']) && !is_float($bucket['tokens'])
-				)
-			) {
-				$bucket = [
-					'tokens'      => $this->limit,
-					'last_refill' => $currentTime,
-				];
-			}
-			
-			// PHPStan does not narrow array offset types through compound guards, so extract
-			// to typed locals here. Each branch uses an is_* check: PHPStan narrows the true
-			// branch but not the false branch of a ternary, so both branches must type-guard.
-			$rawTokens = $bucket['tokens'];
-			$bucketTokens = is_float($rawTokens) ? $rawTokens : (is_int($rawTokens) ? (float)$rawTokens : (float)$this->limit);
-			$rawLastRefill = $bucket['last_refill'];
-			
-			/** @noinspection PhpConditionAlreadyCheckedInspection */
-			$bucketLastRefill = is_int($rawLastRefill) ? $rawLastRefill : $currentTime;
-			
-			// Calculate how many tokens to add based on time elapsed since last refill
-			$timePassed = $currentTime - $bucketLastRefill;
-			$tokensToAdd = $timePassed * $refillRate;
-			
-			// Refill the bucket, but don't exceed the maximum capacity
-			// min() ensures we never have more tokens than the bucket size
-			$bucketTokens = min((float)$this->limit, $bucketTokens + $tokensToAdd);
-			
-			// Check if request can be processed (need at least 1 token)
-			$exceeded = $bucketTokens < 1;
-			
-			// If not exceeded, consume one token for this request
-			if (!$exceeded) {
-				$bucketTokens--;
-			}
-			
-			// Store updated bucket state with extended TTL
-			// TTL is 2x window duration to handle clock skew and ensure persistence
-			$this->cache->set($cacheKey, ['tokens' => $bucketTokens, 'last_refill' => $currentTime], $this->window * 2);
-			
-			return [
-				// Calculate count as number of tokens consumed (limit - remaining tokens)
-				'count'       => (int)($this->limit - floor($bucketTokens)),
-				
-				// Whether the request exceeded the rate limit
-				'exceeded'    => $exceeded,
-				
-				// When the bucket will have at least 1 token again
-				// If not exceeded, reset time is immediate (0 seconds from now)
-				'reset_time'  => (int)($currentTime + ($exceeded ? ceil((1 - $bucketTokens) / $refillRate) : 0)),
-				
-				// How long client should wait before retrying
-				// Calculate time needed to accumulate 1 token based on refill rate
-				'retry_after' => $exceeded ? (int)ceil((1 - $bucketTokens) / $refillRate) : 0
-			];
-		}
-		
+
 		/**
 		 * Generate cache key based on scope and identifier
 		 *
@@ -445,67 +288,69 @@
 		private function generateKey(MethodContextInterface $context): string {
 			// Fetch the request from the context
 			$request = $context->getRequest();
-			
+
 			// Base prefix for all rate limit cache keys
 			// This helps organize cache entries and avoid conflicts with other cached data
 			$baseKey = 'rate_limit';
-			
+
 			// Determine the identifier based on the configured scope
 			// Each scope provides different granularity for rate limiting
 			$rawIdentifier = match ($this->scope) {
 				// Rate limit per IP address - useful for preventing abuse from single sources
 				'ip' => $request->getClientIp() ?? 'unknown_ip',
-				
+
 				// Rate limit per authenticated user - allows different limits for different users
 				'user' => $this->getUserIdentifier($request),
-				
+
 				// Rate limit per API key - useful for API quotas and partner management
 				'api_key' => $request->headers->get('X-API-Key', 'anonymous') ?? 'anonymous',
-				
+
 				// Global rate limit - applies to all requests regardless of source
 				'global' => 'global',
-				
+
 				// Custom identifier - allows for flexible rate limiting strategies
 				'custom' => $this->identifier,
-				
+
 				// Default value (will never occur, but to keep phpstan happy)
 				default => throw new \LogicException("Unhandled rate limit scope: {$this->scope}")
 			};
-			
+
 			// Sanitize each component to prevent special character conflicts and cache key collisions
 			$scope = $this->sanitizeKeyComponent($this->scope);
 			$identifier = $this->sanitizeKeyComponent($rawIdentifier);
 			$route = $this->sanitizeKeyComponent($context->getClassName() . '::' . $context->getMethodName());
-			
+
 			// Construct the final cache key with all components
 			// This ensures unique keys for each combination of scope, identifier, and route
 			return "{$baseKey}:{$scope}:{$identifier}:{$route}";
 		}
-		
+
 		/**
-		 * Sanitize cache key component to prevent collisions and ensure compatibility
+		 * Sanitize cache key component to prevent collisions and ensure compatibility.
+		 * A hash of the original is always appended (not only when replacement changes the value), otherwise a raw input could collide with another component's sanitized-plus-hash output.
 		 * @param string $component The component to sanitize
 		 * @return string Sanitized component safe for cache keys
 		 */
 		private function sanitizeKeyComponent(string $component): string {
-			// Remove or replace potentially problematic characters
 			// Most cache systems have restrictions on key characters
 			$sanitized = preg_replace('/[^a-zA-Z0-9._-]/', '_', $component);
-			
+
 			// Prevent empty components which could cause collisions
-			if (empty($sanitized)) {
+			if ($sanitized === '') {
 				$sanitized = 'empty';
 			}
-			
+
+			// Always disambiguate with a hash of the original, regardless of whether the replacement above changed anything
+			$sanitized .= '_' . substr(hash('sha256', $component), 0, 16);
+
 			// Limit length to prevent excessively long keys
 			if (strlen($sanitized) > 50) {
-				// Use hash for long identifiers to ensure uniqueness
-				$sanitized = substr($sanitized, 0, 30) . '_' . md5($component);
+				$sanitized = substr($sanitized, 0, 30) . '_' . substr(hash('sha256', $component), 0, 16);
 			}
-			
+
 			return $sanitized;
 		}
-		
+
 		/**
 		 * Get user identifier for rate limiting
 		 * @param Request $request
@@ -516,11 +361,11 @@
 			if ($request->hasSession() && $request->getSession()->has('auth_user_id')) {
 				// Fetch user id from session
 				$userId = $request->getSession()->get('auth_user_id');
-				
+
 				// getSession()->get() returns mixed; guard the type before concatenation.
 				return 'user_' . (is_string($userId) || is_int($userId) ? (string)$userId : 'unknown');
 			}
-			
+
 			// Fallback to IP if no user found
 			return 'anonymous_' . $request->getClientIp();
 		}

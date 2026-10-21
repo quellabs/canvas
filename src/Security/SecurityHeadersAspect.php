@@ -55,6 +55,7 @@
 		 * Adds security headers to the response after the controller method executes
 		 * @param MethodContextInterface $context The method execution context
 		 * @param Response $response The response to modify
+		 * @return void
 		 */
 		public function after(MethodContextInterface $context, Response $response): void {
 			// Fetch the request

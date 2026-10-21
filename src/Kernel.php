@@ -40,6 +40,8 @@
 	use Quellabs\Canvas\Legacy\LegacyHandler;
 	use Quellabs\Canvas\Security\Policies\BasicSecurityHeaderPolicy;
 	use Quellabs\Canvas\Security\Policies\NullSecurityHeaderPolicy;
+	use Quellabs\Canvas\Security\RateLimit\RateLimitStoreFactory;
+	use Quellabs\Canvas\Security\RateLimit\RateLimitStoreInterface;
 	use Quellabs\Canvas\Security\SecurityHeaderPolicyInterface;
 	use Quellabs\Contracts\Configuration\ConfigProviderInterface;
 	use Quellabs\Contracts\Configuration\ConfigurationInterface;
@@ -147,7 +149,13 @@
 			$this->dependencyInjector->register(new LoggerInterfaceProvider(
 				$this->configuration->get("monolog_file", ComposerUtils::getProjectRoot() . '/storage/logs/canvas.log')
 			));
-			
+
+			// Build the rate limit store from config/rate_limit.php (defaults to a
+			// file-backed store when the file is absent) and bind it as a singleton,
+			// so every RateLimitAspect instance shares the same atomic admission storage
+			$rateLimitStore = RateLimitStoreFactory::create($this->configLoader->loadConfigFile("rate_limit.php"));
+			$this->dependencyInjector->register(new SimpleBinding(RateLimitStoreInterface::class, $rateLimitStore));
+
 			// Initialize legacy support
 			$this->initializeLegacySupport();
 
