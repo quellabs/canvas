@@ -5,6 +5,7 @@
 	use Quellabs\DependencyInjection\Container;
 	use Quellabs\ObjectQuel\Exception\EntityResolutionException;
 	use Quellabs\ObjectQuel\Exception\QuelException;
+	use Quellabs\ObjectQuel\Metadata\EntityMetadataRecord;
 	use Quellabs\ObjectQuel\OrmException;
 	use Quellabs\ObjectQuel\ReflectionManagement\PropertyHandler;
 	use Quellabs\ObjectQuel\Serialization\Serializers\JsonApiSerializer;
@@ -363,7 +364,7 @@
 					continue;
 				}
 
-				$resolvedKey = $this->resolveAttributeKey($entity, $key);
+				$resolvedKey = $this->resolveAttributeKey($metadata, $key);
 
 				if ($metadata->isIdentifierKey($resolvedKey)) {
 					$forbiddenAttributes[] = $key;
@@ -419,24 +420,24 @@
 		}
 
 		/**
-		 * Resolve a request key to the entity's canonical property name. PHP resolves
-		 * method calls case-insensitively, so a setter lookup can match a differently-cased
-		 * key (e.g. request key `ID` invoking `setId()`); resolving to the setter's real
-		 * declared name keeps the identifier check and isAttributeWritable() from being
-		 * bypassed by casing. Falls back to the key unchanged when there is no setter.
-		 * @param object $entity
+		 * Resolve a request key to the entity's canonical property name, matched
+		 * case-insensitively against the entity's own declared properties — not
+		 * derived from the setter method name, which can't be unmangled for an
+		 * acronym property (e.g. `setID()` does not imply property `iD`). Keeps
+		 * the identifier check and isAttributeWritable() from being bypassed by
+		 * casing. Falls back to the key unchanged when no property matches.
+		 * @param EntityMetadataRecord $metadata
 		 * @param string $key
 		 * @return string
 		 */
-		private function resolveAttributeKey(object $entity, string $key): string {
-			$setterMethod = 'set' . ucfirst($key);
-
-			if (!method_exists($entity, $setterMethod)) {
-				return $key;
+		private function resolveAttributeKey(EntityMetadataRecord $metadata, string $key): string {
+			foreach ($metadata->properties as $property) {
+				if (strcasecmp($property, $key) === 0) {
+					return $property;
+				}
 			}
 
-			$realMethodName = (new \ReflectionMethod($entity, $setterMethod))->getName();
-			return lcfirst(substr($realMethodName, 3));
+			return $key;
 		}
 
 		/**
