@@ -340,13 +340,12 @@
 		
 		/**
 		 * Validate every submitted attribute before anything is mapped onto the
-		 * entity. The primary key is always forbidden, regardless of what a
-		 * concrete controller does — a client can never reassign which row a
-		 * request writes to. An attribute that isn't a property on the entity at
-		 * all is silently ignored (typo, stale client field; mapAttributesToEntity()
-		 * is a no-op for it either way). Everything else — whether or not it has
-		 * a setter — is decided solely by isAttributeWritable(); that's the one
-		 * and only write gate.
+		 * entity. An attribute that isn't a property on the entity at all (typo,
+		 * stale client field) is rejected with a 422. The primary key is always
+		 * forbidden, regardless of what a concrete controller does — a client can
+		 * never reassign which row a request writes to. Everything else — whether
+		 * or not it has a setter — is decided solely by isAttributeWritable();
+		 * that's the one and only write gate.
 		 * @param object $entity The entity instance to validate against
 		 * @param array<string, mixed> $attributes Associative array of attribute name => value pairs
 		 * @param WriteOperation $operation Whether this is a create or an update
@@ -356,20 +355,28 @@
 		protected function validateAttributes(object $entity, array $attributes, WriteOperation $operation): ?JsonResponse {
 			$metadata = $this->em()->getEntityStore()->getMetadata($entity);
 			$forbiddenAttributes = [];
+			$unknownAttributes = [];
 
 			foreach ($attributes as $key => $value) {
-				if ($metadata->isIdentifierKey($key)) {
-					$forbiddenAttributes[] = $key;
-					continue;
-				}
-
 				if (!$this->attributeExistsOnEntity($entity, $key)) {
+					$unknownAttributes[] = $key;
 					continue;
 				}
 
-				if (!$this->isAttributeWritable($entity, $key, $operation)) {
+				$resolvedKey = $this->resolveAttributeKey($entity, $key);
+
+				if ($metadata->isIdentifierKey($resolvedKey)) {
+					$forbiddenAttributes[] = $key;
+					continue;
+				}
+
+				if (!$this->isAttributeWritable($entity, $resolvedKey, $operation)) {
 					$forbiddenAttributes[] = $key;
 				}
+			}
+
+			if (!empty($unknownAttributes)) {
+				return $this->createUnknownAttributesResponse($unknownAttributes);
 			}
 
 			if (!empty($forbiddenAttributes)) {
@@ -412,6 +419,27 @@
 		}
 
 		/**
+		 * Resolve a request key to the entity's canonical property name. PHP resolves
+		 * method calls case-insensitively, so a setter lookup can match a differently-cased
+		 * key (e.g. request key `ID` invoking `setId()`); resolving to the setter's real
+		 * declared name keeps the identifier check and isAttributeWritable() from being
+		 * bypassed by casing. Falls back to the key unchanged when there is no setter.
+		 * @param object $entity
+		 * @param string $key
+		 * @return string
+		 */
+		private function resolveAttributeKey(object $entity, string $key): string {
+			$setterMethod = 'set' . ucfirst($key);
+
+			if (!method_exists($entity, $setterMethod)) {
+				return $key;
+			}
+
+			$realMethodName = (new \ReflectionMethod($entity, $setterMethod))->getName();
+			return lcfirst(substr($realMethodName, 3));
+		}
+
+		/**
 		 * Authorize a write before any attribute is validated or mapped. The default
 		 * allows every create/update; override to add resource- or user-specific
 		 * checks (ownership, role, current entity state) that a per-attribute
@@ -443,6 +471,23 @@
 					"source" => ["pointer" => "/data/attributes/{$name}"]
 				], $attributeNames)
 			], 403);
+		}
+
+		/**
+		 * Create a standardized 422 response for attributes that don't correspond
+		 * to any property on the entity, through a setter or directly.
+		 * @param list<string> $attributeNames
+		 * @return JsonResponse
+		 */
+		protected function createUnknownAttributesResponse(array $attributeNames): JsonResponse {
+			return $this->json([
+				"errors" => [[
+					"status" => "422",
+					"title"  => "Invalid attributes",
+					"detail" => "Unknown attributes: " . implode(', ', $attributeNames),
+					"source" => ["pointer" => "/data/attributes"]
+				]]
+			], 422);
 		}
 
 		/**

@@ -55,10 +55,10 @@
 			} else {
 				$content = $this->renderProductionErrorPageContent($status);
 			}
-			
+
 			// Create and return the Symfony response object
 			$response = new Response($content, $status, ['Content-Type' => 'text/html']);
-			
+
 			if ($e instanceof ProvidesResponseHeaders) {
 				// The exception computed these itself (e.g. RateLimitException's Retry-After,
 				// MethodNotAllowedException's Allow); this handler never recalculates them.
