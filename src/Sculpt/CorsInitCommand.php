@@ -159,6 +159,12 @@ CONFIG;
 				return;
 			}
 
+			// A non-directory file already occupies this path: fail with a precise
+			// message instead of letting mkdir() emit its own E_WARNING for it.
+			if (file_exists($directory)) {
+				throw new \RuntimeException("Cannot create directory, a file already exists at: {$directory}");
+			}
+
 			// Create directory with recursive flag and appropriate permissions
 			if (!mkdir($directory, 0755, true)) {
 				throw new \RuntimeException("Failed to create directory: {$directory}");
