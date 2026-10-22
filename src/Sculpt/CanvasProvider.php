@@ -19,6 +19,7 @@
 				CacheInitCommand::class,
 				JwtInitCommand::class,
 				RateLimitInitCommand::class,
+				CorsInitCommand::class,
 			]);
 		}
 	}

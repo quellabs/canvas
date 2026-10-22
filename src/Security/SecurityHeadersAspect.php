@@ -30,25 +30,20 @@
 		/**
 		 * Constructor
 		 * @param Kernel $kernel Supplies the application-wide default policy when $policyClass is null
-		 * @param class-string<SecurityHeaderPolicyInterface>|null $policyClass Class implementing SecurityHeaderPolicyInterface to use for this route instead of the application-wide default
+		 * @param class-string<SecurityHeaderPolicyInterface>|list<class-string<SecurityHeaderPolicyInterface>>|null $policyClass Class, or ordered list of classes, implementing SecurityHeaderPolicyInterface to use for this route instead of the application-wide default. This replaces the entire application-wide list rather than extending it.
 		 */
-		public function __construct(Kernel $kernel, ?string $policyClass = null) {
+		public function __construct(Kernel $kernel, string|array|null $policyClass = null) {
 			if ($policyClass === null) {
 				$this->policy = $kernel->getDefaultSecurityHeaderPolicy();
 				return;
 			}
 
-			$policy = $kernel->getDependencyInjector()->make($policyClass);
-
-			if (!$policy instanceof SecurityHeaderPolicyInterface) {
-				throw new \InvalidArgumentException(sprintf(
-					"SecurityHeadersAspect's policyClass '%s' must implement %s.",
-					$policyClass,
-					SecurityHeaderPolicyInterface::class
-				));
-			}
-
-			$this->policy = $policy;
+			$this->policy = SecurityHeaderPolicyResolver::resolve(
+				$kernel->getDependencyInjector(),
+				$policyClass,
+				"SecurityHeadersAspect's policyClass",
+				\InvalidArgumentException::class
+			);
 		}
 
 		/**

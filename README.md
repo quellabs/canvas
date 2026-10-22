@@ -51,6 +51,46 @@ public function manage() {
 
 Each aspect is a standalone class — `BeforeAspect` for checks that can short-circuit the request, `AroundAspect` for wrapping behavior like caching, `AfterAspect` for post-processing. Aspects inherit through controller hierarchies — apply `@InterceptWith` on a base class and every child controller gets it automatically — with priority ordering controlling execution sequence within each inheritance level.
 
+## Security headers & CORS
+
+`config/app.php`'s `security_header_policy` accepts a single policy class or an ordered list, applied to every response in that order:
+
+```php
+// config/app.php
+return [
+    'security_header_policy' => [
+        BasicSecurityHeaderPolicy::class,
+        CorsSecurityHeaderPolicy::class,
+    ],
+];
+```
+
+A route-specific override uses the same syntax and replaces the *entire* list for that route, not just one entry:
+
+```php
+/**
+ * @InterceptWith(SecurityHeadersAspect::class, policyClass={StrictSecurityHeaderPolicy::class, CorsSecurityHeaderPolicy::class})
+ */
+```
+
+`CorsSecurityHeaderPolicy` is opt-in and reads its allowlists from `config/cors.php`, created with `php sculpt cors:init`. The generated file grants no cross-origin access until filled in:
+
+```php
+// config/cors.php
+return [
+    'allowed_origins'   => ['https://app.example.com'],
+    'allowed_methods'   => ['GET', 'POST'],
+    'allowed_headers'   => ['Content-Type', 'Authorization'],
+    'exposed_headers'   => ['Location'],
+    'allow_credentials' => true,
+    'max_age'           => 600,
+];
+```
+
+Only exact `scheme://host(:port)` origins are accepted — `*` and the opaque `null` origin are rejected. A preflight (`OPTIONS` with `Access-Control-Request-Method`) is approved only when the origin, requested method, and every requested header are allowed; Canvas's generated `OPTIONS` response already carries the route's matched methods in `Allow`, which the requested method must also appear in.
+
+Existing single-class configurations keep working unchanged. Basic/Medium/Strict headers (clickjacking, MIME-sniffing, HSTS, CSP) are a separate concern from CORS's cross-origin permission headers — an application opting into CORS still needs one of them, and must list `CorsSecurityHeaderPolicy::class` in any route override that should keep it.
+
 ## ObjectQuel ORM
 
 Canvas integrates with [ObjectQuel](https://objectquel.com) through the `quellabs/canvas-objectquel` package. Simple lookups use familiar `find` and `findBy` methods. Complex queries use ObjectQuel's declarative syntax:

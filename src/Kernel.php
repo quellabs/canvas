@@ -39,10 +39,10 @@
 	use Quellabs\Canvas\Legacy\LegacyBridge;
 	use Quellabs\Canvas\Legacy\LegacyHandler;
 	use Quellabs\Canvas\Security\Policies\BasicSecurityHeaderPolicy;
-	use Quellabs\Canvas\Security\Policies\NullSecurityHeaderPolicy;
 	use Quellabs\Canvas\Security\RateLimit\RateLimitStoreFactory;
 	use Quellabs\Canvas\Security\RateLimit\RateLimitStoreInterface;
 	use Quellabs\Canvas\Security\SecurityHeaderPolicyInterface;
+	use Quellabs\Canvas\Security\SecurityHeaderPolicyResolver;
 	use Quellabs\Contracts\Configuration\ConfigProviderInterface;
 	use Quellabs\Contracts\Configuration\ConfigurationInterface;
 	use Quellabs\DependencyInjection\Container;
@@ -163,38 +163,20 @@
 			// SecurityHeadersAspect (when no $policyClass override is given) and
 			// DefaultErrorHandler apply, so a route's headers and an error page's
 			// headers never silently diverge. config/app.php can point this at a
-			// custom class, including NullSecurityHeaderPolicy to opt out of
-			// security headers entirely; the key itself must resolve to a real
-			// policy, so an explicit null is rejected rather than treated as "disabled".
+			// custom class or an ordered list of classes (composed via
+			// CompositeSecurityHeaderPolicy), including NullSecurityHeaderPolicy to
+			// opt out of security headers entirely; the key itself must resolve to a
+			// real policy, so an explicit null is rejected rather than treated as "disabled".
 			$securityHeaderPolicyClass = $this->configuration->has('security_header_policy')
 				? $this->configuration->get('security_header_policy')
 				: BasicSecurityHeaderPolicy::class;
 
-			if ($securityHeaderPolicyClass === null) {
-				throw new \RuntimeException(sprintf(
-					"config/app.php's security_header_policy must not be null; use %s::class to disable security headers.",
-					NullSecurityHeaderPolicy::class
-				));
-			}
-
-			if (!class_exists($securityHeaderPolicyClass)) {
-				throw new \RuntimeException(sprintf(
-					"Configured security_header_policy class '%s' does not exist.",
-					$securityHeaderPolicyClass
-				));
-			}
-
-			$policy = $this->dependencyInjector->make($securityHeaderPolicyClass);
-
-			if (!$policy instanceof SecurityHeaderPolicyInterface) {
-				throw new \RuntimeException(sprintf(
-					"Configured security_header_policy class '%s' must implement %s.",
-					$securityHeaderPolicyClass,
-					SecurityHeaderPolicyInterface::class
-				));
-			}
-
-			$this->defaultSecurityHeaderPolicy = $policy;
+			$this->defaultSecurityHeaderPolicy = SecurityHeaderPolicyResolver::resolve(
+				$this->dependencyInjector,
+				$securityHeaderPolicyClass,
+				"config/app.php's security_header_policy",
+				\RuntimeException::class
+			);
 		}
 		
 		/**
