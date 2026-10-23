@@ -24,17 +24,17 @@
 		 * @var list<string> The http methods
 		 */
 		private array $methods;
-
+		
 		/**
 		 * @var string|null Fallback route when dynamic route is empty
 		 */
 		private ?string $fallback;
-
+		
 		/**
 		 * @var array<string, mixed> Only the keys the caller actually supplied
 		 */
 		private array $parameters;
-
+		
 		/**
 		 * Route constructor.
 		 * @param string $value Route path
@@ -44,20 +44,19 @@
 		public function __construct(string $value, array|UnsuppliedParameter $methods = new UnsuppliedParameter(), string|UnsuppliedParameter|null $fallback = new UnsuppliedParameter()) {
 			$this->value = $value;
 			$this->parameters = ['value' => $value];
-
 			$this->methods = $this->parseHttpMethods($methods instanceof UnsuppliedParameter ? ['GET', 'HEAD'] : $methods);
-
+			
 			if (!($methods instanceof UnsuppliedParameter)) {
 				$this->parameters['methods'] = $methods;
 			}
-
+			
 			$this->fallback = $fallback instanceof UnsuppliedParameter ? null : $fallback;
-
+			
 			if (!($fallback instanceof UnsuppliedParameter)) {
 				$this->parameters['fallback'] = $fallback;
 			}
 		}
-
+		
 		/**
 		 * Returns only the route parameters the caller explicitly supplied
 		 * @return array<string, mixed>

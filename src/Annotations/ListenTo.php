@@ -13,8 +13,8 @@
 	#[\Attribute(\Attribute::TARGET_METHOD | \Attribute::IS_REPEATABLE)]
 	class ListenTo implements AnnotationInterface {
 		use ReflectsAnnotationParameters;
+		
 		private string $value;
-
 		
 		/**
 		 * @var int Priority
@@ -31,8 +31,6 @@
 			$this->value = $value;
 			$this->priority = $priority;
 		}
-		
-
 		
 		/**
 		 * Returns the signal name this method should be connected to.

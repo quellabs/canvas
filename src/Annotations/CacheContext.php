@@ -11,12 +11,12 @@
 	 * docblock-only and keeps the legacy array constructor.
 	 */
 	class CacheContext implements AnnotationInterface {
-
+		
 		/**
 		 * @var array<string, mixed> All parameters passed to the annotation
 		 */
 		protected array $parameters;
-
+		
 		/**
 		 * CacheContext constructor
 		 * @param array<string, mixed> $parameters The annotation parameters (expects 'value' key)

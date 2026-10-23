@@ -7,7 +7,7 @@
 	
 	/**
 	 * @Annotation
-     *
+	 *
 	 * RoutePrefix Annotation Class
 	 *
 	 * This class implements an annotation interface for defining route prefixes
@@ -20,8 +20,9 @@
 	#[\Attribute(\Attribute::TARGET_CLASS)]
 	class RoutePrefix implements AnnotationInterface {
 		use ReflectsAnnotationParameters;
+		
+		/** @var string The route prefix */
 		private string $value;
-
 		
 		/**
 		 * Constructs the RoutePrefix annotation.
@@ -31,8 +32,6 @@
 		public function __construct(string $value) {
 			$this->value = $value;
 		}
-		
-
 		
 		/**
 		 * Fetches the route prefix
