@@ -7,7 +7,8 @@
 	/**
 	 * @Annotation
 	 * @Target("METHOD")
-	 * Annotation for declaring aspect-oriented method interception
+	 * Annotation for declaring aspect-oriented method interception. Accepts arbitrary
+	 * aspect-specific keys, so it stays docblock-only and keeps the legacy array constructor.
 	 */
 	class InterceptWith implements AnnotationInterface {
 		
@@ -17,10 +18,14 @@
 		 */
 		private array $parameters;
 		
-		/** @var string The aspect class to use for this interception */
+		/**
+		 * @var string The aspect class to use for this interception
+		 */
 		private string $interceptClass;
 		
-		/** @var int Priority */
+		/**
+		 * @var int Priority
+		 */
 		private int $priority;
 		
 		/**

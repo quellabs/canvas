@@ -3,52 +3,36 @@
 	namespace Quellabs\Canvas\Annotations;
 	
 	use Quellabs\AnnotationReader\AnnotationInterface;
+	use Quellabs\AnnotationReader\Annotation\ReflectsAnnotationParameters;
 	
 	/**
 	 * @Annotation
 	 * @Target("METHOD")
 	 * Declares that an annotated method should be connected to a named signal.
 	 */
+	#[\Attribute(\Attribute::TARGET_METHOD | \Attribute::IS_REPEATABLE)]
 	class ListenTo implements AnnotationInterface {
+		use ReflectsAnnotationParameters;
+		private string $value;
+
 		
 		/**
-		 * @var array<string, mixed> Raw annotation parameters as parsed by the annotation reader
+		 * @var int Priority
 		 */
-		protected array $parameters;
-		
-		/** @var string The name of the signal */
-		private string $signalName;
-		
-		/** @var int Priority */
 		private int $priority;
 		
 		/**
-		 * @param array<string, mixed> $parameters Parsed annotation parameters, expecting at minimum "value"
+		 * Constructs the ListenTo annotation.
+		 * @param string $value
+		 * @param int $priority
+		 * @return void
 		 */
-		public function __construct(array $parameters) {
-			$value = $parameters['value'] ?? null;
-			$priority = $parameters['priority'] ?? null;
-			
-			if (!isset($value) || !is_string($value)) {
-				throw new \InvalidArgumentException("ListenTo needs a valid signal name");
-			}
-			
-			if (isset($priority) && !is_integer($priority)) {
-				throw new \InvalidArgumentException("Invalid priority for ListenTo. Needs to be an integer");
-			}
-			
-			$this->parameters = $parameters;
-			$this->signalName = $value;
-			$this->priority = is_integer($priority) ? $priority : 0;
+		public function __construct(string $value, int $priority = 0) {
+			$this->value = $value;
+			$this->priority = $priority;
 		}
 		
-		/**
-		 * Returns all raw annotation parameters
-		 * @return array<string, mixed>
-		 */
-		public function getParameters(): array {
-			return $this->parameters;
-		}
+
 		
 		/**
 		 * Returns the signal name this method should be connected to.
@@ -56,7 +40,7 @@
 		 * @return string
 		 */
 		public function getName(): string {
-			return $this->signalName;
+			return $this->value;
 		}
 		
 		/**

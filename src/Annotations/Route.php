@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Annotations;
 	
 	use Quellabs\AnnotationReader\AnnotationInterface;
+	use Quellabs\AnnotationReader\Annotation\UnsuppliedParameter;
 	
 	/**
 	 * @Annotation
@@ -16,48 +17,50 @@
 	 * @Route("/api/users", methods={"GET"})
 	 * @Route("/api/users/{id}", methods="GET")
 	 */
+	#[\Attribute(\Attribute::TARGET_METHOD | \Attribute::IS_REPEATABLE)]
 	class Route implements AnnotationInterface {
+		private string $value;
 		/**
-		 * Array of route parameters including route path and HTTP methods
-		 * @var array<string, mixed>
+		 * @var list<string> The http methods
+		 */
+		private array $methods;
+
+		/**
+		 * @var string|null Fallback route when dynamic route is empty
+		 */
+		private ?string $fallback;
+
+		/**
+		 * @var array<string, mixed> Only the keys the caller actually supplied
 		 */
 		private array $parameters;
-		
-		/** @var string The aspect class to use for this interception */
-		private string $routeName;
-		
-		/** @var list<string> The http methods */
-		private array $methods;
-		
-		/** @var string|null Fallback route when dynamic route is empty */
-		private ?string $fallback;
-		
+
 		/**
 		 * Route constructor.
-		 * @param array<string, mixed> $parameters An associative array of route configuration parameters
+		 * @param string $value Route path
+		 * @param array<int, string>|UnsuppliedParameter $methods Allowed HTTP methods
+		 * @param string|UnsuppliedParameter|null $fallback Fallback route
 		 */
-		public function __construct(array $parameters) {
-			$value = $parameters['value'] ?? null;
-			$methods = $parameters['methods'] ?? null;
-			$fallback = $parameters['fallback'] ?? null;
-			
-			if (!isset($value) || !is_string($value)) {
-				throw new \InvalidArgumentException("Route needs a valid route string");
+		public function __construct(string $value, array|UnsuppliedParameter $methods = new UnsuppliedParameter(), string|UnsuppliedParameter|null $fallback = new UnsuppliedParameter()) {
+			$this->value = $value;
+			$this->parameters = ['value' => $value];
+
+			$this->methods = $this->parseHttpMethods($methods instanceof UnsuppliedParameter ? ['GET', 'HEAD'] : $methods);
+
+			if (!($methods instanceof UnsuppliedParameter)) {
+				$this->parameters['methods'] = $methods;
 			}
-			
-			if (isset($fallback) && !is_string($fallback)) {
-				throw new \InvalidArgumentException("Invalid fallback. Needs to be a string");
+
+			$this->fallback = $fallback instanceof UnsuppliedParameter ? null : $fallback;
+
+			if (!($fallback instanceof UnsuppliedParameter)) {
+				$this->parameters['fallback'] = $fallback;
 			}
-			
-			$this->parameters = $parameters;
-			$this->routeName = $value;
-			$this->methods = $this->parseHttpMethods($methods);
-			$this->fallback = $fallback ?? null;
 		}
-		
+
 		/**
-		 * Returns all route parameters
-		 * @return array<string, mixed> The complete array of route parameters
+		 * Returns only the route parameters the caller explicitly supplied
+		 * @return array<string, mixed>
 		 */
 		public function getParameters(): array {
 			return $this->parameters;
@@ -69,7 +72,7 @@
 		 */
 		public function getRoute(): string {
 			// Fetch unnamed route parameter
-			$route = $this->routeName;
+			$route = $this->value;
 			
 			// Only run parse_url for full URLs (http/https) to strip scheme and host.
 			// Config references (e.g. "mollie::redirectUrl") and plain paths are returned as-is.
@@ -98,7 +101,7 @@
 		 * @return string|null The name of the route
 		 */
 		public function getName(): ?string {
-			return $this->routeName;
+			return $this->value;
 		}
 		
 		/**

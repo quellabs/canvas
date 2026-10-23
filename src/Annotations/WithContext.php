@@ -7,7 +7,8 @@
 	/**
 	 * @Annotation
 	 * Specifies the DI container context to use when resolving a particular
-	 * constructor or method parameter.
+	 * constructor or method parameter. Accepts arbitrary context keys, so it
+	 * stays docblock-only and keeps the legacy array constructor.
 	 */
 	class WithContext implements AnnotationInterface {
 		
@@ -17,7 +18,9 @@
 		 */
 		private array $parameters;
 		
-		/** @var string The parameter to add context for */
+		/**
+		 * @var string The parameter to add context for
+		 */
 		private string $contextParameter;
 		
 		/**

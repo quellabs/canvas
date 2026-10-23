@@ -58,34 +58,54 @@
 	
 	class Kernel {
 		
-		/** @var ConfigLoader Loads configuration files from disk */
+		/**
+		 * @var ConfigLoader Loads configuration files from disk
+		 */
 		private ConfigLoader $configLoader;
 		
-		/** @var SignalHub Event system */
+		/**
+		 * @var SignalHub Event system
+		 */
 		private SignalHub $signalHub;
 		
-		/** @var Signal Signal for performance measuring */
+		/**
+		 * @var Signal Signal for performance measuring
+		 */
 		private Signal $canvasQuerySignal;
 		
-		/** @var AnnotationReader Annotation reading */
+		/**
+		 * @var AnnotationReader Annotation reading
+		 */
 		private AnnotationReader $annotationsReader;
 		
-		/** @var ConfigurationInterface Application configuration */
+		/**
+		 * @var ConfigurationInterface Application configuration
+		 */
 		private ConfigurationInterface $configuration;
 		
-		/** @var ConfigurationInterface Inspector/debug bar configuration */
+		/**
+		 * @var ConfigurationInterface Inspector/debug bar configuration
+		 */
 		private ConfigurationInterface $inspector_configuration;
 		
-		/** @var LegacyHandler|null Legacy fallback request handler, null when legacy is disabled */
+		/**
+		 * @var LegacyHandler|null Legacy fallback request handler, null when legacy is disabled
+		 */
 		private ?LegacyHandler $legacyFallbackHandler = null;
 		
-		/** @var Container Dependency injection container */
+		/**
+		 * @var Container Dependency injection container
+		 */
 		private Container $dependencyInjector;
 		
-		/** @var array<int, class-string<ErrorHandlerInterface>> */
+		/**
+		 * @var array<int, class-string<ErrorHandlerInterface>>
+		 */
 		private array $errorHandlers;
 
-		/** @var SecurityHeaderPolicyInterface Application-wide default, resolved from config/app.php's security_header_policy */
+		/**
+		 * @var SecurityHeaderPolicyInterface Application-wide default, resolved from config/app.php's security_header_policy
+		 */
 		private SecurityHeaderPolicyInterface $defaultSecurityHeaderPolicy;
 
 		/**
@@ -103,7 +123,9 @@
 				$this->canvasQuerySignal = new Signal('debug.canvas.query');
 				$this->signalHub->registerSignal($this->canvasQuerySignal);
 			} else {
-				/** @var Signal $signal */
+				/**
+				 * @var Signal $signal
+				 */
 				$signal = $this->signalHub->getSignal('debug.canvas.query');
 				$this->canvasQuerySignal = $signal;
 			}
@@ -128,7 +150,9 @@
 				}
 			);
 			
-			/** @var array<int, class-string<ErrorHandlerInterface>> $handlers */
+			/**
+			 * @var array<int, class-string<ErrorHandlerInterface>> $handlers
+			 */
 			$this->errorHandlers = array_values($handlers);
 			
 			// Instantiate Dependency Injector and register default providers
@@ -455,6 +479,11 @@
 			$config->setUseAnnotationCache(true);
 			$config->setAnnotationCachePath($rootPath . "/storage/annotations");
 			$config->setDebugMode($debugMode);
+			$annotationSource = $this->configuration->get('annotation_source', \Quellabs\AnnotationReader\Configuration::SOURCE_DOCBLOCKS);
+			if (!is_string($annotationSource)) {
+				throw new \InvalidArgumentException('annotation_source must be a string');
+			}
+			$config->setSource($annotationSource);
 			
 			// Create and return the configured AnnotationReader instance
 			return new AnnotationReader($config);
