@@ -7,21 +7,22 @@
 	/**
 	 * @Annotation
 	 * @Target("METHOD")
-	 * CacheContext annotation class. Accepts arbitrary cache options, so it stays
-	 * docblock-only and keeps the legacy array constructor.
+	 * CacheContext annotation class. Accepts arbitrary cache options; the same named
+	 * arguments work identically as a docblock annotation or a native PHP attribute.
 	 */
+	#[\Attribute(\Attribute::TARGET_METHOD)]
 	class CacheContext implements AnnotationInterface {
-		
+
 		/**
 		 * @var array<string, mixed> All parameters passed to the annotation
 		 */
 		protected array $parameters;
-		
+
 		/**
 		 * CacheContext constructor
-		 * @param array<string, mixed> $parameters The annotation parameters (expects 'value' key)
+		 * @param mixed ...$parameters Arbitrary cache options (e.g. namespace, driver, ttl)
 		 */
-		public function __construct(array $parameters) {
+		public function __construct(mixed ...$parameters) {
 			$this->parameters = $parameters;
 		}
 		
