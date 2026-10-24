@@ -50,8 +50,11 @@
 					AspectAnnotationInterface::class
 				));
 			}
-
-			$parameters = ['value' => $value, 'priority' => $priority];
+			
+			$parameters = [
+				'value'    => $value,
+				'priority' => $priority
+			];
 
 			foreach ($options as $key => $optionValue) {
 				if (!is_string($key)) {
