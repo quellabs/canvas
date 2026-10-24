@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Annotations;
 	
 	use Quellabs\AnnotationReader\AnnotationInterface;
+	use Quellabs\Canvas\AOP\Contracts\AspectAnnotationInterface;
 	
 	/**
 	 * @Annotation
@@ -40,6 +41,14 @@
 		public function __construct(string $value, int $priority = 0, mixed ...$options) {
 			if (!class_exists($value)) {
 				throw new \InvalidArgumentException("InterceptWith needs a valid aspect class");
+			}
+
+			if (!is_subclass_of($value, AspectAnnotationInterface::class)) {
+				throw new \InvalidArgumentException(sprintf(
+					"InterceptWith class '%s' must implement %s (via BeforeAspectInterface, AfterAspectInterface, AroundAspectInterface, or RequestAspectInterface)",
+					$value,
+					AspectAnnotationInterface::class
+				));
 			}
 
 			$this->parameters = array_merge(['value' => $value, 'priority' => $priority], $options);
