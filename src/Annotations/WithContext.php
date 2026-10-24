@@ -31,7 +31,17 @@
 		 * @param mixed ...$context Arbitrary context options
 		 */
 		public function __construct(string $parameter, mixed ...$context) {
-			$this->parameters = array_merge(['parameter' => $parameter], $context);
+			$parameters = ['parameter' => $parameter];
+
+			foreach ($context as $key => $value) {
+				if (!is_string($key)) {
+					throw new \InvalidArgumentException("WithContext context options must be named arguments");
+				}
+
+				$parameters[$key] = $value;
+			}
+
+			$this->parameters = $parameters;
 			$this->contextParameter = $parameter;
 		}
 		

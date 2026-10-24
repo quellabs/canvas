@@ -51,7 +51,17 @@
 				));
 			}
 
-			$this->parameters = array_merge(['value' => $value, 'priority' => $priority], $options);
+			$parameters = ['value' => $value, 'priority' => $priority];
+
+			foreach ($options as $key => $optionValue) {
+				if (!is_string($key)) {
+					throw new \InvalidArgumentException("InterceptWith aspect-specific options must be named arguments");
+				}
+
+				$parameters[$key] = $optionValue;
+			}
+
+			$this->parameters = $parameters;
 			$this->interceptClass = $value;
 			$this->priority = $priority;
 		}

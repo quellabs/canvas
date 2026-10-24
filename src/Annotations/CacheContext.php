@@ -23,7 +23,17 @@
 		 * @param mixed ...$parameters Arbitrary cache options (e.g. namespace, driver, ttl)
 		 */
 		public function __construct(mixed ...$parameters) {
-			$this->parameters = $parameters;
+			$result = [];
+
+			foreach ($parameters as $key => $value) {
+				if (!is_string($key)) {
+					throw new \InvalidArgumentException("CacheContext options must be named arguments");
+				}
+
+				$result[$key] = $value;
+			}
+
+			$this->parameters = $result;
 		}
 		
 		/**
