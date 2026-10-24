@@ -44,7 +44,7 @@
 		public function __construct(string $value, array|UnsuppliedParameter $methods = new UnsuppliedParameter(), string|UnsuppliedParameter|null $fallback = new UnsuppliedParameter()) {
 			$this->value = $value;
 			$this->parameters = ['value' => $value];
-			$this->methods = $this->parseHttpMethods($methods instanceof UnsuppliedParameter ? ['GET', 'HEAD'] : $methods);
+			$this->methods = $this->parseHttpMethods($methods instanceof UnsuppliedParameter ? ['GET'] : $methods);
 			
 			if (!($methods instanceof UnsuppliedParameter)) {
 				$this->parameters['methods'] = $methods;
@@ -117,9 +117,9 @@
 		 * @return list<string>
 		 */
 		private function parseHttpMethods(mixed $methods): array {
-			// No methods specified, default to GET and HEAD
+			// No methods specified, default to GET
 			if (!isset($methods)) {
-				return ["GET", "HEAD"];
+				return ["GET"];
 			}
 			
 			// Methods must be an array, not a scalar
@@ -141,6 +141,6 @@
 			}
 			
 			// Fall back to defaults if the array was empty
-			return !empty($result) ? $result : ["GET", "HEAD"];
+			return !empty($result) ? $result : ["GET"];
 		}
 	}
