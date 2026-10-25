@@ -53,8 +53,9 @@
 				return;
 			}
 
-			// Perform minification
+			// Perform minification and validate that output changed
 			$minified = $this->minify($content);
+			
 			if ($minified === $content) {
 				return;
 			}

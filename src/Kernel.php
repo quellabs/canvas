@@ -207,18 +207,25 @@
 				"config/app.php's security_header_policy",
 				\RuntimeException::class
 			);
-
+			
+			// Filter the output if requested
 			$outputFilterClass = $this->configuration->all()['output_filter'] ?? null;
+			
 			if ($outputFilterClass !== null) {
+				// Validate existence of output filter class
 				if (!is_string($outputFilterClass) || !class_exists($outputFilterClass)) {
 					throw new \InvalidArgumentException('output_filter must be an existing class name or null.');
 				}
 
+				// Instantiate that class
 				$filter = $this->dependencyInjector->make($outputFilterClass);
+				
+				// If the class does not implement OutputFilterInterface it's invalid
 				if (!$filter instanceof OutputFilterInterface) {
 					throw new \InvalidArgumentException('output_filter class must implement ' . OutputFilterInterface::class . '.');
 				}
-
+				
+				// Store the filter
 				$this->outputFilter = $filter;
 			}
 		}
@@ -352,11 +359,11 @@
 				$this->injectDebugBar($debugCollector, $request, $response);
 			}
 
+			// Apply security headers
 			$this->applyDefaultSecurityHeaderPolicyUnlessAlreadyApplied($request, $response);
 
-			if ($this->outputFilter !== null) {
-				$this->outputFilter->filter($request, $response);
-			}
+			// Apply output filter
+			$this->outputFilter?->filter($request, $response);
 
 			// HEAD must never carry a body (RFC 9110 9.3.2), regardless of which route
 			// or error path produced the response, so this is enforced at the single
