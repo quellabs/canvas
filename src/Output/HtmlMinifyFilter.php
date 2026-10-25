@@ -9,7 +9,7 @@
 	use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 	/**
-	 * Removes indentation between common block elements in buffered HTML responses.
+	 * Collapses whitespace in buffered HTML while preserving embedded content.
 	 */
 	class HtmlMinifyFilter implements OutputFilterInterface {
 
@@ -80,7 +80,7 @@
 		 */
 		private function minify(string $html): string {
 			// Keep comments and raw or whitespace-sensitive elements verbatim.
-			$protectedPattern = '~<!--.*?-->|<(script|style|pre|textarea)\b(?:"[^"]*"|\'[^\']*\'|[^\'">])*?>.*?</\1\s*>~is';
+			$protectedPattern = '~<!--.*?-->|<(script|style|pre|textarea|svg|math|template|code|xmp)\b(?:"[^"]*"|\'[^\']*\'|[^\'">])*?>.*?</\1\s*>~is';
 			$matchCount = preg_match_all($protectedPattern, $html, $matches, PREG_OFFSET_CAPTURE);
 			if ($matchCount === false) {
 				return $html;
@@ -99,14 +99,61 @@
 		}
 
 		/**
-		 * Removes inter-tag indentation where both tags are common block elements.
+		 * Collapses whitespace in text nodes without changing tag attributes.
 		 * @param string $markup
 		 * @return string
 		 */
 		private function minifyMarkup(string $markup): string {
-			// Leave spaces around inline elements intact because they can separate visible text.
-			$block = '(?:html|head|body|div|section|article|main|header|footer|nav|ul|ol|li|table|thead|tbody|tfoot|tr|td|th|p|h[1-6])';
-			$pattern = '~(</?' . $block . '\b[^>]*>)[ \t\r\n]+(?=</?' . $block . '\b)~i';
-			return preg_replace($pattern, '$1', $markup) ?? $markup;
+			// Quoted attribute values may contain whitespace or > characters.
+			$tagPattern = '~<(?:"[^"]*"|\'[^\']*\'|[^\'">])*>~s';
+			$matchCount = preg_match_all($tagPattern, $markup, $matches, PREG_OFFSET_CAPTURE);
+			if ($matchCount === false) {
+				return $markup;
+			}
+
+			$result = '';
+			$offset = 0;
+			$previousTag = null;
+			foreach ($matches[0] as $match) {
+				$text = substr($markup, $offset, $match[1] - $offset);
+				$result .= $this->minifyText($text, $previousTag, $match[0]);
+				$result .= $match[0];
+				$previousTag = $match[0];
+				$offset = $match[1] + strlen($match[0]);
+			}
+
+			return $result . $this->minifyText(substr($markup, $offset), $previousTag, null);
+		}
+
+		/**
+		 * Collapses text whitespace and removes indentation between block tags.
+		 * @param string $text
+		 * @param string|null $previousTag
+		 * @param string|null $nextTag
+		 * @return string
+		 */
+		private function minifyText(string $text, ?string $previousTag, ?string $nextTag): string {
+			if (trim($text) === '' && $this->isBlockTag($previousTag) && $this->isBlockTag($nextTag)) {
+				return '';
+			}
+
+			return preg_replace('/[ \t\r\n]+/', ' ', $text) ?? $text;
+		}
+
+		/**
+		 * Checks whether a tag normally creates a block boundary.
+		 * @param string|null $tag
+		 * @return bool
+		 */
+		private function isBlockTag(?string $tag): bool {
+			if ($tag === null || !preg_match('~^</?([a-z][a-z0-9]*)\b~i', $tag, $match)) {
+				return false;
+			}
+
+			return in_array(strtolower($match[1]), [
+				'html', 'head', 'body', 'div', 'section', 'article', 'main', 'header', 'footer',
+				'nav', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th',
+				'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'
+			], true);
 		}
 	}
