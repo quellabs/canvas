@@ -9,7 +9,7 @@
 	use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 	/**
-	 * Collapses whitespace in buffered HTML while preserving embedded content.
+	 * Collapses whitespace in buffered HTML and inline CSS while preserving embedded content.
 	 */
 	class HtmlMinifyFilter implements OutputFilterInterface {
 
@@ -74,12 +74,12 @@
 		}
 
 		/**
-		 * Minifies markup outside comments and whitespace-sensitive elements.
+		 * Minifies markup and CSS while preserving other embedded content.
 		 * @param string $html
 		 * @return string
 		 */
 		private function minify(string $html): string {
-			// Keep comments and raw or whitespace-sensitive elements verbatim.
+			// Keep comments and raw or whitespace-sensitive elements outside markup processing.
 			$protectedPattern = '~<!--.*?-->|<(script|style|pre|textarea|svg|math|template|code|xmp)\b(?:"[^"]*"|\'[^\']*\'|[^\'">])*?>.*?</\1\s*>~is';
 			$matchCount = preg_match_all($protectedPattern, $html, $matches, PREG_OFFSET_CAPTURE);
 			if ($matchCount === false) {
@@ -91,11 +91,101 @@
 			$offset = 0;
 			foreach ($matches[0] as $match) {
 				$result .= $this->minifyMarkup(substr($html, $offset, $match[1] - $offset));
-				$result .= $match[0];
+				$result .= $this->minifyStyleElement($match[0]);
 				$offset = $match[1] + strlen($match[0]);
 			}
 
 			return $result . $this->minifyMarkup(substr($html, $offset));
+		}
+
+		/**
+		 * Minifies CSS inside a style element and leaves other protected content intact.
+		 * @param string $element
+		 * @return string
+		 */
+		private function minifyStyleElement(string $element): string {
+			if (!preg_match('~^(<style\b(?:"[^"]*"|\'[^\']*\'|[^\'">])*?>)(.*)(</style\s*>)$~is', $element, $parts)) {
+				return $element;
+			}
+
+			// Only CSS style blocks should be rewritten.
+			if (preg_match('~\btype\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))~i', $parts[1], $type)) {
+				$mediaType = $type[1];
+				if ($mediaType === '') {
+					$mediaType = $type[2] ?? '';
+				}
+				if ($mediaType === '') {
+					$mediaType = $type[3] ?? '';
+				}
+				if (strcasecmp($mediaType, 'text/css') !== 0) {
+					return $element;
+				}
+			}
+
+			return $parts[1] . $this->minifyCss($parts[2]) . $parts[3];
+		}
+
+		/**
+		 * Collapses CSS whitespace outside strings and comments.
+		 * @param string $css
+		 * @return string
+		 */
+		private function minifyCss(string $css): string {
+			$result = '';
+			$length = strlen($css);
+			$quote = null;
+			$inComment = false;
+			$pendingWhitespace = false;
+
+			for ($index = 0; $index < $length; $index++) {
+				$character = $css[$index];
+
+				if ($inComment) {
+					$result .= $character;
+					if ($character === '*' && $index + 1 < $length && $css[$index + 1] === '/') {
+						$result .= '/';
+						$index++;
+						$inComment = false;
+					}
+					continue;
+				}
+
+				if ($quote !== null) {
+					$result .= $character;
+					if ($character === '\\' && $index + 1 < $length) {
+						$result .= $css[++$index];
+					} elseif ($character === $quote) {
+						$quote = null;
+					}
+					continue;
+				}
+
+				if ($character === ' ' || $character === "\t" || $character === "\r" || $character === "\n") {
+					$pendingWhitespace = true;
+					continue;
+				}
+
+				if ($pendingWhitespace && $result !== '') {
+					$result .= ' ';
+				}
+				$pendingWhitespace = false;
+
+				if ($character === '/' && $index + 1 < $length && $css[$index + 1] === '*') {
+					$result .= '/*';
+					$index++;
+					$inComment = true;
+					continue;
+				}
+
+				$result .= $character;
+				if ($character === '"' || $character === "'") {
+					$quote = $character;
+				} elseif ($character === '\\' && $index + 1 < $length) {
+					$result .= $css[++$index];
+				}
+			}
+
+			return $result;
 		}
 
 		/**
