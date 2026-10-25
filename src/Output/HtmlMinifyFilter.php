@@ -17,6 +17,7 @@
 		private const string PROTECTED_HTML_PATTERN = '~<!--.*?-->|<(script|style|pre|textarea|svg|math|template|code|xmp)\b' . self::ATTRIBUTE_SKIP . '>.*?</\1\s*>~is';
 		private const string STYLE_ELEMENT_PATTERN = '~^(<style\b' . self::ATTRIBUTE_SKIP . '>)(.*)(</style\s*>)$~is';
 		private const string TAG_ATTRIBUTE_PATTERN = '~([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))~';
+		private const string QUOTED_VALUE_PATTERN = '~"[^"]*"|\'[^\']*\'~';
 		private const string HTML_TAG_PATTERN = '~<(?:/?[a-zA-Z][a-zA-Z0-9]*|!)' . self::ATTRIBUTE_SKIP . '>~s';
 
 		/**
@@ -136,55 +137,72 @@
 		}
 
 		/**
-		 * Finds protected regions and ordinary tags in document order. Drops a
-		 * protected match that starts strictly inside an enclosing tag (a quoted
-		 * attribute value, not a real element), and drops a tag match that falls
-		 * inside a remaining protected region (a stray `<` in raw content).
+		 * Blanks out every quoted attribute value inside the given tag matches,
+		 * replacing it with spaces of the same length so offsets stay valid. Used
+		 * only to locate protected regions; actual output is sliced from the
+		 * original, unmasked string.
+		 * @param string $html
+		 * @param list<array{0: string, 1: int}> $tagMatches HTML_TAG_PATTERN matches with PREG_OFFSET_CAPTURE.
+		 * @return string
+		 */
+		private function maskAttributeValues(string $html, array $tagMatches): string {
+			$masked = $html;
+
+			foreach ($tagMatches as $tagMatch) {
+				if (!preg_match_all(self::QUOTED_VALUE_PATTERN, $tagMatch[0], $valueMatches, PREG_OFFSET_CAPTURE)) {
+					continue;
+				}
+
+				foreach ($valueMatches[0] as $valueMatch) {
+					$valueOffset = $tagMatch[1] + $valueMatch[1];
+					$masked = substr_replace($masked, str_repeat(' ', strlen($valueMatch[0])), $valueOffset, strlen($valueMatch[0]));
+				}
+			}
+
+			return $masked;
+		}
+
+		/**
+		 * Finds protected regions and ordinary tags in document order. Protected
+		 * regions are located on a copy with quoted attribute values blanked out,
+		 * so a tag-like substring inside an attribute value (e.g. `data-code="<script>"`)
+		 * can neither be matched as a fake region nor steal a real one's closing tag.
+		 * A tag match that still falls inside a real protected region (a stray `<`
+		 * in raw content) is dropped in favour of that region's own token.
 		 * @param string $html
 		 * @return list<array{offset: int, length: int, type: string, text: string, tagName: string|null}>|null
 		 */
 		private function tokenizeMarkup(string $html): ?array {
-			$protectedCount = preg_match_all(self::PROTECTED_HTML_PATTERN, $html, $protectedMatches, PREG_OFFSET_CAPTURE);
 			$tagCount = preg_match_all(self::HTML_TAG_PATTERN, $html, $tagMatches, PREG_OFFSET_CAPTURE);
 
-			if ($protectedCount === false || $tagCount === false) {
+			if ($tagCount === false) {
 				return null;
 			}
 
-			$tagRanges = [];
+			$maskedHtml = $this->maskAttributeValues($html, $tagMatches[0]);
+			$protectedCount = preg_match_all(self::PROTECTED_HTML_PATTERN, $maskedHtml, $protectedMatches, PREG_OFFSET_CAPTURE);
 
-			foreach ($tagMatches[0] as $match) {
-				$tagRanges[] = [$match[1], $match[1] + strlen($match[0])];
+			if ($protectedCount === false) {
+				return null;
 			}
 
 			$tokens = [];
 			$protectedRanges = [];
 
 			foreach ($protectedMatches[0] as $index => $match) {
-				$nestedInTag = false;
-
-				foreach ($tagRanges as $tagRange) {
-					if ($tagRange[0] < $match[1] && $match[1] < $tagRange[1]) {
-						$nestedInTag = true;
-						break;
-					}
-				}
-
-				if ($nestedInTag) {
-					continue;
-				}
-
+				$offset = $match[1];
+				$length = strlen($match[0]);
 				$tagName = $protectedMatches[1][$index][0] !== '' ? strtolower($protectedMatches[1][$index][0]) : null;
 
 				$tokens[] = [
-					'offset' => $match[1],
-					'length' => strlen($match[0]),
+					'offset' => $offset,
+					'length' => $length,
 					'type' => $tagName === null ? 'comment' : 'protected',
-					'text' => $match[0],
+					'text' => substr($html, $offset, $length),
 					'tagName' => $tagName,
 				];
 
-				$protectedRanges[] = [$match[1], $match[1] + strlen($match[0])];
+				$protectedRanges[] = [$offset, $offset + $length];
 			}
 
 			foreach ($tagMatches[0] as $match) {
