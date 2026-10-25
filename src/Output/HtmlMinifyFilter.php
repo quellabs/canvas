@@ -25,6 +25,7 @@
 				return;
 			}
 
+			// Exclude status code
 			if (in_array($response->getStatusCode(), [204, 205, 206, 304], true)) {
 				return;
 			}
@@ -34,13 +35,16 @@
 				return;
 			}
 
+			// Ignore if no content
 			$content = $response->getContent();
+
 			if (!is_string($content) || $content === '') {
 				return;
 			}
 
 			// Rendered templates can be HTML even when no Content-Type has been set yet.
 			$contentType = (string)$response->headers->get('Content-Type', '');
+
 			if ($contentType !== '') {
 				if (!preg_match('~^text/html(?:\s*;|\s*$)~i', $contentType)) {
 					return;
@@ -49,12 +53,15 @@
 				return;
 			}
 
+			// Perform minification
 			$minified = $this->minify($content);
 			if ($minified === $content) {
 				return;
 			}
 
+			// Update the content with the minified content
 			$response->setContent($minified);
+
 			if ($response->headers->has('Content-Length')) {
 				$response->headers->set('Content-Length', (string)strlen($minified));
 			}
