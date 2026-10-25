@@ -16,7 +16,7 @@
 		private const string ATTRIBUTE_SKIP = '(?:"[^"]*"|\'[^\']*\'|[^\'">])*?';
 		private const string PROTECTED_HTML_PATTERN = '~<!--.*?-->|<(script|style|pre|textarea|svg|math|template|code|xmp)\b' . self::ATTRIBUTE_SKIP . '>.*?</\1\s*>~is';
 		private const string STYLE_ELEMENT_PATTERN = '~^(<style\b' . self::ATTRIBUTE_SKIP . '>)(.*)(</style\s*>)$~is';
-		private const string STYLE_TYPE_PATTERN = '~(?<![\w-])type\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))~i';
+		private const string TAG_ATTRIBUTE_PATTERN = '~([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))~';
 		private const string HTML_TAG_PATTERN = '~<(?:/?[a-zA-Z][a-zA-Z0-9]*|!)' . self::ATTRIBUTE_SKIP . '>~s';
 
 		/**
@@ -136,10 +136,12 @@
 		}
 
 		/**
-		 * Finds protected regions and ordinary tags in document order, dropping any
-		 * tag match that falls inside a protected region.
+		 * Finds protected regions and ordinary tags in document order. Drops a
+		 * protected match that starts strictly inside an enclosing tag (a quoted
+		 * attribute value, not a real element), and drops a tag match that falls
+		 * inside a remaining protected region (a stray `<` in raw content).
 		 * @param string $html
-		 * @return array|null Ordered token list, or null when matching fails.
+		 * @return list<array{offset: int, length: int, type: string, text: string, tagName: string|null}>|null
 		 */
 		private function tokenizeMarkup(string $html): ?array {
 			$protectedCount = preg_match_all(self::PROTECTED_HTML_PATTERN, $html, $protectedMatches, PREG_OFFSET_CAPTURE);
@@ -149,10 +151,29 @@
 				return null;
 			}
 
+			$tagRanges = [];
+
+			foreach ($tagMatches[0] as $match) {
+				$tagRanges[] = [$match[1], $match[1] + strlen($match[0])];
+			}
+
 			$tokens = [];
 			$protectedRanges = [];
 
 			foreach ($protectedMatches[0] as $index => $match) {
+				$nestedInTag = false;
+
+				foreach ($tagRanges as $tagRange) {
+					if ($tagRange[0] < $match[1] && $match[1] < $tagRange[1]) {
+						$nestedInTag = true;
+						break;
+					}
+				}
+
+				if ($nestedInTag) {
+					continue;
+				}
+
 				$tagName = $protectedMatches[1][$index][0] !== '' ? strtolower($protectedMatches[1][$index][0]) : null;
 
 				$tokens[] = [
@@ -196,7 +217,7 @@
 		 * Collapses the whitespace accumulated since the previous real tag, keeping
 		 * any raw (comment) segments byte-for-byte and treating them as transparent
 		 * when deciding whether the surrounding whitespace can be dropped entirely.
-		 * @param array $segments List of ['text' => string] or ['raw' => string] segments.
+		 * @param list<array{text?: string, raw?: string}> $segments
 		 * @param string|null $previousTag
 		 * @param string|null $nextTag
 		 * @return string
@@ -224,7 +245,9 @@
 					continue;
 				}
 
-				$result .= preg_replace('/[ \t\r\n]+/', ' ', $segment['text']) ?? $segment['text'];
+				if (array_key_exists('text', $segment)) {
+					$result .= preg_replace('/[ \t\r\n]+/', ' ', $segment['text']) ?? $segment['text'];
+				}
 			}
 
 			return $result;
@@ -241,20 +264,49 @@
 			}
 
 			// Only CSS style blocks should be rewritten; an empty or absent type
-			// attribute defaults to text/css per the HTML spec.
-			if (preg_match(self::STYLE_TYPE_PATTERN, $parts[1], $type)) {
-				$mediaType = $type[1] !== '' ? $type[1] : ($type[2] ?? '');
+			// attribute defaults to text/css per the HTML spec. Attributes are matched
+			// sequentially so a quoted value cannot be mistaken for a later attribute.
+			$mediaType = $this->findAttributeValue($parts[1], 'type');
 
-				if ($mediaType === '') {
-					$mediaType = $type[3] ?? '';
-				}
-
-				if ($mediaType !== '' && strcasecmp($mediaType, 'text/css') !== 0) {
-					return $element;
-				}
+			if ($mediaType !== null && $mediaType !== '' && strcasecmp($mediaType, 'text/css') !== 0) {
+				return $element;
 			}
 
 			return $parts[1] . $this->minifyCss($parts[2]) . $parts[3];
+		}
+
+		/**
+		 * Finds a named attribute's value on an opening tag by matching attributes
+		 * left to right, so a name inside another attribute's quoted value is
+		 * consumed as part of that value instead of being matched on its own.
+		 * @param string $openingTag
+		 * @param string $name
+		 * @return string|null The attribute's value, or null when it is not present.
+		 */
+		private function findAttributeValue(string $openingTag, string $name): ?string {
+			if (!preg_match_all(self::TAG_ATTRIBUTE_PATTERN, $openingTag, $attributes, PREG_SET_ORDER)) {
+				return null;
+			}
+
+			foreach ($attributes as $attribute) {
+				if (strcasecmp($attribute[1], $name) !== 0) {
+					continue;
+				}
+
+				$value = $attribute[2] ?? '';
+
+				if ($value === '') {
+					$value = $attribute[3] ?? '';
+				}
+
+				if ($value === '') {
+					$value = $attribute[4] ?? '';
+				}
+
+				return $value;
+			}
+
+			return null;
 		}
 
 		/**
