@@ -104,16 +104,16 @@
 				// Text since the last token; stays unresolved until we know the next real tag.
 				$pendingSegments[] = ['text' => substr($html, $offset, $token['offset'] - $offset)];
 				$offset = $token['offset'] + $token['length'];
-
+				
+				// Comments carry no whitespace meaning of their own, so keep them as an
+				// opaque segment and let the next real tag resolve the pending text.
 				if ($token['type'] === 'comment') {
-					// Comments carry no whitespace meaning of their own, so keep them as an
-					// opaque segment and let the next real tag resolve the pending text.
 					$pendingSegments[] = ['raw' => $token['text']];
 					continue;
 				}
-
+				
+				// script/style/pre/etc. act as a real tag boundary: resolve pending text now.
 				if ($token['type'] === 'protected') {
-					// script/style/pre/etc. act as a real tag boundary: resolve pending text now.
 					$nextTag = '<' . $token['tagName'] . '>';
 					$result .= $this->flushPendingText($pendingSegments, $previousRealTag, $nextTag);
 					$pendingSegments = [];
@@ -132,7 +132,6 @@
 			// Trailing text after the last token has no following tag.
 			$pendingSegments[] = ['text' => substr($html, $offset)];
 			$result .= $this->flushPendingText($pendingSegments, $previousRealTag, null);
-
 			return $result;
 		}
 
