@@ -13,6 +13,11 @@
 	 */
 	class HtmlMinifyFilter implements OutputFilterInterface {
 
+		private const string PROTECTED_HTML_PATTERN = '~<!--.*?-->|<(script|style|pre|textarea|svg|math|template|code|xmp)\b(?:"[^"]*"|\'[^\']*\'|[^\'">])*?>.*?</\1\s*>~is';
+		private const string STYLE_ELEMENT_PATTERN = '~^(<style\b(?:"[^"]*"|\'[^\']*\'|[^\'">])*?>)(.*)(</style\s*>)$~is';
+		private const string STYLE_TYPE_PATTERN = '~\btype\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))~i';
+		private const string HTML_TAG_PATTERN = '~<(?:"[^"]*"|\'[^\']*\'|[^\'">])*>~s';
+
 		/**
 		 * Filters eligible HTML responses and updates headers tied to the body bytes.
 		 * @param Request $request
@@ -80,8 +85,8 @@
 		 */
 		private function minify(string $html): string {
 			// Keep comments and raw or whitespace-sensitive elements outside markup processing.
-			$protectedPattern = '~<!--.*?-->|<(script|style|pre|textarea|svg|math|template|code|xmp)\b(?:"[^"]*"|\'[^\']*\'|[^\'">])*?>.*?</\1\s*>~is';
-			$matchCount = preg_match_all($protectedPattern, $html, $matches, PREG_OFFSET_CAPTURE);
+			$matchCount = preg_match_all(self::PROTECTED_HTML_PATTERN, $html, $matches, PREG_OFFSET_CAPTURE);
+
 			if ($matchCount === false) {
 				return $html;
 			}
@@ -89,6 +94,7 @@
 			// Minify only the gaps between protected regions.
 			$result = '';
 			$offset = 0;
+
 			foreach ($matches[0] as $match) {
 				$result .= $this->minifyMarkup(substr($html, $offset, $match[1] - $offset));
 				$result .= $this->minifyStyleElement($match[0]);
@@ -104,12 +110,12 @@
 		 * @return string
 		 */
 		private function minifyStyleElement(string $element): string {
-			if (!preg_match('~^(<style\b(?:"[^"]*"|\'[^\']*\'|[^\'">])*?>)(.*)(</style\s*>)$~is', $element, $parts)) {
+			if (!preg_match(self::STYLE_ELEMENT_PATTERN, $element, $parts)) {
 				return $element;
 			}
 
 			// Only CSS style blocks should be rewritten.
-			if (preg_match('~\btype\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))~i', $parts[1], $type)) {
+			if (preg_match(self::STYLE_TYPE_PATTERN, $parts[1], $type)) {
 				$mediaType = $type[1];
 				if ($mediaType === '') {
 					$mediaType = $type[2] ?? '';
@@ -195,8 +201,7 @@
 		 */
 		private function minifyMarkup(string $markup): string {
 			// Quoted attribute values may contain whitespace or > characters.
-			$tagPattern = '~<(?:"[^"]*"|\'[^\']*\'|[^\'">])*>~s';
-			$matchCount = preg_match_all($tagPattern, $markup, $matches, PREG_OFFSET_CAPTURE);
+			$matchCount = preg_match_all(self::HTML_TAG_PATTERN, $markup, $matches, PREG_OFFSET_CAPTURE);
 			if ($matchCount === false) {
 				return $markup;
 			}
