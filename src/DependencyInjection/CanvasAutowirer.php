@@ -9,6 +9,7 @@
 	use Quellabs\Contracts\DependencyInjection\ContainerInterface;
 	use Quellabs\Canvas\Annotations\WithContext;
 	use Quellabs\Contracts\Context\MethodContextInterface;
+	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Contracts\DependencyInjection\ContextProviderInterface;
 	
 	/**
@@ -102,6 +103,7 @@
 		 * @param string $className Class name for error reporting
 		 * @param string $methodName Method name for error reporting
 		 * @return mixed The resolved parameter value
+		 * @throws AnnotationReaderException
 		 */
 		protected function resolveParameter(
 			array          $param,
