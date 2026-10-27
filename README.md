@@ -22,7 +22,13 @@ Canvas checks its own routes first. Unmatched URLs fall through to your legacy f
 
 ```php
 // legacy/admin/dashboard.php — your existing file, now with Canvas services
-$users = canvas('EntityManager')->findBy(User::class, ['active' => true]);
+$users = canvas()->get(EntityManager::class)->findBy(User::class, ['active' => true]);
+```
+
+`canvas()` returns the DI container; pass a DI context (string or array), as accepted by `Container::for()`, to scope resolution before calling `get()`:
+
+```php
+$cache = canvas('redis')->get(CacheInterface::class);
 ```
 
 Legacy files using `header()`, `die()`, and `exit()` are automatically preprocessed to work within Canvas's request/response flow. The preprocessing is recursive — included files are transformed too, and results are cached.
@@ -136,7 +142,7 @@ Controllers are discovered automatically through Composer metadata. Routes are d
 
 ## Features
 
-- **Legacy-first integration** — wrap existing PHP apps with route fallthrough, automatic preprocessing of `header()`/`die()`/`exit()`, and a `canvas()` helper for accessing services from legacy code
+- **Legacy-first integration** — wrap existing PHP apps with route fallthrough, automatic preprocessing of `header()`/`die()`/`exit()`, and a `canvas()` helper for accessing the DI container from legacy code
 - **Aspect-oriented programming** — Before, Around, and After aspects with annotation parameters, priority ordering, and inheritance through controller hierarchies
 - **ObjectQuel ORM** — declarative query language with pattern matching, hybrid JSON sources, and Data Mapper architecture
 - **Template engines** — Smarty by default, with Twig, Latte, Blade, Plates, and Handlebars available as drop-in packages
