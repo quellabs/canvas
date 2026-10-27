@@ -9,6 +9,7 @@
 	use Quellabs\Contracts\DependencyInjection\ContainerInterface;
 	use Quellabs\Canvas\Annotations\WithContext;
 	use Quellabs\Contracts\Context\MethodContextInterface;
+	use Quellabs\Contracts\DependencyInjection\ContextProviderInterface;
 	
 	/**
 	 * Canvas-aware autowirer that extends the base autowirer with @WithContext
@@ -111,9 +112,11 @@
 		): mixed {
 			// Store the context for this parameter so resolveType() can use it.
 			// Null when no @WithContext annotation was declared, which causes
-			// resolveType() to fall back to the default container.
-			$this->currentParamContext = $param['context'] ?? null;
-			
+			// resolveType() to fall back to the default container. If the
+			// single-value "context" key names a ContextProviderInterface class,
+			// replace it with the value that provider computes at request time.
+			$this->currentParamContext = $this->resolveContextProviders($param['context'] ?? null, $methodContext);
+
 			try {
 				return parent::resolveParameter($param, $parameters, $methodContext, $className, $methodName);
 			} finally {
@@ -121,6 +124,34 @@
 				// from this parameter never bleeds into the next one
 				$this->currentParamContext = null;
 			}
+		}
+
+		/**
+		 * If the context array's "context" key names a ContextProviderInterface class,
+		 * replaces it with the result of calling resolve() on it. A literal tag (e.g.
+		 * "redis") or any other key (the multi-key variadic form) passes through unchanged.
+		 * @param array<string, mixed>|null $context
+		 * @param MethodContextInterface|null $methodContext
+		 * @return array<string, mixed>|null
+		 */
+		private function resolveContextProviders(?array $context, ?MethodContextInterface $methodContext): ?array {
+			if (!isset($context['context']) || !is_string($context['context'])) {
+				return $context;
+			}
+
+			if (!is_a($context['context'], ContextProviderInterface::class, true)) {
+				return $context;
+			}
+
+			$provider = $this->container->get($context['context']);
+
+			if (!$provider instanceof ContextProviderInterface) {
+				return $context;
+			}
+
+			$context['context'] = $provider->resolve($methodContext);
+
+			return $context;
 		}
 		
 		/**
