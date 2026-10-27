@@ -129,7 +129,7 @@
 		/**
 		 * If the context array's "context" key names a ContextProviderInterface class,
 		 * replaces it with the result of calling resolve() on it. A literal tag (e.g.
-		 * "redis") or any other key (the multi-key variadic form) passes through unchanged.
+		 * "redis") passes through unchanged.
 		 * @param array<string, mixed>|null $context
 		 * @param MethodContextInterface|null $methodContext
 		 * @return array<string, mixed>|null
