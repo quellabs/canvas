@@ -135,20 +135,24 @@
 		 * @return array<string, mixed>|null
 		 */
 		private function resolveContextProviders(?array $context, ?MethodContextInterface $methodContext): ?array {
+			// No "context" key, or it isn't a string — nothing to resolve
 			if (!isset($context['context']) || !is_string($context['context'])) {
 				return $context;
 			}
 
+			// Not a provider class name — treat as a literal tag (e.g. "redis")
 			if (!is_a($context['context'], ContextProviderInterface::class, true)) {
 				return $context;
 			}
 
+			// Container returned something unexpected — fall back unchanged
 			$provider = $this->container->get($context['context']);
-
+			
 			if (!$provider instanceof ContextProviderInterface) {
 				return $context;
 			}
 
+			// Swap the class name for the value the provider computes for this call
 			$context['context'] = $provider->resolve($methodContext);
 
 			return $context;
