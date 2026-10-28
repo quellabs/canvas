@@ -177,7 +177,8 @@
 			$this->dependencyInjector->register(new SimpleBinding(AnnotationReader::class, $this->annotationsReader));
 			$this->dependencyInjector->register(new CacheInterfaceProvider($this->dependencyInjector, $this->annotationsReader));
 			$this->dependencyInjector->register(new LoggerInterfaceProvider(
-				$this->configuration->get("monolog_file", ComposerUtils::getProjectRoot() . '/storage/logs/canvas.log')
+				$this->configuration->get("monolog_file", ComposerUtils::getProjectRoot() . '/storage/logs/canvas.log'),
+				$this->annotationsReader
 			));
 
 			// Build the rate limit store from config/rate_limit.php (defaults to a

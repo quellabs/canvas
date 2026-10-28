@@ -9,6 +9,8 @@
 	use Quellabs\Contracts\DependencyInjection\ContainerInterface;
 	use Quellabs\Canvas\Annotations\WithContext;
 	use Quellabs\Contracts\Context\MethodContextInterface;
+	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
+	use Quellabs\Contracts\DependencyInjection\ContextProviderInterface;
 	
 	/**
 	 * Canvas-aware autowirer that extends the base autowirer with @WithContext
@@ -101,6 +103,7 @@
 		 * @param string $className Class name for error reporting
 		 * @param string $methodName Method name for error reporting
 		 * @return mixed The resolved parameter value
+		 * @throws AnnotationReaderException
 		 */
 		protected function resolveParameter(
 			array          $param,
@@ -111,9 +114,11 @@
 		): mixed {
 			// Store the context for this parameter so resolveType() can use it.
 			// Null when no @WithContext annotation was declared, which causes
-			// resolveType() to fall back to the default container.
-			$this->currentParamContext = $param['context'] ?? null;
-			
+			// resolveType() to fall back to the default container. If the
+			// single-value "context" key names a ContextProviderInterface class,
+			// replace it with the value that provider computes at request time.
+			$this->currentParamContext = $this->resolveContextProviders($param['context'] ?? null, $methodContext);
+
 			try {
 				return parent::resolveParameter($param, $parameters, $methodContext, $className, $methodName);
 			} finally {
@@ -122,7 +127,7 @@
 				$this->currentParamContext = null;
 			}
 		}
-		
+
 		/**
 		 * When @WithContext is active, temporarily resolves through a scoped container
 		 * clone. The original container is restored in the finally block.
@@ -146,5 +151,37 @@
 			} finally {
 				$this->container = $originalContainer;
 			}
+		}
+		
+		/**
+		 * If the context array's "context" key names a ContextProviderInterface class,
+		 * replaces it with the result of calling resolve() on it. A literal tag (e.g.
+		 * "redis") passes through unchanged.
+		 * @param array<string, mixed>|null $context
+		 * @param MethodContextInterface|null $methodContext
+		 * @return array<string, mixed>|null
+		 */
+		private function resolveContextProviders(?array $context, ?MethodContextInterface $methodContext): ?array {
+			// No "context" key, or it isn't a string — nothing to resolve
+			if (!isset($context['context']) || !is_string($context['context'])) {
+				return $context;
+			}
+			
+			// Not a provider class name — treat as a literal tag (e.g. "redis")
+			if (!is_a($context['context'], ContextProviderInterface::class, true)) {
+				return $context;
+			}
+			
+			// Container returned something unexpected — fall back unchanged
+			$provider = $this->container->get($context['context']);
+			
+			if (!$provider instanceof ContextProviderInterface) {
+				return $context;
+			}
+			
+			// Swap the class name for the value the provider computes for this call
+			$context['context'] = $provider->resolve($methodContext);
+			
+			return $context;
 		}
 	}
