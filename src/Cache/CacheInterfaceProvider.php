@@ -87,7 +87,7 @@
 			// @WithContext's literal context tag is the sole selector for which cache provider to use
 			$rawProvider = $metadata['context'] ?? null;
 			$providerName = is_string($rawProvider) ? $rawProvider : null;
-
+			
 			// Pick the @CacheContext instance that matches the resolved provider,
 			// falling back to the untagged default (if any), falling back to $dependencies.
 			$context = $this->resolveContext($methodContext, $dependencies, $providerName);
@@ -100,7 +100,7 @@
 			if (isset($this->cache[$cacheKey])) {
 				return $this->cache[$cacheKey];
 			}
-
+			
 			// Gather parameters from all sources: MethodContext, InterceptWith and config/cache.php
 			$rawUserConfig = $dependencies['config'] ?? [];
 			$userConfig = is_array($rawUserConfig) ? $rawUserConfig : [];
@@ -117,10 +117,10 @@
 				'config'    => $totalConfig,
 				...$context['params']
 			];
-
+			
 			// Create and store new cache instance
 			$instance = $this->dependencyInjector->make($providerClass, $constructorParams);
-
+			
 			// Ensure the instance implements CacheInterface
 			if (!$instance instanceof CacheInterface) {
 				throw new \RuntimeException(
@@ -143,20 +143,20 @@
 		private function resolveContext(?MethodContextInterface $methodContext, array $dependencies, ?string $resolvedContext): array {
 			$params = $dependencies;
 			$namespace = self::DEFAULT_NAMESPACE;
-
+			
 			// Check if namespace is passed in the dependencies
 			if (!empty($dependencies['namespace'])) {
 				$namespace = $dependencies['namespace'];
 			}
-
+			
 			// Check if we have method context to read annotations from
 			if ($methodContext !== null) {
 				$className = $methodContext->getClassName();
-
+				
 				// Validate class exists
 				if (!class_exists($className)) {
 					throw new \RuntimeException('Class does not exist');
-
+					
 				}
 				// Read CacheContext annotations from the method. A method may carry
 				// several, one per resolved context, plus an optional untagged default.
@@ -165,25 +165,25 @@
 					$methodContext->getMethodName(),
 					CacheContext::class
 				);
-
+				
 				$annotation = $this->selectCacheContext($annotations, $resolvedContext);
-
+				
 				if ($annotation !== null) {
 					$params = $annotation->getParameters();
 					$namespace = $params['namespace'] ?? $namespace;
 				}
 			}
-
-				// Resolve namespace to a definite string for the hash
+			
+			// Resolve namespace to a definite string for the hash
 			$namespaceString = is_string($namespace) ? $namespace : self::DEFAULT_NAMESPACE;
-
+			
 			return [
 				'namespace' => $namespace,
 				'params'    => $params,
 				'hash'      => $namespaceString . ':' . md5(serialize($params))
 			];
 		}
-
+		
 		/**
 		 * Picks the @CacheContext instance whose `context` matches $resolvedContext,
 		 * falling back to the untagged instance (`context` omitted), if any.
@@ -193,21 +193,21 @@
 		 */
 		private function selectCacheContext(iterable $annotations, ?string $resolvedContext): ?CacheContext {
 			$default = null;
-
+			
 			foreach ($annotations as $annotation) {
 				if (!$annotation instanceof CacheContext) {
 					continue;
 				}
-
+				
 				if ($annotation->getContext() === $resolvedContext) {
 					return $annotation;
 				}
-
+				
 				if ($annotation->getContext() === null) {
 					$default = $annotation;
 				}
 			}
-
+			
 			return $default;
 		}
 		

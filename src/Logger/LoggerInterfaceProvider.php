@@ -13,7 +13,7 @@
 	use Psr\Log\LoggerInterface;
 	use Quellabs\Contracts\Context\MethodContextInterface;
 	use Quellabs\DependencyInjection\Provider\ServiceProvider;
-
+	
 	/**
 	 * Provides a contextual LoggerInterface implementation to the dependency
 	 * injection container. Each consumer receives a Logger instance configured
@@ -32,16 +32,16 @@
 	 * plus an optional untagged one used when none of the tagged ones match.
 	 */
 	class LoggerInterfaceProvider extends ServiceProvider {
-
+		
 		/** @var string Default log file */
 		private string $logfile;
-
+		
 		/** @var AnnotationReader Used to read @LoggerContext from the requesting method */
 		private AnnotationReader $annotationReader;
-
+		
 		/** @var array<string, LoggerInterface> Cached logger instances keyed by channel name */
 		private array $loggers = [];
-
+		
 		/**
 		 * LoggerInterfaceProvider constructor
 		 * @param string $logfile
@@ -79,18 +79,18 @@
 		): LoggerInterface {
 			// @WithContext's literal context tag is the sole handler selector
 			$provider = is_string($metadata['context'] ?? null) ? $metadata['context'] : 'stream';
-
+			
 			// Pick the @LoggerContext instance that matches the resolved handler,
 			// falling back to the untagged default (if any), falling back to [].
 			$loggerContext = $this->resolveLoggerContext($methodContext, $provider);
-
+			
 			// Resolve all configuration, falling back to defaults.
 			// Use is_string guards — PHPStan at strict level rejects casts on mixed.
 			$channel = is_string($loggerContext['channel'] ?? null) ? $loggerContext['channel'] : 'app';
-
+			
 			// Resolve logfile
 			$logfile = is_string($loggerContext['logfile'] ?? null) ? $loggerContext['logfile'] : $this->logfile;
-
+			
 			if (!str_starts_with($logfile, DIRECTORY_SEPARATOR)) {
 				$logfile = ComposerUtils::getProjectRoot() . '/storage/logs/' . $logfile;
 			}
@@ -119,7 +119,7 @@
 			$logger->pushHandler($handler);
 			return $this->loggers[$cacheKey] = $logger;
 		}
-
+		
 		/**
 		 * Reads @LoggerContext parameters off the requesting method, if present.
 		 * A method may carry several @LoggerContext instances, one per resolved
@@ -133,13 +133,13 @@
 			if ($methodContext === null) {
 				return [];
 			}
-
+			
 			$className = $methodContext->getClassName();
-
+			
 			if (!class_exists($className)) {
 				return [];
 			}
-
+			
 			try {
 				$annotations = $this->annotationReader->getMethodAnnotations(
 					$className,
@@ -150,23 +150,23 @@
 				// Annotation parsing failed or no docblock present — proceed without overrides
 				return [];
 			}
-
+			
 			$default = null;
-
+			
 			foreach ($annotations as $annotation) {
 				if (!$annotation instanceof LoggerContext) {
 					continue;
 				}
-
+				
 				if ($annotation->getContext() === $resolvedContext) {
 					return $annotation->getParameters();
 				}
-
+				
 				if ($annotation->getContext() === null) {
 					$default = $annotation;
 				}
 			}
-
+			
 			return $default?->getParameters() ?? [];
 		}
 	}
