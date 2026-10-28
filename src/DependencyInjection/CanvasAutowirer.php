@@ -12,7 +12,6 @@
 	use Quellabs\Contracts\Context\MethodContextInterface;
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Contracts\DependencyInjection\ContextProviderInterface;
-	use Quellabs\Contracts\DependencyInjection\EntityProviderInterface;
 	
 	/**
 	 * Canvas-aware autowirer that extends the base autowirer with @WithContext
@@ -98,13 +97,6 @@
 		/**
 		 * Stashes the @WithContext context for the current parameter so resolveType()
 		 * can pick it up, then resets it after resolution to prevent bleed-over.
-		 * Also turns a required (non-nullable) parameter resolved to null by an
-		 * EntityProviderInterface provider (e.g. no database row for the requested
-		 * entity) into a deliberate 404, rather than letting PHP raise a TypeError
-		 * when the controller method is actually invoked. A nullable parameter
-		 * still receives null unchanged, and null from any other provider (an
-		 * ordinary service that doesn't implement EntityProviderInterface) is left
-		 * as an ordinary DI failure, not turned into a 404.
 		 * @param ParameterMeta $param Parameter metadata, optionally containing 'context' from @WithContext
 		 * @param array<string, mixed> $parameters User-provided parameter values
 		 * @param MethodContextInterface|null $methodContext Context object for dependency injection
@@ -112,7 +104,6 @@
 		 * @param string $methodName Method name for error reporting
 		 * @return mixed The resolved parameter value
 		 * @throws AnnotationReaderException
-		 * @throws RequiredParameterNotFoundException If a required entity-bound parameter resolved to null
 		 */
 		protected function resolveParameter(
 			array          $param,
@@ -129,45 +120,35 @@
 			$this->currentParamContext = $this->resolveContextProviders($param['context'] ?? null, $methodContext);
 
 			try {
-				$resolved = parent::resolveParameter($param, $parameters, $methodContext, $className, $methodName);
+				return parent::resolveParameter($param, $parameters, $methodContext, $className, $methodName);
 			} finally {
 				// Always reset regardless of success or exception, so the context
 				// from this parameter never bleeds into the next one
 				$this->currentParamContext = null;
 			}
-
-			if (
-				$resolved === null &&
-				!($param['nullable'] ?? true) &&
-				$this->isEntityBoundType($param['types'] ?? [])
-			) {
-				throw new RequiredParameterNotFoundException($className, $methodName, $param['name']);
-			}
-
-			return $resolved;
 		}
 
 		/**
-		 * Whether a parameter's declared types include a candidate whose
-		 * registered provider implements EntityProviderInterface — the only kind
-		 * of null worth converting into a 404. A type with no dedicated provider,
-		 * or one handled by an ordinary ServiceProviderInterface implementation,
-		 * does not qualify.
-		 * @param array<int, string> $types
-		 * @return bool
+		 * A provider's NotFound::instance() (e.g. no database row for the
+		 * requested entity) becomes a deliberate 404 for a required parameter,
+		 * rather than letting PHP raise a TypeError when the controller method
+		 * is actually invoked. A nullable parameter still receives null
+		 * unchanged. This is the only place that distinguishes the two — base
+		 * Autowirer has no concept of an HTTP response, and a provider that
+		 * doesn't deal in "missing records" never produces NotFound in the
+		 * first place, so its null is untouched by this override entirely.
+		 * @param ParameterMeta $param Parameter metadata (name, types, nullable, etc.)
+		 * @param string $className Class name for error reporting
+		 * @param string $methodName Method name for error reporting
+		 * @return mixed
+		 * @throws RequiredParameterNotFoundException If the parameter is required
 		 */
-		private function isEntityBoundType(array $types): bool {
-			foreach ($types as $type) {
-				if ($type === 'null' || $this->isBuiltinType($type)) {
-					continue;
-				}
-
-				if ($this->container->findProvider($type) instanceof EntityProviderInterface) {
-					return true;
-				}
+		protected function handleNotFound(array $param, string $className, string $methodName): mixed {
+			if ($param['nullable'] ?? true) {
+				return null;
 			}
 
-			return false;
+			throw new RequiredParameterNotFoundException($className, $methodName, $param['name']);
 		}
 
 		/**
