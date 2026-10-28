@@ -129,14 +129,15 @@
 		}
 
 		/**
-		 * A provider's NotFound::instance() (e.g. no database row for the
-		 * requested entity) becomes a deliberate 404 for a required parameter,
-		 * rather than letting PHP raise a TypeError when the controller method
-		 * is actually invoked. A nullable parameter still receives null
-		 * unchanged. This is the only place that distinguishes the two — base
-		 * Autowirer has no concept of an HTTP response, and a provider that
-		 * doesn't deal in "missing records" never produces NotFound in the
-		 * first place, so its null is untouched by this override entirely.
+		 * A provider throwing ResolutionNotFoundException (e.g. no database row
+		 * for the requested entity) becomes a deliberate 404 for a required
+		 * parameter, rather than letting PHP raise a TypeError when the
+		 * controller method is actually invoked. A nullable parameter still
+		 * receives null unchanged. This is the only place that distinguishes
+		 * the two — base Autowirer has no concept of an HTTP response, and a
+		 * provider that doesn't deal in "missing records" never throws that
+		 * exception in the first place, so its ordinary null is untouched by
+		 * this override entirely.
 		 * @param ParameterMeta $param Parameter metadata (name, types, nullable, etc.)
 		 * @param string $className Class name for error reporting
 		 * @param string $methodName Method name for error reporting
