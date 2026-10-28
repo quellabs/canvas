@@ -2,104 +2,112 @@
 	
 	namespace Quellabs\Canvas\Validation;
 	
+	use Quellabs\Canvas\Exceptions\ValidationException;
 	use Quellabs\Canvas\Validation\Contracts\ValidationInterface;
 	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
 	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
-	use Symfony\Component\HttpFoundation\JsonResponse;
 	use Quellabs\Contracts\DependencyInjection\ContainerInterface;
-	
+
 	/**
 	 * Form validation aspect that intercepts method calls to validate request data
 	 * before the method execution. Uses AOP (Aspect-Oriented Programming) pattern
 	 * to separate validation concerns from business logic.
+	 *
+	 * Failure modes:
+	 * - Default (throwOnFailure = false): writes validation_passed/validation_errors
+	 *   to the request attributes, then continues. The controller is responsible for
+	 *   checking these attributes and deciding how to respond.
+	 * - throwOnFailure = true: throws ValidationException, which the framework's
+	 *   exception handler converts into an HTTP response. Use this when you want
+	 *   centralized, uniform error handling and do not need per-controller logic.
 	 */
 	class ValidateAspect implements BeforeAspectInterface {
-		
+
 		/**
 		 * @var ContainerInterface The Dependency Injector container
 		 */
 		protected ContainerInterface $di;
-		
+
 		/**
 		 * @var string The fully qualified class name of the validation rules class
 		 */
 		protected string $validationClass;
-		
-		/**
-		 * @var bool In the case of JSON, send an auto response. By default, this is disabled.
-		 */
-		protected bool $autoRespond;
-		
+
 		/**
 		 * @var string|null The ID of the form being checked
 		 */
 		protected ?string $formId;
-		
+
+		/**
+		 * @var bool If true, throws ValidationException on failure instead of
+		 * only writing to request attributes
+		 */
+		protected bool $throwOnFailure;
+
 		/**
 		 * @var Validator The validator instance
 		 */
 		protected Validator $validator;
-		
+
 		/**
 		 * ValidateFormAspect constructor
 		 * @param ContainerInterface $di The Dependency Injector object
 		 * @param string $validator The validation class name that contains the rules
-		 * @param bool $autoRespond In the case of JSON, send an auto response
 		 * @param string|null $formId Optional form ID for multi-form scenarios
+		 * @param bool $throwOnFailure If true, throws ValidationException on failure in
+		 *                             addition to writing failure info to request attributes
 		 */
-		public function __construct(ContainerInterface $di, string $validator, bool $autoRespond = false, ?string $formId = null) {
+		public function __construct(ContainerInterface $di, string $validator, ?string $formId = null, bool $throwOnFailure = false) {
 			$this->di = $di;
 			$this->validationClass = $validator;
-			$this->autoRespond = $autoRespond;
 			$this->formId = $formId;
+			$this->throwOnFailure = $throwOnFailure;
 			$this->validator = new Validator();
 		}
-		
+
 		/**
 		 * Executes before the target method is called
-		 * Validates the request data and either returns an error response (for API calls)
-		 * or sets validation attributes on the request (for web requests)
+		 * Validates the request data and sets validation_passed/validation_errors
+		 * request attributes for the controller to act on. Throws ValidationException
+		 * instead when throwOnFailure is enabled and validation fails; a misconfigured
+		 * validator class always throws, regardless of throwOnFailure.
 		 * @param MethodContextInterface $context The method execution context containing request data
-		 * @return Response|null Returns JsonResponse for failed API validations, null otherwise
+		 * @return Response|null Always null; throws ValidationException if throwOnFailure is
+		 *                        enabled and validation fails
+		 * @throws ValidationException If throwOnFailure is true and the data fails validation
 		 */
 		public function before(MethodContextInterface $context): ?Response {
 			$request = $context->getRequest();
-			
+
 			// Skip validation if no form data is present
 			if (!$this->shouldPerformValidation($request)) {
 				return null;
 			}
-			
+
 			// Create the validation rules instance
 			$rules = $this->createValidationRules();
-			
+
 			// Extract only $_POST and $_GET data (no JSON body handling)
 			$requestData = $this->extractRequestData($request);
-			
+
 			// Validate the data using the Validator
 			$errors = $this->validator->validate($requestData, $rules);
-			
+
 			// Prefix distinguishes validation results when multiple forms are present
 			$prefix = $this->formId ? "{$this->formId}_" : '';
-			
-			// Handle validation failures
-			if (!empty($errors)) {
-				// For API requests, return JSON error immediately
-				if ($this->autoRespond && $this->expectsJson($request)) {
-					return $this->createValidationErrorResponse($errors);
-				}
-				
-				// For web requests, set validation flags and let controller handle the response
-				$request->attributes->set("{$prefix}validation_passed", false);
-				$request->attributes->set("{$prefix}validation_errors", $errors);
-				return null;
+
+			// Always write results to request attributes — controllers and exception
+			// handlers both benefit from having them available without re-validating
+			$request->attributes->set("{$prefix}validation_passed", empty($errors));
+			$request->attributes->set("{$prefix}validation_errors", $errors);
+
+			// Validation failed — throw if opted in, otherwise continue to controller
+			if (!empty($errors) && $this->throwOnFailure) {
+				throw new ValidationException('Validation failed', $errors, $this->formId);
 			}
-			
-			// Validation passed - set success flags
-			$request->attributes->set("{$prefix}validation_passed", true);
-			$request->attributes->set("{$prefix}validation_errors", []);
+
 			return null;
 		}
 		
@@ -118,19 +126,6 @@
 			
 			// Merge with POST taking precedence
 			return array_merge($getData, $postData);
-		}
-		
-		/**
-		 * Creates the JSON error response for validation failures
-		 * Override this method to customize the error response format
-		 * @param array<string, list<string>> $errors
-		 * @return JsonResponse
-		 */
-		protected function createValidationErrorResponse(array $errors): JsonResponse {
-			return new JsonResponse([
-				'message' => 'Validation failed',
-				'errors'  => $errors
-			], 422);
 		}
 		
 		/**
@@ -174,58 +169,5 @@
 			}
 			
 			return true;
-		}
-		
-		/**
-		 * Determines if the request expects a JSON response
-		 * Checks multiple indicators including Accept header, AJAX, and URL patterns
-		 * @param Request $request The HTTP request
-		 * @return bool True if JSON response is expected
-		 */
-		private function expectsJson(Request $request): bool {
-			// Check if request explicitly wants JSON via Accept header
-			if ($request->getPreferredFormat() === 'json') {
-				return true;
-			}
-			
-			// Check if it's an AJAX request wanting JSON
-			if ($request->isXmlHttpRequest()) {
-				$acceptHeader = (string)$request->headers->get('Accept', '');
-				
-				if (str_contains($acceptHeader, 'application/json')) {
-					return true;
-				}
-			}
-			
-			// Check if the URL path indicates an API endpoint
-			if ($this->isApiPath($request->getPathInfo())) {
-				return true;
-			}
-			
-			return false;
-		}
-		
-		/**
-		 * Checks if the URL path indicates an API endpoint
-		 * @param string $pathInfo The request path
-		 * @return bool True if it looks like an API path
-		 */
-		private function isApiPath(string $pathInfo): bool {
-			$apiPatterns = [
-				'/^\/api\//',           // /api/...
-				'/^\/v\d+\//',          // /v1/, /v2/, etc.
-				'/^\/api\/v\d+\//',     // /api/v1/, /api/v2/, etc.
-				'/\.json$/',            // ends with .json
-				'/^\/graphql/',         // GraphQL endpoints
-				'/^\/webhook/',         // Webhook endpoints
-			];
-			
-			foreach ($apiPatterns as $pattern) {
-				if (preg_match($pattern, $pathInfo)) {
-					return true;
-				}
-			}
-			
-			return false;
 		}
 	}
