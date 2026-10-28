@@ -17,6 +17,11 @@
 	 * to the dependency injection container. It uses the singleton pattern to
 	 * ensure that the same cache instance is returned whenever the CacheInterface
 	 * is requested, preventing multiple cache instances from being created.
+	 *
+	 * @WithContext's literal context tag is the sole provider selector. A method
+	 * may carry several @CacheContext instances, each tagged with the context it
+	 * configures (`@CacheContext(context: "redis", namespace: "...")`), plus an
+	 * optional untagged one used when none of the tagged ones match.
 	 */
 	class CacheInterfaceProvider extends ServiceProvider {
 		
@@ -68,7 +73,7 @@
 		 * Creates and returns the cache interface instance.
 		 * @param class-string $className The class name being requested (should be CacheInterface::class)
 		 * @param array<int|string, mixed> $dependencies Dependencies for the class (unused since we return existing instance)
-		 * @param array<string, mixed> $metadata Metadata as passed by Discover - may contain 'provider' key
+		 * @param array<string, mixed> $metadata May contain a 'context' key naming the cache provider
 		 * @param MethodContextInterface|null $methodContext Context about the method requesting the cache
 		 * @return CacheInterface The cache interface implementation
 		 * @throws AnnotationReaderException
@@ -79,11 +84,13 @@
 			array $metadata,
 			?MethodContextInterface $methodContext = null
 		): CacheInterface {
-			$context = $this->resolveContext($methodContext, $dependencies);
-			
-			// Determine which cache provider to use based on metadata or annotations
-			$rawProvider = $metadata['context'] ?? $context['driver'] ?? null;
+			// @WithContext's literal context tag is the sole selector for which cache provider to use
+			$rawProvider = $metadata['context'] ?? null;
 			$providerName = is_string($rawProvider) ? $rawProvider : null;
+
+			// Pick the @CacheContext instance that matches the resolved provider,
+			// falling back to the untagged default (if any), falling back to $dependencies.
+			$context = $this->resolveContext($methodContext, $dependencies, $providerName);
 			$providerClass = $this->getProviderClass($providerName);
 			
 			// Create a unique cache key for this provider and context combination
@@ -129,56 +136,79 @@
 		 * Resolves cache context from method annotations.
 		 * @param MethodContextInterface|null $methodContext The method context to analyze
 		 * @param array<int|string, mixed> $dependencies Dependencies passed to createInstance
-		 * @return array{namespace: mixed, params: array<int|string, mixed>, driver: mixed, hash: string} Contains namespace, params, and hash for caching
+		 * @param string|null $resolvedContext The provider tag resolved from @WithContext, if any
+		 * @return array{namespace: mixed, params: array<int|string, mixed>, hash: string} Contains namespace, params, and hash for caching
 		 * @throws AnnotationReaderException
 		 */
-		private function resolveContext(?MethodContextInterface $methodContext, array $dependencies): array {
+		private function resolveContext(?MethodContextInterface $methodContext, array $dependencies, ?string $resolvedContext): array {
 			$params = $dependencies;
 			$namespace = self::DEFAULT_NAMESPACE;
-			
+
 			// Check if namespace is passed in the dependencies
 			if (!empty($dependencies['namespace'])) {
 				$namespace = $dependencies['namespace'];
 			}
-			
+
 			// Check if we have method context to read annotations from
 			if ($methodContext !== null) {
 				$className = $methodContext->getClassName();
-				
+
 				// Validate class exists
 				if (!class_exists($className)) {
 					throw new \RuntimeException('Class does not exist');
-					
+
 				}
-				// Read CacheContext annotations from the method
+				// Read CacheContext annotations from the method. A method may carry
+				// several, one per resolved context, plus an optional untagged default.
 				$annotations = $this->annotationReader->getMethodAnnotations(
 					$className,
 					$methodContext->getMethodName(),
 					CacheContext::class
 				);
-				
-				// Extract parameters from the first annotation if it exists
-				if (!$annotations->isEmpty()) {
-					$annotation = $annotations[0];
-					
-					if (!$annotation instanceof CacheContext) {
-						throw new \RuntimeException('Expected CacheContext annotation');
-					}
-					
+
+				$annotation = $this->selectCacheContext($annotations, $resolvedContext);
+
+				if ($annotation !== null) {
 					$params = $annotation->getParameters();
 					$namespace = $params['namespace'] ?? $namespace;
 				}
 			}
-			
+
 				// Resolve namespace to a definite string for the hash
 			$namespaceString = is_string($namespace) ? $namespace : self::DEFAULT_NAMESPACE;
-			
+
 			return [
 				'namespace' => $namespace,
 				'params'    => $params,
-				'driver'    => $params['driver'] ?? null,
 				'hash'      => $namespaceString . ':' . md5(serialize($params))
 			];
+		}
+
+		/**
+		 * Picks the @CacheContext instance whose `context` matches $resolvedContext,
+		 * falling back to the untagged instance (`context` omitted), if any.
+		 * @param iterable<mixed> $annotations The method's @CacheContext annotations
+		 * @param string|null $resolvedContext The provider tag resolved from @WithContext, if any
+		 * @return CacheContext|null The matching annotation, or null if none apply
+		 */
+		private function selectCacheContext(iterable $annotations, ?string $resolvedContext): ?CacheContext {
+			$default = null;
+
+			foreach ($annotations as $annotation) {
+				if (!$annotation instanceof CacheContext) {
+					continue;
+				}
+
+				if ($annotation->getContext() === $resolvedContext) {
+					return $annotation;
+				}
+
+				if ($annotation->getContext() === null) {
+					$default = $annotation;
+				}
+			}
+
+			return $default;
 		}
 		
 		/**

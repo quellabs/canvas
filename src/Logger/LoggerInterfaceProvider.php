@@ -17,18 +17,19 @@
 	/**
 	 * Provides a contextual LoggerInterface implementation to the dependency
 	 * injection container. Each consumer receives a Logger instance configured
-	 * with the handler and channel specified via @WithContext / @LoggerContext,
-	 * or sensible defaults.
+	 * via @WithContext (handler selection) and @LoggerContext (logfile/channel
+	 * overrides), or sensible defaults.
 	 *
 	 * Logger instances are cached by their full configuration (channel, provider,
 	 * logfile) so that repeated injections with the same settings return the same
 	 * instance rather than constructing a new one each time.
 	 *
-	 * Handler selection ('stream' default, 'rotating', 'stderr') comes from either
-	 * @WithContext's literal context tag or @LoggerContext's 'handler' key, the
-	 * latter taking precedence. 'logfile' and 'channel' overrides are read from
-	 * @LoggerContext, read directly off the method — they can no longer travel
-	 * through @WithContext's context value, which is a single string.
+	 * @WithContext's literal context tag ('stream' default, 'rotating', 'stderr')
+	 * is the sole handler selector. @LoggerContext, read directly off the method,
+	 * only supplies 'logfile'/'channel' overrides — it has no say over the handler.
+	 * A method may carry several @LoggerContext instances, each tagged with the
+	 * context it configures (`@LoggerContext(context: "rotating", logfile: "...")`),
+	 * plus an optional untagged one used when none of the tagged ones match.
 	 */
 	class LoggerInterfaceProvider extends ServiceProvider {
 
@@ -63,7 +64,7 @@
 		
 		/**
 		 * Creates and returns a Logger instance configured per @WithContext's literal
-		 * tag (handler selection) and @LoggerContext (handler/logfile/channel overrides).
+		 * tag (handler selection) and @LoggerContext (logfile/channel overrides).
 		 * @param class-string $className The class name being requested (should be LoggerInterface::class)
 		 * @param array<int|string, mixed> $dependencies Dependencies for the class (unused)
 		 * @param array<string, mixed> $metadata May contain a 'context' key naming the handler
@@ -76,19 +77,16 @@
 			array $metadata,
 			?MethodContextInterface $methodContext = null
 		): LoggerInterface {
-			$loggerContext = $this->resolveLoggerContext($methodContext);
+			// @WithContext's literal context tag is the sole handler selector
+			$provider = is_string($metadata['context'] ?? null) ? $metadata['context'] : 'stream';
+
+			// Pick the @LoggerContext instance that matches the resolved handler,
+			// falling back to the untagged default (if any), falling back to [].
+			$loggerContext = $this->resolveLoggerContext($methodContext, $provider);
 
 			// Resolve all configuration, falling back to defaults.
 			// Use is_string guards — PHPStan at strict level rejects casts on mixed.
 			$channel = is_string($loggerContext['channel'] ?? null) ? $loggerContext['channel'] : 'app';
-
-			if (is_string($loggerContext['handler'] ?? null)) {
-				$provider = $loggerContext['handler'];
-			} elseif (is_string($metadata['context'] ?? null)) {
-				$provider = $metadata['context'];
-			} else {
-				$provider = 'stream';
-			}
 
 			// Resolve logfile
 			$logfile = is_string($loggerContext['logfile'] ?? null) ? $loggerContext['logfile'] : $this->logfile;
@@ -124,10 +122,14 @@
 
 		/**
 		 * Reads @LoggerContext parameters off the requesting method, if present.
+		 * A method may carry several @LoggerContext instances, one per resolved
+		 * context; the one whose `context` matches $resolvedContext wins, falling
+		 * back to the untagged instance (`context` omitted), if any.
 		 * @param MethodContextInterface|null $methodContext Context about the class requesting the logger
-		 * @return array<string, mixed> The annotation's parameters, or an empty array if absent
+		 * @param string $resolvedContext The handler tag resolved from @WithContext (or the 'stream' default)
+		 * @return array<string, mixed> The matching annotation's parameters, or an empty array if none match
 		 */
-		private function resolveLoggerContext(?MethodContextInterface $methodContext): array {
+		private function resolveLoggerContext(?MethodContextInterface $methodContext, string $resolvedContext): array {
 			if ($methodContext === null) {
 				return [];
 			}
@@ -149,16 +151,22 @@
 				return [];
 			}
 
-			if ($annotations->isEmpty()) {
-				return [];
+			$default = null;
+
+			foreach ($annotations as $annotation) {
+				if (!$annotation instanceof LoggerContext) {
+					continue;
+				}
+
+				if ($annotation->getContext() === $resolvedContext) {
+					return $annotation->getParameters();
+				}
+
+				if ($annotation->getContext() === null) {
+					$default = $annotation;
+				}
 			}
 
-			$annotation = $annotations[0];
-
-			if (!$annotation instanceof LoggerContext) {
-				return [];
-			}
-
-			return $annotation->getParameters();
+			return $default?->getParameters() ?? [];
 		}
 	}
