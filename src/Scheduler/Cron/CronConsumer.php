@@ -71,7 +71,7 @@
 		 */
 		public function run(): void {
 			$container = $this->kernel->getDependencyInjector();
-			$tasksPath = $this->kernel->getConfiguration()->get('task_scheduler_directory', ComposerUtils::getProjectRoot() . '/src/Tasks');
+			$tasksPath = $this->kernel->getConfiguration()->get('scheduler_directory', ComposerUtils::getProjectRoot() . '/src/Tasks');
 			$fileJobStorage = new FileJobStorage(ComposerUtils::getProjectRoot() . '/storage/task-scheduler');
 			
 			$scheduler = new Scheduler($fileJobStorage, $container, $tasksPath);
