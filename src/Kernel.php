@@ -28,6 +28,7 @@
 	use Quellabs\Canvas\Configuration\Configuration;
 	use Quellabs\Canvas\Logger\LoggerInterfaceProvider;
 	use Quellabs\Canvas\Output\OutputFilterInterface;
+	use Quellabs\Canvas\Output\OutputFilterResolver;
 	use Symfony\Component\HttpFoundation\Session\Session;
 	use Quellabs\Canvas\DependencyInjection\CanvasContainer;
 	use Quellabs\Canvas\Discover\DependencyAwareDiscover;
@@ -209,26 +210,16 @@
 				\RuntimeException::class
 			);
 			
-			// Filter the output if requested
+			// Filter the output if requested; config/app.php's output_filter accepts
+			// a single class-string or an ordered list of classes (composed via
+			// CompositeOutputFilter)
 			$outputFilterClass = $this->configuration->all()['output_filter'] ?? null;
-			
-			if ($outputFilterClass !== null) {
-				// Validate existence of output filter class
-				if (!is_string($outputFilterClass) || !class_exists($outputFilterClass)) {
-					throw new \InvalidArgumentException('output_filter must be an existing class name or null.');
-				}
 
-				// Instantiate that class
-				$filter = $this->dependencyInjector->make($outputFilterClass);
-				
-				// If the class does not implement OutputFilterInterface it's invalid
-				if (!$filter instanceof OutputFilterInterface) {
-					throw new \InvalidArgumentException('output_filter class must implement ' . OutputFilterInterface::class . '.');
-				}
-				
-				// Store the filter
-				$this->outputFilter = $filter;
+			if (!is_string($outputFilterClass) && !is_array($outputFilterClass) && $outputFilterClass !== null) {
+				throw new \InvalidArgumentException('output_filter must be a class-string, a list of class-strings, or null.');
 			}
+
+			$this->outputFilter = OutputFilterResolver::resolve($this->dependencyInjector, $outputFilterClass, 'output_filter');
 		}
 		
 		/**
