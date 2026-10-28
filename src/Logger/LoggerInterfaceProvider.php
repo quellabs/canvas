@@ -78,11 +78,11 @@
 			?MethodContextInterface $methodContext = null
 		): LoggerInterface {
 			// @WithContext's literal context tag is the sole handler selector
-			$provider = is_string($metadata['context'] ?? null) ? $metadata['context'] : 'stream';
-			
+			$handler = is_string($metadata['context'] ?? null) ? $metadata['context'] : 'stream';
+
 			// Pick the @LoggerContext instance that matches the resolved handler,
 			// falling back to the untagged default (if any), falling back to [].
-			$loggerContext = $this->resolveLoggerContext($methodContext, $provider);
+			$loggerContext = $this->resolveLoggerContext($methodContext, $handler);
 			
 			// Resolve all configuration, falling back to defaults.
 			// Use is_string guards — PHPStan at strict level rejects casts on mixed.
@@ -95,28 +95,28 @@
 				$logfile = ComposerUtils::getProjectRoot() . '/storage/logs/' . $logfile;
 			}
 			
-			// Cache key includes channel, provider, and logfile so that two injections
+			// Cache key includes channel, handler, and logfile so that two injections
 			// into the same class with different handlers or paths get distinct instances
-			$cacheKey = $channel . '|' . $provider . '|' . $logfile;
-			
+			$cacheKey = $channel . '|' . $handler . '|' . $logfile;
+
 			// Return the cached instance if one already exists for this combination
 			if (isset($this->loggers[$cacheKey])) {
 				return $this->loggers[$cacheKey];
 			}
-			
+
 			// Instantiate the handler concretely so PHPStan can verify constructor signatures
-			$handler = match ($provider) {
+			$handlerInstance = match ($handler) {
 				'stream' => new StreamHandler($logfile, Level::Debug),
 				'rotating' => new RotatingFileHandler($logfile, 0, Level::Debug),
 				'stderr' => new ErrorLogHandler(),
 				default => throw new \InvalidArgumentException(
-					"Unsupported logger provider '{$provider}'. Supported values: stream, rotating, stderr."
+					"Unsupported logger handler '{$handler}'. Supported values: stream, rotating, stderr."
 				),
 			};
-			
+
 			// Create the logger
 			$logger = new Logger($channel);
-			$logger->pushHandler($handler);
+			$logger->pushHandler($handlerInstance);
 			return $this->loggers[$cacheKey] = $logger;
 		}
 		
