@@ -12,6 +12,7 @@
 	use Quellabs\Contracts\Context\MethodContextInterface;
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Contracts\DependencyInjection\ContextProviderInterface;
+	use Quellabs\Contracts\DependencyInjection\EntityProviderInterface;
 	
 	/**
 	 * Canvas-aware autowirer that extends the base autowirer with @WithContext
@@ -97,11 +98,13 @@
 		/**
 		 * Stashes the @WithContext context for the current parameter so resolveType()
 		 * can pick it up, then resets it after resolution to prevent bleed-over.
-		 * Also turns a required (non-nullable) object-typed parameter that a provider
-		 * resolved to null (e.g. no database row for the requested entity) into a
-		 * deliberate 404, rather than letting PHP raise a TypeError when the
-		 * controller method is actually invoked. A nullable parameter still receives
-		 * null unchanged.
+		 * Also turns a required (non-nullable) parameter resolved to null by an
+		 * EntityProviderInterface provider (e.g. no database row for the requested
+		 * entity) into a deliberate 404, rather than letting PHP raise a TypeError
+		 * when the controller method is actually invoked. A nullable parameter
+		 * still receives null unchanged, and null from any other provider (an
+		 * ordinary service that doesn't implement EntityProviderInterface) is left
+		 * as an ordinary DI failure, not turned into a 404.
 		 * @param ParameterMeta $param Parameter metadata, optionally containing 'context' from @WithContext
 		 * @param array<string, mixed> $parameters User-provided parameter values
 		 * @param MethodContextInterface|null $methodContext Context object for dependency injection
@@ -109,7 +112,7 @@
 		 * @param string $methodName Method name for error reporting
 		 * @return mixed The resolved parameter value
 		 * @throws AnnotationReaderException
-		 * @throws RequiredParameterNotFoundException If a required object-typed parameter resolved to null
+		 * @throws RequiredParameterNotFoundException If a required entity-bound parameter resolved to null
 		 */
 		protected function resolveParameter(
 			array          $param,
@@ -136,7 +139,7 @@
 			if (
 				$resolved === null &&
 				!($param['nullable'] ?? true) &&
-				$this->hasObjectType($param['types'] ?? [])
+				$this->isEntityBoundType($param['types'] ?? [])
 			) {
 				throw new RequiredParameterNotFoundException($className, $methodName, $param['name']);
 			}
@@ -145,15 +148,21 @@
 		}
 
 		/**
-		 * Whether a parameter's declared types include a class/interface candidate
-		 * that dependency injection could have resolved (as opposed to only built-in
-		 * scalar types, which a provider never produces null for).
+		 * Whether a parameter's declared types include a candidate whose
+		 * registered provider implements EntityProviderInterface — the only kind
+		 * of null worth converting into a 404. A type with no dedicated provider,
+		 * or one handled by an ordinary ServiceProviderInterface implementation,
+		 * does not qualify.
 		 * @param array<int, string> $types
 		 * @return bool
 		 */
-		private function hasObjectType(array $types): bool {
+		private function isEntityBoundType(array $types): bool {
 			foreach ($types as $type) {
-				if ($type !== 'null' && !$this->isBuiltinType($type)) {
+				if ($type === 'null' || $this->isBuiltinType($type)) {
+					continue;
+				}
+
+				if ($this->container->findProvider($type) instanceof EntityProviderInterface) {
 					return true;
 				}
 			}
