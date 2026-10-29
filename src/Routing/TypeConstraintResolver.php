@@ -19,6 +19,7 @@
 			'integer'      => '\d+',
 
 			// Text types
+			'string'       => '[^\/]+',
 			'alpha'        => '[a-zA-Z]+',
 			'alnum'        => '[a-zA-Z0-9]+',
 			'alphanumeric' => '[a-zA-Z0-9]+',
