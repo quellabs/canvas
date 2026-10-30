@@ -1,7 +1,7 @@
 <?php
 	
 	namespace Quellabs\Canvas\Sculpt;
-
+	
 	use Quellabs\AnnotationReader\Configuration as AnnotationReaderConfiguration;
 	use Quellabs\Sculpt\ConfigurationManager;
 	use Quellabs\Sculpt\Contracts\CommandBase;
@@ -135,14 +135,14 @@ HELP;
 		 */
 		private function createController(string $controllerName): string {
 			$route = strtolower($controllerName);
-
+			
 			if ($this->usesNativeAttributes()) {
 				return $this->createControllerWithAttribute($controllerName, $route);
 			}
-
+			
 			return $this->createControllerWithDocblock($controllerName, $route);
 		}
-
+		
 		/**
 		 * Determine whether generated code should use native PHP attributes instead of docblocks.
 		 * @return bool True when the "annotation_source" app setting is set to attributes
@@ -151,7 +151,7 @@ HELP;
 			$annotationSource = $this->getProvider()->getConfig()['annotation_source'] ?? AnnotationReaderConfiguration::SOURCE_DOCBLOCKS;
 			return $annotationSource === AnnotationReaderConfiguration::SOURCE_ATTRIBUTES;
 		}
-
+		
 		/**
 		 * Generate controller content using a docblock @Route annotation
 		 * @param string $controllerName The sanitized controller name (without 'Controller' suffix)
@@ -163,16 +163,16 @@ HELP;
 <?php
 
 	namespace App\\Controllers;
-
+	
 	use Quellabs\\Canvas\\Annotations\\Route;
 	use Quellabs\\Canvas\\Controllers\\BaseController;
 	use Symfony\\Component\\HttpFoundation\\Response;
-
+	
 	/**
 	 * {$controllerName} Controller
 	 */
 	class {$controllerName}Controller extends BaseController {
-
+	
 	    /**
 	     * Display the main {$route} view
 	     * @Route("/{$route}", methods={"GET"})
@@ -182,11 +182,11 @@ HELP;
 	        // TODO: Implement your controller logic here
 	        return new Response('Hello from {$controllerName}Controller');
 	    }
-
+	
 	}
 PHP;
 		}
-
+		
 		/**
 		 * Generate controller content using a native #[Route] attribute
 		 * @param string $controllerName The sanitized controller name (without 'Controller' suffix)
@@ -198,16 +198,16 @@ PHP;
 <?php
 
 	namespace App\\Controllers;
-
+	
 	use Quellabs\\Canvas\\Annotations\\Route;
 	use Quellabs\\Canvas\\Controllers\\BaseController;
 	use Symfony\\Component\\HttpFoundation\\Response;
-
+	
 	/**
 	 * {$controllerName} Controller
 	 */
 	class {$controllerName}Controller extends BaseController {
-
+	
 	    /**
 	     * Display the main {$route} view
 	     * @return Response
@@ -217,7 +217,7 @@ PHP;
 	        // TODO: Implement your controller logic here
 	        return new Response('Hello from {$controllerName}Controller');
 	    }
-
+	
 	}
 PHP;
 		}
