@@ -2,6 +2,8 @@
 
 	namespace Quellabs\Canvas\Exceptions;
 
+	use Quellabs\Contracts\Http\HttpException;
+
 	/**
 	 * Thrown by ValidateAspect when throwOnFailure is enabled and
 	 * the submitted data fails validation.

@@ -2,6 +2,8 @@
 
 	namespace Quellabs\Canvas\Exceptions;
 
+	use Quellabs\Contracts\Http\HttpException;
+
 	/**
 	 * Thrown when a required (non-nullable) controller parameter was resolved by
 	 * a dependency-injection provider to no value at all — e.g. no database row

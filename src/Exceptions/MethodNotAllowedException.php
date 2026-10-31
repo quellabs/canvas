@@ -3,6 +3,7 @@
 	namespace Quellabs\Canvas\Exceptions;
 
 	use Quellabs\Canvas\Error\ProvidesResponseHeaders;
+	use Quellabs\Contracts\Http\HttpException;
 	use Throwable;
 
 	/**

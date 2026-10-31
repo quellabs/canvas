@@ -4,8 +4,8 @@
 	
 	use Quellabs\Canvas\Exceptions\CsrfTokenException;
 	use Quellabs\Canvas\Security\Foundation\CsrfTokenManager;
-	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
-	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
+	use Quellabs\Contracts\AOP\BeforeAspectInterface;
+	use Quellabs\Contracts\AOP\MethodContextInterface;
 	use Random\RandomException;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;

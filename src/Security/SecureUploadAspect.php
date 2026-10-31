@@ -4,8 +4,8 @@
 	
 	use RuntimeException;
 	use Random\RandomException;
-	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
-	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
+	use Quellabs\Contracts\AOP\BeforeAspectInterface;
+	use Quellabs\Contracts\AOP\MethodContextInterface;
 	use Quellabs\Canvas\Exceptions\UploadException;
 	use Symfony\Component\HttpFoundation\File\UploadedFile;
 	use Symfony\Component\HttpFoundation\Response;

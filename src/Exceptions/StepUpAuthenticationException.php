@@ -2,6 +2,7 @@
 
 	namespace Quellabs\Canvas\Exceptions;
 
+	use Quellabs\Contracts\Http\HttpException;
 	use Throwable;
 
 	/**

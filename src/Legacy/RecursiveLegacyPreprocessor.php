@@ -121,6 +121,31 @@
 			if (isset($this->processedFiles[$filePath])) {
 				return $this->processedFiles[$filePath];
 			}
+
+			$processedFilePath = $this->generateProcessedFilePath($filePath);
+			$this->processedFiles[$filePath] = $processedFilePath;
+			$metadataPath = $processedFilePath . '.json';
+			$cachedIncludes = is_file($processedFilePath) && is_file($metadataPath)
+				? json_decode((string)file_get_contents($metadataPath), true)
+				: null;
+
+			if (is_array($cachedIncludes)) {
+				$cacheValid = true;
+				foreach ($cachedIncludes as $originalIncludePath => $cachedProcessedPath) {
+					if (!is_string($originalIncludePath) || !is_string($cachedProcessedPath) || !is_file($originalIncludePath)) {
+						$cacheValid = false;
+						break;
+					}
+					$processedIncludePath = $this->processFileWithIncludes($originalIncludePath);
+					$this->fileMapping[$originalIncludePath] = $processedIncludePath;
+					if ($processedIncludePath !== $cachedProcessedPath) {
+						$cacheValid = false;
+					}
+				}
+				if ($cacheValid) {
+					return $processedFilePath;
+				}
+			}
 			
 			// Read original file content
 			$content = file_get_contents($filePath);
@@ -132,6 +157,7 @@
 			
 			// Find all include/require statements in this file
 			$includes = $this->discoverIncludes($content, dirname($filePath));
+			$directIncludes = [];
 			
 			// Process all discovered includes first (depth-first approach)
 			// This ensures dependencies are processed before the files that depend on them
@@ -141,6 +167,7 @@
 				
 				// Store the mapping for later path rewriting
 				$this->fileMapping[$originalIncludePath] = $processedIncludePath;
+				$directIncludes[$originalIncludePath] = $processedIncludePath;
 			}
 			
 			// Now process this file's content using parent's preprocessing logic
@@ -149,11 +176,11 @@
 			// Rewrite include paths to point to processed files instead of originals
 			$processedContent = $this->rewriteIncludePaths($processedContent, dirname($filePath));
 			
-			// Generate a unique path for the processed file
-			$processedFilePath = $this->generateProcessedFilePath($filePath);
-			
 			// Write the processed content to the cache directory
-			file_put_contents($processedFilePath, $processedContent);
+			if (file_put_contents($processedFilePath, $processedContent) === false ||
+				file_put_contents($metadataPath, json_encode($directIncludes, JSON_THROW_ON_ERROR)) === false) {
+				throw new \RuntimeException("Failed to write processed file: {$processedFilePath}");
+			}
 			
 			// Cache the result to avoid reprocessing
 			$this->processedFiles[$filePath] = $processedFilePath;
@@ -377,6 +404,10 @@
 			foreach ($files as $file) {
 				if (unlink($file)) {
 					++$removed;
+				}
+				$metadataPath = $file . '.json';
+				if (is_file($metadataPath)) {
+					unlink($metadataPath);
 				}
 			}
 			

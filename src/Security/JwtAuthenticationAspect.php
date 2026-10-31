@@ -2,10 +2,10 @@
 	
 	namespace Quellabs\Canvas\Security;
 	
-	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
-	use Quellabs\Canvas\AOP\Contracts\NonStackableAspectInterface;
+	use Quellabs\Contracts\AOP\BeforeAspectInterface;
+	use Quellabs\Contracts\AOP\NonStackableAspectInterface;
 	use Quellabs\Canvas\Exceptions\JwtAuthenticationException;
-	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
+	use Quellabs\Contracts\AOP\MethodContextInterface;
 	use Quellabs\Contracts\Configuration\ConfigProviderInterface;
 	use Symfony\Component\HttpFoundation\Response;
 	

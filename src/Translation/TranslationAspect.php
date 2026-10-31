@@ -2,8 +2,8 @@
 	
 	namespace Quellabs\Canvas\Translation;
 	
-	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
-	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
+	use Quellabs\Contracts\AOP\BeforeAspectInterface;
+	use Quellabs\Contracts\AOP\MethodContextInterface;
 	use Quellabs\Support\ComposerUtils;
 	use Quellabs\Support\StringInflector;
 	use Symfony\Component\HttpFoundation\Request;

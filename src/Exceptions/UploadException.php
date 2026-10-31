@@ -1,7 +1,9 @@
 <?php
 	
 	namespace Quellabs\Canvas\Exceptions;
-	
+
+	use Quellabs\Contracts\Http\HttpException;
+
 	/**
 	 * Thrown by SecureUploadAspect when throwOnFailure is enabled and
 	 * one or more uploaded files fail validation.

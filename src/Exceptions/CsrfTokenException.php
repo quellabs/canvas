@@ -1,9 +1,9 @@
 <?php
 	
 	namespace Quellabs\Canvas\Exceptions;
-	
-	use RuntimeException;
-	
+
+	use Quellabs\Contracts\Http\HttpException;
+
 	/**
 	 * Thrown by CsrfProtectionAspect when throwOnFailure is enabled and
 	 * the CSRF token is missing or invalid.

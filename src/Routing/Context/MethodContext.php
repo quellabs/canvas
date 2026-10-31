@@ -2,7 +2,7 @@
 	
 	namespace Quellabs\Canvas\Routing\Context;
 	
-	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
+	use Quellabs\Contracts\AOP\MethodContextInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	
 	/**

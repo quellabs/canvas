@@ -2,11 +2,11 @@
 	
 	namespace Quellabs\Canvas\Sanitization;
 	
-	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
+	use Quellabs\Contracts\AOP\BeforeAspectInterface;
 	use Quellabs\Canvas\Routing\Context\MethodContext;
 	use Quellabs\Canvas\Sanitization\Contracts\SanitizationInterface;
 	use Quellabs\Canvas\Sanitization\Contracts\SanitizationRuleInterface;
-	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
+	use Quellabs\Contracts\AOP\MethodContextInterface;
 	use Quellabs\Contracts\DependencyInjection\ContainerInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;

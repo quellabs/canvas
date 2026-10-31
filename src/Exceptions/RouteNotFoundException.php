@@ -1,9 +1,9 @@
 <?php
 	
 	namespace Quellabs\Canvas\Exceptions;
-	
-	use RuntimeException;
-	
+
+	use Quellabs\Contracts\Http\HttpException;
+
 	/**
 	 * Exception thrown when a requested route cannot be found
 	 *

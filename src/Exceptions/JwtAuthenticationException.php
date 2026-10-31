@@ -1,9 +1,10 @@
 <?php
 	
 	namespace Quellabs\Canvas\Exceptions;
-	
+
+	use Quellabs\Contracts\Http\HttpException;
 	use Throwable;
-	
+
 	/**
 	 * Thrown when JWT validation fails and throwOnFailure is enabled.
 	 *

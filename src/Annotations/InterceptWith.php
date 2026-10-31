@@ -3,7 +3,7 @@
 	namespace Quellabs\Canvas\Annotations;
 	
 	use Quellabs\AnnotationReader\AnnotationInterface;
-	use Quellabs\Canvas\AOP\Contracts\AspectAnnotationInterface;
+	use Quellabs\Contracts\AOP\AspectAnnotationInterface;
 	
 	/**
 	 * @Annotation
