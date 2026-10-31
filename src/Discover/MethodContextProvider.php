@@ -2,7 +2,7 @@
 	
 	namespace Quellabs\Canvas\Discover;
 	
-	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
+	use Quellabs\Contracts\AOP\MethodContextInterface;
 	use Quellabs\DependencyInjection\Provider\ServiceProvider;
 	
 	/**

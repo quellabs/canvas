@@ -2,8 +2,8 @@
 	
 	namespace Quellabs\Canvas\Cache;
 	
-	use Quellabs\Canvas\AOP\Contracts\AroundAspectInterface;
-	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
+	use Quellabs\Contracts\AOP\AroundAspectInterface;
+	use Quellabs\Contracts\AOP\MethodContextInterface;
 	use Quellabs\Contracts\Cache\CacheInterface;
 	use Quellabs\DependencyInjection\Container;
 	use Psr\Log\LoggerInterface;

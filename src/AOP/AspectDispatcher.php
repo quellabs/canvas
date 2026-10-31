@@ -4,11 +4,11 @@
 	
 	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
-	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
-	use Quellabs\Canvas\AOP\Contracts\AfterAspectInterface;
-	use Quellabs\Canvas\AOP\Contracts\AroundAspectInterface;
-	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
-	use Quellabs\Canvas\AOP\Contracts\RequestAspectInterface;
+	use Quellabs\Contracts\AOP\MethodContextInterface;
+	use Quellabs\Contracts\AOP\AfterAspectInterface;
+	use Quellabs\Contracts\AOP\AroundAspectInterface;
+	use Quellabs\Contracts\AOP\BeforeAspectInterface;
+	use Quellabs\Contracts\AOP\RequestAspectInterface;
 	use Quellabs\DependencyInjection\Container;
 	use Symfony\Component\HttpFoundation\Response;
 	

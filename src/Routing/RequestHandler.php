@@ -5,10 +5,10 @@
 	use Quellabs\Canvas\AOP\AspectResolver;
 	use Quellabs\DependencyInjection\Container;
 	use Quellabs\Canvas\Signals\SignalConnector;
-	use Quellabs\Canvas\AOP\Contracts\AfterAspectInterface;
-	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
-	use Quellabs\Canvas\AOP\Contracts\AroundAspectInterface;
-	use Quellabs\Canvas\AOP\Contracts\RequestAspectInterface;
+	use Quellabs\Contracts\AOP\AfterAspectInterface;
+	use Quellabs\Contracts\AOP\BeforeAspectInterface;
+	use Quellabs\Contracts\AOP\AroundAspectInterface;
+	use Quellabs\Contracts\AOP\RequestAspectInterface;
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
 	use Quellabs\Canvas\AOP\AspectDispatcher;
 	use Quellabs\Canvas\Discover\MethodContextProvider;

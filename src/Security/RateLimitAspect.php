@@ -2,10 +2,10 @@
 
 	namespace Quellabs\Canvas\Security;
 
-	use Quellabs\Canvas\AOP\Contracts\AfterAspectInterface;
-	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
-	use Quellabs\Canvas\AOP\Contracts\NonStackableAspectInterface;
-	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
+	use Quellabs\Contracts\AOP\AfterAspectInterface;
+	use Quellabs\Contracts\AOP\BeforeAspectInterface;
+	use Quellabs\Contracts\AOP\NonStackableAspectInterface;
+	use Quellabs\Contracts\AOP\MethodContextInterface;
 	use Quellabs\Canvas\Exceptions\RateLimitException;
 	use Quellabs\Canvas\Exceptions\RateLimitStoreUnavailableException;
 	use Quellabs\Canvas\Security\RateLimit\RateLimitResult;

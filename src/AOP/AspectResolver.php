@@ -5,7 +5,7 @@
 	use Quellabs\AnnotationReader\AnnotationReader;
 	use Quellabs\AnnotationReader\Collection\AnnotationCollection;
 	use Quellabs\AnnotationReader\Exception\AnnotationReaderException;
-	use Quellabs\Canvas\AOP\Contracts\NonStackableAspectInterface;
+	use Quellabs\Contracts\AOP\NonStackableAspectInterface;
 	use Quellabs\Canvas\Annotations\InterceptWith;
 
 	/**

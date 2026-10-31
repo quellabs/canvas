@@ -3,8 +3,8 @@
 	namespace Quellabs\Canvas\Tracking;
 	
 	use Quellabs\SignalHub\Signal;
-	use Quellabs\Canvas\AOP\Contracts\RequestAspectInterface;
-	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
+	use Quellabs\Contracts\AOP\RequestAspectInterface;
+	use Quellabs\Contracts\AOP\MethodContextInterface;
 	
 	class TrackingParamsAspect implements RequestAspectInterface {
 		

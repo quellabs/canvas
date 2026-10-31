@@ -4,8 +4,8 @@
 	
 	use Quellabs\Canvas\Exceptions\ValidationException;
 	use Quellabs\Canvas\Validation\Contracts\ValidationInterface;
-	use Quellabs\Canvas\AOP\Contracts\BeforeAspectInterface;
-	use Quellabs\Canvas\Routing\Contracts\MethodContextInterface;
+	use Quellabs\Contracts\AOP\BeforeAspectInterface;
+	use Quellabs\Contracts\AOP\MethodContextInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
 	use Quellabs\Contracts\DependencyInjection\ContainerInterface;
