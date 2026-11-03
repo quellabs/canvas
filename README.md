@@ -37,7 +37,7 @@ Legacy files using `header()`, `die()`, and `exit()` are automatically preproces
 return [
     'legacy_enabled'   => true,
     'legacy_path'      => dirname(__FILE__) . "/../legacy",
-    'exclusion_paths'  => ['libs/PHPMailer']
+    'exclusion_paths'  => ['libs/third-party']
 ];
 ```
 
