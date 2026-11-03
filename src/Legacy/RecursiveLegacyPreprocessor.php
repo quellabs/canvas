@@ -44,28 +44,32 @@
 		 * Constructor that takes the cache directory and legacy base path
 		 * @param string $cacheDir Directory where processed files will be stored
 		 * @param string $legacyBasePath Base path for legacy files (default: 'legacy/')
-		 * @param array<string> $excludedPaths
+		 * @param array<string> $excludedPaths Additional path segments to exclude; a 'vendor' segment is always excluded
 		 */
 		public function __construct(string $cacheDir, string $legacyBasePath = 'legacy/', array $excludedPaths = []) {
 			$this->cacheDir = $cacheDir;
 			$this->legacyBasePath = rtrim($legacyBasePath, '/') . '/';
-			$this->excludedPaths = $excludedPaths;
+			$this->excludedPaths = array_unique(array_merge(['vendor'], $excludedPaths));
 		}
-		
+
 		/**
-		 * Check if a file should be preprocessed or used as-is
+		 * Check if a file should be preprocessed or used as-is. A path matches an
+		 * exclusion when it appears as one or more whole path segments, not merely
+		 * as a substring (e.g. excluding 'lib' must not also match 'calibrate.php').
 		 * @param string $filePath Path to check
 		 * @return bool True if file should be preprocessed, false to use original
 		 */
 		private function shouldPreprocess(string $filePath): bool {
-			$normalizedPath = str_replace('\\', '/', $filePath);
-			
+			$normalizedPath = '/' . trim(str_replace('\\', '/', $filePath), '/') . '/';
+
 			foreach ($this->excludedPaths as $excluded) {
-				if (str_contains($normalizedPath, $excluded)) {
+				$normalizedExcluded = '/' . trim(str_replace('\\', '/', $excluded), '/') . '/';
+
+				if (str_contains($normalizedPath, $normalizedExcluded)) {
 					return false;
 				}
 			}
-			
+
 			return true;
 		}
 		

@@ -37,7 +37,7 @@
 		 * Initialize the handler with a base legacy path.
 		 * @param string $legacyPath Base directory path for legacy files
 		 * @param bool $preprocessingEnabled
-		 * @param array<string> $excludedPaths
+		 * @param array<string> $excludedPaths Additional path segments to exclude from preprocessing; a 'vendor' segment is always excluded
 		 */
 		public function __construct(
 			string $legacyPath = 'legacy/',

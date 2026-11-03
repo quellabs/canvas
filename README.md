@@ -31,7 +31,15 @@ $users = canvas()->get(EntityManager::class)->findBy(User::class, ['active' => t
 $cache = canvas('redis')->get(CacheInterface::class);
 ```
 
-Legacy files using `header()`, `die()`, and `exit()` are automatically preprocessed to work within Canvas's request/response flow. The preprocessing is recursive — included files are transformed too, and results are cached.
+Legacy files using `header()`, `die()`, and `exit()` are automatically preprocessed to work within Canvas's request/response flow. The preprocessing is recursive — included files are transformed too, and results are cached. Any `vendor/` path segment is always skipped, since third-party libraries don't need their internals rewritten; exclude other paths (e.g. a vendored library kept outside `vendor/`) with `exclusion_paths`:
+
+```php
+return [
+    'legacy_enabled'   => true,
+    'legacy_path'      => dirname(__FILE__) . "/../legacy",
+    'exclusion_paths'  => ['libs/PHPMailer']
+];
+```
 
 Migrate one route at a time. When a Canvas controller claims a URL, it takes precedence over the legacy file. When every route is migrated, set `legacy_enabled` to `false`.
 
