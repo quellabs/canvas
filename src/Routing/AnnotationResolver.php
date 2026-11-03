@@ -63,6 +63,7 @@
 	 */
 	class AnnotationResolver extends AnnotationBase {
 		private bool $matchTrailingSlashes;
+		private bool $debugMode;
 		private string $cacheDirectory;
 		
 		// Component dependencies
@@ -233,6 +234,7 @@
 			$config = $this->kernel->getConfiguration();
 			
 			$this->matchTrailingSlashes = $config->get('match_trailing_slashes', false);
+			$this->debugMode = (bool)$config->get('debug_mode', false);
 			$this->cacheDirectory = $config->get('cache_dir', ComposerUtils::getProjectRoot() . "/storage/cache");
 		}
 		
@@ -311,7 +313,8 @@
 			// Set up cache management for storing and retrieving compiled routes
 			$this->cacheManager = new RouteCacheManager(
 				$fileCache,              // File-based cache storage
-				$controllerDiscovery     // Discovery component
+				$controllerDiscovery,    // Discovery component
+				$this->debugMode         // Skip live revalidation outside debug mode
 			);
 		}
 		

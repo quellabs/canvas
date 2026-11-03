@@ -22,17 +22,12 @@
 	 * - Cache statistics: Provides metrics on cache performance and status
 	 *
 	 * Caching strategy:
-	 * - Production mode: Aggressive caching with file modification detection
-	 * - Intelligent invalidation: Compares controller modification times
+	 * - Debug mode: Compares controller modification times to auto-detect changes
+	 * - Production mode: Cache existence alone is trusted, skipping the controller
+	 *   rediscovery/reflection scan needed to recompute mtime on every request;
+	 *   the deployment process is responsible for clearing the cache
 	 * - Atomic operations: Thread-safe cache updates using FileCache
 	 * - Configurable TTL: Default 24-hour cache lifetime with override support
-	 *
-	 * Cache validation process:
-	 * 1. Checks if cached routes exist (including embedded mtime)
-	 * 2. Compares current controller modification times with cached times
-	 * 3. Invalidates cache if any controller files changed
-	 * 4. Falls back to route rebuilding if cache is stale or missing
-	 * 5. Stores new controller modification times atomically alongside routes
 	 *
 	 * File monitoring:
 	 * - Recursive directory scanning for PHP files
@@ -54,6 +49,7 @@
 		
 		private FileCache $cache;
 		private ControllersDiscovery $controllersDiscovery;
+		private bool $debugMode;
 		private int $defaultTtl;
 		
 		/**
@@ -72,15 +68,19 @@
 		 * RouteCacheManager constructor
 		 * @param FileCache $cache
 		 * @param ControllersDiscovery $controllersDiscovery
+		 * @param bool $debugMode When false, cache existence alone is trusted and the
+		 *        live controller discovery/reflection scan needed to revalidate is skipped
 		 * @param int $defaultTtl
 		 */
 		public function __construct(
 			FileCache $cache,
 			ControllersDiscovery $controllersDiscovery,
+			bool $debugMode,
 			int $defaultTtl = 86400 // 24 hours default
 		) {
 			$this->cache = $cache;
 			$this->controllersDiscovery = $controllersDiscovery;
+			$this->debugMode = $debugMode;
 			$this->defaultTtl = $defaultTtl;
 		}
 		
@@ -91,25 +91,40 @@
 		 * @return T Cached or freshly built route index
 		 */
 		public function getCachedRouteIndex(callable $builder): mixed {
-			$currentMtime = $this->getLastControllerModification();
-			
-			// Fetch cache
 			$cached = $this->getCachedBundle();
-			
+
+			// Outside debug mode, cache existence is sufficient — skip recomputing
+			// the controller mtime, which otherwise requires rediscovering every
+			// controller (filesystem scan + Composer package scan + reflection)
+			// on every single request just to validate a cache that rarely changes.
+			// Cache freshness in production is the deployment process's responsibility
+			// (clear the route cache on deploy). Mirrors CachedAnnotationReader::cacheValid().
+			if (!$this->debugMode) {
+				if ($cached !== null) {
+					return $cached['routes'];
+				}
+
+				$routes = $builder();
+				$this->cache->set(self::ROUTES_CACHE_KEY, ['mtime' => 0, 'routes' => $routes], $this->defaultTtl);
+				return $routes;
+			}
+
+			$currentMtime = $this->getLastControllerModification();
+
 			// Cache hit: entry exists and mtime still matches
 			if ($cached !== null && $this->isBundleValid($cached, $currentMtime)) {
 				return $cached['routes'];
 			}
-			
+
 			// Cache miss or stale: rebuild and store atomically
 			$routes = $builder();
-			
+
 			$this->cache->set(
 				self::ROUTES_CACHE_KEY,
 				['mtime' => $currentMtime, 'routes' => $routes],
 				$this->defaultTtl
 			);
-			
+
 			return $routes;
 		}
 		
