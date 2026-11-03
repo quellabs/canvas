@@ -49,8 +49,16 @@
 		/**
 		 * Get the container itself
 		 * @return Container The dependency injection container
+		 * @throws \RuntimeException If the bridge has not been initialized
 		 */
 		public static function container(): Container {
+			if (!self::$initialized) {
+				throw new \RuntimeException(
+					"LegacyBridge is not initialized. Set 'legacy_enabled' to true in config/app.php " .
+					"to make Canvas services available to legacy code via canvas()."
+				);
+			}
+
 			return self::$container;
 		}
 	}
