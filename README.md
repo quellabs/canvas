@@ -159,7 +159,7 @@ return [
 ];
 ```
 
-Each resolver class is instantiated with `legacy_path` as its only constructor argument, the same as the built-in ones.
+Each resolver class is built with `legacy_path` passed as its `legacyPath` constructor argument; any other constructor parameter is autowired through the DI container, the same as controllers and aspects.
 
 Migrate one route at a time. When a Canvas controller claims a URL, it takes precedence over the legacy file. When every route is migrated, set `legacy_enabled` to `false`.
 

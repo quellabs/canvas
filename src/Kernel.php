@@ -533,11 +533,12 @@
 				// Fetch exclusion directories
 				$exclusionPaths = $this->configuration->get('exclusion_paths', []);
 
-				// Fetch the resolver classes to try, in order; each is instantiated with $legacyPath
+				// Fetch the resolver classes to try, in order; each is instantiated with
+				// $legacyPath, autowiring any other constructor dependency via the container
 				$resolverClasses = $this->configuration->get('legacy_resolvers', [DefaultFileResolver::class]);
 
 				// Create the fallthrough handler
-				$this->legacyFallbackHandler = new LegacyHandler($legacyPath, $preprocessingEnabled, $exclusionPaths, $resolverClasses);
+				$this->legacyFallbackHandler = new LegacyHandler($legacyPath, $preprocessingEnabled, $exclusionPaths, $resolverClasses, $this->dependencyInjector);
 			}
 		}
 	}
