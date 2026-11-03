@@ -80,7 +80,7 @@
 
 			// Instantiate and register each configured resolver, in order
 			foreach ($resolverClasses as $resolverClass) {
-				$this->addResolver($this->instantiateResolver($resolverClass));
+				$this->resolvers[] = $this->instantiateResolver($resolverClass);
 			}
 		}
 
@@ -109,17 +109,6 @@
 			}
 
 			return $resolver;
-		}
-		
-		/**
-		 * Add a file resolver to the chain of resolvers.
-		 * Resolvers are tried in the order they were added.
-		 * @param FileResolverInterface $resolver The resolver to add
-		 * @return self Fluent interface
-		 */
-		public function addResolver(FileResolverInterface $resolver): self {
-			$this->resolvers[] = $resolver;
-			return $this;
 		}
 		
 		/**
