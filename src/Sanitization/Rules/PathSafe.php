@@ -22,9 +22,13 @@
 				return $value;
 			}
 			
-			// Remove path traversal attempts (directory traversal patterns)
-			// This prevents attackers from using ../ or ..\ to navigate up directories
-			$value = str_replace(['../', '..\\', '../', '..\\'], '', $value);
+			// Remove path traversal attempts (directory traversal patterns).
+			// Repeated to a fixed point because a single pass is bypassable: removing
+			// '../' from '....//' leaves '../' behind again (chars 0,1,5 of the original).
+			do {
+				$previous = $value;
+				$value = str_replace(['../', '..\\'], '', $value);
+			} while ($value !== $previous);
 			
 			// Remove null bytes (\0) which can be used to truncate paths
 			// in some systems and bypass security checks
