@@ -41,6 +41,21 @@ return [
 ];
 ```
 
+URLs are mapped to files by trying each configured resolver in order until one finds a match; by default that's just `DefaultFileResolver` (`/users` → `legacy/users.php` or `legacy/users/index.php`). Configure `legacy_resolvers` to add others, such as the built-in `WordPressStyleResolver` for date-based permalinks (`/2024/03/my-post` → `legacy/posts/2024-03-my-post.php`), or your own `FileResolverInterface` implementation:
+
+```php
+use Quellabs\Canvas\Legacy\Resolvers\DefaultFileResolver;
+use Quellabs\Canvas\Legacy\Resolvers\WordPressStyleResolver;
+
+return [
+    'legacy_enabled'   => true,
+    'legacy_path'      => dirname(__FILE__) . "/../legacy",
+    'legacy_resolvers' => [WordPressStyleResolver::class, DefaultFileResolver::class]
+];
+```
+
+Each resolver class is instantiated with `legacy_path` as its only constructor argument, the same as the built-in ones.
+
 Migrate one route at a time. When a Canvas controller claims a URL, it takes precedence over the legacy file. When every route is migrated, set `legacy_enabled` to `false`.
 
 ## Templating

@@ -38,33 +38,56 @@
 		 * @param string $legacyPath Base directory path for legacy files
 		 * @param bool $preprocessingEnabled
 		 * @param array<string> $excludedPaths Additional path segments to exclude from preprocessing; a 'vendor' segment is always excluded
+		 * @param array<class-string<FileResolverInterface>> $resolverClasses Resolver classes to instantiate with $legacyPath, tried in the given order
 		 */
 		public function __construct(
 			string $legacyPath = 'legacy/',
 			bool $preprocessingEnabled = true,
-			array $excludedPaths=[]
+			array $excludedPaths = [],
+			array $resolverClasses = [DefaultFileResolver::class]
 		) {
 			// Store the legacy path
 			$this->legacyPath = $legacyPath;
-			
+
 			// Store preprocessing setting
 			$this->preprocessingEnabled = $preprocessingEnabled;
-			
+
 			// Set cache directory using kernel's project root
 			$this->cacheDir = ComposerUtils::getProjectRoot() . '/storage/cache/legacy';
-			
+
 			// Create cache directory if preprocessing is enabled
 			if ($this->preprocessingEnabled && !is_dir($this->cacheDir)) {
 				mkdir($this->cacheDir, 0755, true);
 			}
-			
+
 			// Initialize the recursive legacy preprocessor
 			if ($this->preprocessingEnabled) {
 				$this->preprocessor = new RecursiveLegacyPreprocessor($this->cacheDir, $this->legacyPath, $excludedPaths);
 			}
-			
-			// Add default resolver for standard file resolution
-			$this->addResolver(new DefaultFileResolver($this->legacyPath));
+
+			// Instantiate and register each configured resolver, in order
+			foreach ($resolverClasses as $resolverClass) {
+				$this->addResolver($this->instantiateResolver($resolverClass));
+			}
+		}
+
+		/**
+		 * Instantiate a resolver class with the legacy path as its sole constructor argument.
+		 * @param string $resolverClass Fully qualified class name of a FileResolverInterface implementation
+		 * @return FileResolverInterface The instantiated resolver
+		 */
+		private function instantiateResolver(string $resolverClass): FileResolverInterface {
+			if (!class_exists($resolverClass)) {
+				throw new \InvalidArgumentException("Legacy resolver class '{$resolverClass}' does not exist.");
+			}
+
+			$resolver = new $resolverClass($this->legacyPath);
+
+			if (!$resolver instanceof FileResolverInterface) {
+				throw new \InvalidArgumentException("Legacy resolver class '{$resolverClass}' must implement " . FileResolverInterface::class . ".");
+			}
+
+			return $resolver;
 		}
 		
 		/**

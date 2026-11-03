@@ -40,6 +40,7 @@
 	use Quellabs\Canvas\Inspector\Inspector;
 	use Quellabs\Canvas\Legacy\LegacyBridge;
 	use Quellabs\Canvas\Legacy\LegacyHandler;
+	use Quellabs\Canvas\Legacy\Resolvers\DefaultFileResolver;
 	use Quellabs\Canvas\Security\Policies\BasicSecurityHeaderPolicy;
 	use Quellabs\Canvas\Security\RateLimit\RateLimitStoreFactory;
 	use Quellabs\Canvas\Security\RateLimit\RateLimitStoreInterface;
@@ -531,9 +532,12 @@
 				
 				// Fetch exclusion directories
 				$exclusionPaths = $this->configuration->get('exclusion_paths', []);
-				
+
+				// Fetch the resolver classes to try, in order; each is instantiated with $legacyPath
+				$resolverClasses = $this->configuration->get('legacy_resolvers', [DefaultFileResolver::class]);
+
 				// Create the fallthrough handler
-				$this->legacyFallbackHandler = new LegacyHandler($legacyPath, $preprocessingEnabled, $exclusionPaths);
+				$this->legacyFallbackHandler = new LegacyHandler($legacyPath, $preprocessingEnabled, $exclusionPaths, $resolverClasses);
 			}
 		}
 	}
