@@ -4,9 +4,114 @@
 [![PHPStan](https://img.shields.io/badge/PHPStan-level%209-brightgreen.svg)](https://phpstan.org)
 [![License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 
-A PHP framework built for real-world projects — especially the messy ones. Canvas drops into existing PHP codebases without forcing a rewrite, while giving new projects a clean, annotation-driven architecture: aspect-oriented programming, a readable ORM, your choice of template engine, and auto-discovered packages for payments, shipments, and scheduling.
+A PHP framework built for real-world projects. New projects get a clean, annotation-driven architecture: aspect-oriented programming, a readable ORM, your choice of template engine, and auto-discovered packages for payments, shipments, and scheduling. Existing projects get all of that too — Canvas drops into a codebase you already have without forcing a rewrite.
 
-## The legacy problem
+## How to Install
+
+```bash
+# New project
+composer create-project quellabs/canvas-skeleton my-app
+
+# Existing project
+composer require quellabs/canvas
+```
+
+## Quick start
+
+```php
+class BlogController extends BaseController {
+
+    /**
+     * @Route("/posts/{id:int}")
+     */
+    public function show(int $id) {
+        $post = $this->em()->find(Post::class, $id);
+        return $this->render('post.tpl', compact('post'));
+    }
+}
+```
+
+Controllers are discovered automatically through Composer metadata. Routes are defined with annotations. Typed route parameters (`{id:int}`) are validated before your method runs. No configuration files, no route registration.
+
+## Cross-cutting concerns without the mess
+
+Canvas separates cross-cutting concerns — auth, caching, rate limiting, logging — into aspects: reusable classes applied via annotations instead of tangled into business logic.
+
+```php
+/**
+ * @Route("/admin/users")
+ * @InterceptWith(RequireAuthAspect::class, priority=100)
+ * @InterceptWith(CacheAspect::class, ttl=300)
+ * @InterceptWith(RateLimitAspect::class, limit=100, window=3600)
+ */
+public function manage() {
+    $users = $this->em()->findBy(User::class, ['active' => true]);
+    return $this->render('admin/users.tpl', compact('users'));
+}
+```
+
+Each aspect is a standalone class — `BeforeAspect` for checks that can short-circuit the request, `AroundAspect` for wrapping behavior like caching, `AfterAspect` for post-processing. Aspects inherit through controller hierarchies — apply `@InterceptWith` on a base class and every child controller gets it automatically — with priority ordering controlling execution sequence within each inheritance level.
+
+## ObjectQuel ORM
+
+Canvas integrates with [ObjectQuel](https://objectquel.com) through the `quellabs/canvas-objectquel` package. Simple lookups use familiar `find` and `findBy` methods. Complex queries use ObjectQuel's declarative syntax:
+
+```php
+$results = $this->em()->executeQuery("
+    range of p is App\\Entity\\Post
+    range of u is App\\Entity\\User via p.authorId
+    retrieve (p, u.name) where p.title = /^Tech/i
+    sort by p.publishedAt desc
+    window 0 using window_size 20
+");
+```
+
+Pattern matching, regex, full-text search, and relationship traversal are first-class query expressions — not raw SQL escapes. ObjectQuel can also join database entities with JSON files in a single query via `json_source()`, something no other PHP ORM supports.
+
+## Templating
+Canvas uses [Smarty](https://www.smarty.net/) as its default template engine. Twig, Latte, Blade, Plates, and Handlebars are each available as a separate package and can be swapped in without touching controller code.
+
+## Security headers & CORS
+
+`config/app.php`'s `security_header_policy` accepts a single policy class or an ordered list, applied to every response in that order:
+
+```php
+// config/app.php
+return [
+    'security_header_policy' => [
+        BasicSecurityHeaderPolicy::class,
+        CorsSecurityHeaderPolicy::class,
+    ],
+];
+```
+
+A route-specific override uses the same syntax and replaces the *entire* list for that route, not just one entry:
+
+```php
+/**
+ * @InterceptWith(SecurityHeadersAspect::class, policyClass={StrictSecurityHeaderPolicy::class, CorsSecurityHeaderPolicy::class})
+ */
+```
+
+`CorsSecurityHeaderPolicy` is opt-in and reads its allowlists from `config/cors.php`, created with `php sculpt cors:init`. The generated file grants no cross-origin access until filled in:
+
+```php
+// config/cors.php
+return [
+    'allowed_origins'   => ['https://app.example.com'],
+    'allowed_methods'   => ['GET', 'POST'],
+    'allowed_headers'   => ['Content-Type', 'Authorization'],
+    'exposed_headers'   => ['Location'],
+    'allow_credentials' => true,
+    'max_age'           => 600,
+];
+```
+
+Only exact `scheme://host(:port)` origins are accepted — `*` and the opaque `null` origin are rejected. A preflight (`OPTIONS` with `Access-Control-Request-Method`) is approved only when the origin, requested method, and every requested header are allowed; Canvas's generated `OPTIONS` response already carries the route's matched methods in `Allow`, which the requested method must also appear in.
+
+Existing single-class configurations keep working unchanged. Basic/Medium/Strict headers (clickjacking, MIME-sniffing, HSTS, CSP) are a separate concern from CORS's cross-origin permission headers — an application opting into CORS still needs one of them, and must list `CorsSecurityHeaderPolicy::class` in any route override that should keep it.
+
+## Legacy integration
 
 Most frameworks assume you're starting fresh. Canvas doesn't. Point it at your existing application, and it takes over routing while your old `.php` files keep working:
 
@@ -58,116 +163,11 @@ Each resolver class is instantiated with `legacy_path` as its only constructor a
 
 Migrate one route at a time. When a Canvas controller claims a URL, it takes precedence over the legacy file. When every route is migrated, set `legacy_enabled` to `false`.
 
-## Templating
-Canvas uses [Smarty](https://www.smarty.net/) as its default template engine. Twig, Latte, Blade, Plates, and Handlebars are each available as a separate package and can be swapped in without touching controller code.
-
-## Cross-cutting concerns without the mess
-
-Canvas separates cross-cutting concerns — auth, caching, rate limiting, logging — into aspects: reusable classes applied via annotations instead of tangled into business logic.
-
-```php
-/**
- * @Route("/admin/users")
- * @InterceptWith(RequireAuthAspect::class, priority=100)
- * @InterceptWith(CacheAspect::class, ttl=300)
- * @InterceptWith(RateLimitAspect::class, limit=100, window=3600)
- */
-public function manage() {
-    $users = $this->em()->findBy(User::class, ['active' => true]);
-    return $this->render('admin/users.tpl', compact('users'));
-}
-```
-
-Each aspect is a standalone class — `BeforeAspect` for checks that can short-circuit the request, `AroundAspect` for wrapping behavior like caching, `AfterAspect` for post-processing. Aspects inherit through controller hierarchies — apply `@InterceptWith` on a base class and every child controller gets it automatically — with priority ordering controlling execution sequence within each inheritance level.
-
-## Security headers & CORS
-
-`config/app.php`'s `security_header_policy` accepts a single policy class or an ordered list, applied to every response in that order:
-
-```php
-// config/app.php
-return [
-    'security_header_policy' => [
-        BasicSecurityHeaderPolicy::class,
-        CorsSecurityHeaderPolicy::class,
-    ],
-];
-```
-
-A route-specific override uses the same syntax and replaces the *entire* list for that route, not just one entry:
-
-```php
-/**
- * @InterceptWith(SecurityHeadersAspect::class, policyClass={StrictSecurityHeaderPolicy::class, CorsSecurityHeaderPolicy::class})
- */
-```
-
-`CorsSecurityHeaderPolicy` is opt-in and reads its allowlists from `config/cors.php`, created with `php sculpt cors:init`. The generated file grants no cross-origin access until filled in:
-
-```php
-// config/cors.php
-return [
-    'allowed_origins'   => ['https://app.example.com'],
-    'allowed_methods'   => ['GET', 'POST'],
-    'allowed_headers'   => ['Content-Type', 'Authorization'],
-    'exposed_headers'   => ['Location'],
-    'allow_credentials' => true,
-    'max_age'           => 600,
-];
-```
-
-Only exact `scheme://host(:port)` origins are accepted — `*` and the opaque `null` origin are rejected. A preflight (`OPTIONS` with `Access-Control-Request-Method`) is approved only when the origin, requested method, and every requested header are allowed; Canvas's generated `OPTIONS` response already carries the route's matched methods in `Allow`, which the requested method must also appear in.
-
-Existing single-class configurations keep working unchanged. Basic/Medium/Strict headers (clickjacking, MIME-sniffing, HSTS, CSP) are a separate concern from CORS's cross-origin permission headers — an application opting into CORS still needs one of them, and must list `CorsSecurityHeaderPolicy::class` in any route override that should keep it.
-
-## ObjectQuel ORM
-
-Canvas integrates with [ObjectQuel](https://objectquel.com) through the `quellabs/canvas-objectquel` package. Simple lookups use familiar `find` and `findBy` methods. Complex queries use ObjectQuel's declarative syntax:
-
-```php
-$results = $this->em()->executeQuery("
-    range of p is App\\Entity\\Post
-    range of u is App\\Entity\\User via p.authorId
-    retrieve (p, u.name) where p.title = /^Tech/i
-    sort by p.publishedAt desc
-    window 0 using window_size 20
-");
-```
-
-Pattern matching, regex, full-text search, and relationship traversal are first-class query expressions — not raw SQL escapes. ObjectQuel can also join database entities with JSON files in a single query via `json_source()`, something no other PHP ORM supports.
-
-## How to Install
-
-```bash
-# New project
-composer create-project quellabs/canvas-skeleton my-app
-
-# Existing project
-composer require quellabs/canvas
-```
-
-## Quick start
-
-```php
-class BlogController extends BaseController {
-
-    /**
-     * @Route("/posts/{id:int}")
-     */
-    public function show(int $id) {
-        $post = $this->em()->find(Post::class, $id);
-        return $this->render('post.tpl', compact('post'));
-    }
-}
-```
-
-Controllers are discovered automatically through Composer metadata. Routes are defined with annotations. Typed route parameters (`{id:int}`) are validated before your method runs. No configuration files, no route registration.
-
 ## Features
 
-- **Legacy-first integration** — wrap existing PHP apps with route fallthrough, automatic preprocessing of `header()`/`die()`/`exit()`, and a `canvas()` helper for accessing the DI container from legacy code
 - **Aspect-oriented programming** — Before, Around, and After aspects with annotation parameters, priority ordering, and inheritance through controller hierarchies
 - **ObjectQuel ORM** — declarative query language with pattern matching, hybrid JSON sources, and Data Mapper architecture
+- **Legacy-first integration** — wrap existing PHP apps with route fallthrough, automatic preprocessing of `header()`/`die()`/`exit()`, and a `canvas()` helper for accessing the DI container from legacy code
 - **Template engines** — Smarty by default, with Twig, Latte, Blade, Plates, and Handlebars available as drop-in packages
 - **Contextual dependency injection** — resolve different interface implementations based on request context, without conditional logic in your code
 - **Signal/slot event system** — Qt-style decoupled service communication with type checking and priority-based handlers
