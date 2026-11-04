@@ -171,16 +171,28 @@
 
 		/**
 		 * Perform basic security checks on the resolved file.
-		 * Ensures the file exists, is readable, and has a .php extension.
+		 * Ensures the file exists, is readable, has a .php extension, and its
+		 * canonical path is still inside $legacyPath. The last check blocks path
+		 * traversal (e.g. "../../../etc/passwd.php") that a resolver failed to
+		 * reject, since the file is include()d and not just read.
 		 * @param string $file Path to the file to check
 		 * @return bool True if the file is safe to execute
 		 */
 		private function isSafeFile(string $file): bool {
 			// Basic security: must be .php and exist
-			return
-				file_exists($file) &&
-				str_ends_with($file, '.php') &&
-				is_readable($file);
+			if (!file_exists($file) || !is_readable($file) || !str_ends_with($file, '.php')) {
+				return false;
+			}
+
+			// Canonicalize both paths and ensure the resolved file stays within legacyPath
+			$realFile = realpath($file);
+			$realLegacyPath = realpath($this->legacyPath);
+
+			if ($realFile === false || $realLegacyPath === false) {
+				return false;
+			}
+
+			return str_starts_with($realFile, $realLegacyPath . DIRECTORY_SEPARATOR);
 		}
 		
 		/**
