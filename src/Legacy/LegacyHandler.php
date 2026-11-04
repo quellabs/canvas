@@ -170,11 +170,8 @@
 		}
 
 		/**
-		 * Perform basic security checks on the resolved file.
-		 * Ensures the file exists, is readable, has a .php extension, and its
-		 * canonical path is still inside $legacyPath. The last check blocks path
-		 * traversal (e.g. "../../../etc/passwd.php") that a resolver failed to
-		 * reject, since the file is include()d and not just read.
+		 * Perform basic security checks on the resolved file, including a
+		 * canonical-path check that blocks path traversal outside legacyPath.
 		 * @param string $file Path to the file to check
 		 * @return bool True if the file is safe to execute
 		 */

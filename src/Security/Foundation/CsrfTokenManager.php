@@ -63,8 +63,7 @@
 			// Get all stored tokens for this intention
 			$tokens = $this->getStoredTokens($intention);
 
-			// Compare against each stored token in constant time to avoid leaking
-			// how many leading bytes matched
+			// hash_equals() avoids leaking a byte-match timing signal
 			foreach ($tokens as $storedToken) {
 				if (hash_equals($storedToken, $token)) {
 					// Remove token after use (single-use tokens)
