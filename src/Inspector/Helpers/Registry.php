@@ -346,6 +346,7 @@ HTML;
     display: flex;
     align-items: center;
     gap: 6px;
+    margin: 0;
     font-size: 12px;
     color: #666666;
     cursor: pointer;
