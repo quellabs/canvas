@@ -76,9 +76,14 @@ HELP;
 				return 1;
 			}
 			
-			// Generate configuration content
-			$configContents = $this->createConfigFile();
-			
+			// Load configuration content from the shipped stub
+			$configContents = $this->loadStub();
+
+			if ($configContents === false) {
+				$this->output->writeLn("Failed to read cache configuration stub at: {$this->getStubPath()}");
+				return 1;
+			}
+
 			// Ensure the config directory exists
 			$this->ensureDirectoryExists($configPath);
 			
@@ -95,40 +100,19 @@ HELP;
 		}
 		
 		/**
-		 * Generate cache configuration file content
-		 * @return string Complete PHP configuration array content
+		 * Returns the path to the shipped configuration stub
+		 * @return string Absolute path to the stub file
 		 */
-		private function createConfigFile(): string {
-			return <<<'CONFIG'
-<?php
-	
-	return [
-		'default' => 'file',
-		'drivers' => [
-			'file'      => [
-				'class' => \Quellabs\Canvas\Cache\Drivers\FileCache::class,
-			],
-			'redis'     => [
-				'class'        => \Quellabs\Canvas\Cache\Drivers\RedisCache::class,
-				'host'         => '127.0.0.1',
-				'port'         => 6379,
-				'timeout'      => 2.5,
-				'read_timeout' => 2.5,
-				'database'     => 0,
-				'password'     => null,
-			],
-			'memcached' => [
-				'class'                 => \Quellabs\Canvas\Cache\Drivers\MemcachedCache::class,
-				'servers'               => [
-					['127.0.0.1', 11211, 100] // [host, port, weight]
-				],
-				'persistent_id'         => 'cache_pool',
-				'compression'           => true,
-				'compression_threshold' => 2000, // bytes
-			]
-		],
-	];
-CONFIG;
+		private function getStubPath(): string {
+			return dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'cache.php';
+		}
+
+		/**
+		 * Read the shipped configuration stub
+		 * @return string|false Stub file contents, or false on failure
+		 */
+		private function loadStub(): string|false {
+			return file_get_contents($this->getStubPath());
 		}
 		
 		/**

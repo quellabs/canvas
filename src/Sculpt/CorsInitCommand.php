@@ -82,8 +82,13 @@ HELP;
 				return 1;
 			}
 
-			// Generate configuration content
-			$configContents = $this->createConfigFile();
+			// Load configuration content from the shipped stub
+			$configContents = $this->loadStub();
+
+			if ($configContents === false) {
+				$this->output->writeLn("Failed to read CORS configuration stub at: {$this->getStubPath()}");
+				return 1;
+			}
 
 			// Ensure the config directory exists
 			try {
@@ -108,41 +113,19 @@ HELP;
 		}
 
 		/**
-		 * Generate CORS configuration file content
-		 * @return string Complete PHP configuration array content
+		 * Returns the path to the shipped configuration stub
+		 * @return string Absolute path to the stub file
 		 */
-		private function createConfigFile(): string {
-			return <<<'CONFIG'
-<?php
+		private function getStubPath(): string {
+			return dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'cors.php';
+		}
 
-	// Read by Quellabs\Canvas\Security\Policies\CorsSecurityHeaderPolicy, which must be
-	// added to config/app.php's security_header_policy (this file alone does nothing).
-	// Absent entries default to empty/false/0, so an unfilled file grants no cross-origin
-	// access. Only exact http(s) origins are accepted — wildcard '*' and the opaque 'null'
-	// origin are not supported.
-
-	return [
-		// Exact scheme+host(+port) origins allowed cross-origin access, e.g.
-		// 'https://app.example.com' or 'https://admin.example.com:8443'.
-		'allowed_origins'   => [],
-
-		// HTTP methods allowed cross-origin, e.g. ['GET', 'POST', 'PATCH', 'DELETE'].
-		'allowed_methods'   => [],
-
-		// Request headers a cross-origin script may send, e.g. ['Content-Type', 'Authorization'].
-		'allowed_headers'   => [],
-
-		// Response headers exposed to cross-origin scripts via Access-Control-Expose-Headers.
-		'exposed_headers'   => [],
-
-		// Whether to send Access-Control-Allow-Credentials: true for allowed origins.
-		'allow_credentials' => false,
-
-		// Access-Control-Max-Age in seconds (how long a browser may cache a preflight
-		// result). 0 omits the header.
-		'max_age'           => 0,
-	];
-CONFIG;
+		/**
+		 * Read the shipped configuration stub
+		 * @return string|false Stub file contents, or false on failure
+		 */
+		private function loadStub(): string|false {
+			return file_get_contents($this->getStubPath());
 		}
 
 		/**

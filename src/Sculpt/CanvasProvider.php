@@ -16,10 +16,12 @@
 				RoutesCacheClearCommand::class,
 				ScheduleRunCommand::class,
 				SchedulerListCommand::class,
+				CanvasInitCommand::class,
 				CacheInitCommand::class,
 				JwtInitCommand::class,
 				RateLimitInitCommand::class,
 				CorsInitCommand::class,
+				InspectorInitCommand::class,
 			]);
 		}
 	}
