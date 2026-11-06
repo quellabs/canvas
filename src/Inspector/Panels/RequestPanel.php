@@ -168,6 +168,14 @@ return `
         </div>
         ` : ''}
 
+        <!-- Query Parameters Section -->
+        \${Object.keys(request.query).length > 0 ? `
+        <div class="debug-panel-section">
+            <h3>Query Parameters</h3>
+            \${formatParamsTable(request.query, 'No query parameters')}
+        </div>
+        ` : ''}
+
         <!-- POST Data Section -->
         \${Object.keys(request.request).length > 0 ? `
         <div class="debug-panel-section">
@@ -221,6 +229,22 @@ return `
         <div class="debug-panel-section">
             <h3>Cookies</h3>
             \${formatParamsTable(request.cookies, 'No cookies')}
+        </div>
+        ` : ''}
+
+        <!-- Headers Section -->
+        \${Object.keys(request.headers).length > 0 ? `
+        <div class="debug-panel-section">
+            <h3>Headers</h3>
+            \${formatParamsTable(request.headers, 'No headers')}
+        </div>
+        ` : ''}
+
+        <!-- Session Data Section -->
+        \${Object.keys(request.session).length > 0 ? `
+        <div class="debug-panel-section">
+            <h3>Session Data</h3>
+            \${formatParamsTable(request.session, 'No session data')}
         </div>
         ` : ''}
     </div>

@@ -25,8 +25,15 @@
 		private const array DEFAULT_PANELS = [
 			RequestPanel::class
 		];
-		
-		
+
+		/**
+		 * Base64-encoded PNG of the Canvas gnome mascot, cropped to the head and
+		 * shown next to the header logo text. Inlined so the debug bar never
+		 * depends on a request to the public website to render.
+		 */
+		private const string LOGO_ICON_BASE64 = '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';
+
+
 		/**
 		 * @var EventCollectorInterface Event collector
 		 */
@@ -164,6 +171,9 @@
 		 * @throws \JsonException
 		 */
 		private function renderDebugBar(array $jsTemplates, array $css, array $panelData, array $stats): string {
+			// Inlined so the header icon never depends on a request to the public website
+			$logoIcon = self::LOGO_ICON_BASE64;
+
 			// Combine all panel-specific CSS
 			$cssContent = implode("\n", array_filter($css));
 			
@@ -193,7 +203,10 @@
     <!-- Header with logo, arrow, statistics, and controls -->
     <div class="canvas-debug-bar-header" onclick="CanvasDebugBar.toggle()">
         <span class="canvas-debug-bar-arrow" id="debug-bar-arrow">▲</span>
-        <div class="canvas-debug-bar-logo">Canvas Inspector</div>
+        <div class="canvas-debug-bar-logo">
+            Canvas Inspector
+            <img src="data:image/png;base64,{$logoIcon}" alt="" class="canvas-debug-bar-logo-icon">
+        </div>
         <div class="canvas-debug-bar-stats" id="debug-stats"></div>
         <div class="canvas-debug-bar-controls">
             <label class="canvas-debug-remain-open" onclick="event.stopPropagation()">
@@ -294,6 +307,13 @@ HTML;
     gap: 8px;
     font-weight: 600;
     color: #0066cc;
+}
+
+/* Gnome mascot icon next to the logo text */
+.canvas-debug-bar-logo-icon {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
 }
 
 /* Statistics display in header */
