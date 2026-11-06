@@ -433,15 +433,22 @@
 		 * @return Response
 		 */
 		public function createErrorResponse(\Throwable $exception, Request $request): Response {
-			// Find an error class that support the exception
-			foreach ($this->errorHandlers as $handlerClass) {
-				if ($handlerClass::supports($exception)) {
-					$handler = $this->dependencyInjector->make($handlerClass);
-					return $handler->handle($exception, $request);
+			// Find an error class that support the exception. A broken custom handler
+			// (its own supports()/handle() throwing) must never propagate out of this
+			// method - handle()'s security-header application runs on whatever Response
+			// this method returns, so a handler failure still needs to produce one.
+			try {
+				foreach ($this->errorHandlers as $handlerClass) {
+					if ($handlerClass::supports($exception)) {
+						$handler = $this->dependencyInjector->make($handlerClass);
+						return $handler->handle($exception, $request);
+					}
 				}
+			} catch (\Throwable) {
+				// Fall through to the default handler below
 			}
-			
-			// No custom handler found. Show a generic message
+
+			// No custom handler found (or one of them failed). Show a generic message
 			$isDevelopment = $this->configuration->get('debug_mode', false);
 			$defaultHandler = new DefaultErrorHandler($this->defaultSecurityHeaderPolicy);
 			return $defaultHandler->handle($exception, $request, $isDevelopment);

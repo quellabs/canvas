@@ -279,17 +279,20 @@
 		}
 		
 		/**
-		 * Get the context directory path
+		 * Get the context directory path. The namespace is hashed the same way a
+		 * cache key is - today it's only ever developer-authored config, but hashing
+		 * it removes the shape of a path-traversal/collision issue regardless of
+		 * what a future caller passes.
 		 * @return string Context directory path
 		 */
 		private function getContextPath(): string {
-			return $this->cachePath . '/' . $this->namespace;
+			return $this->cachePath . '/' . $this->hashKey($this->namespace);
 		}
-		
+
 		/**
-		 * Hash a cache key for safe file naming
-		 * @param string $key Cache key
-		 * @return string Hashed key (64 characters)
+		 * Hash a cache key (or namespace) for safe file/directory naming
+		 * @param string $key Cache key or namespace
+		 * @return string Hashed value (64 characters)
 		 */
 		private function hashKey(string $key): string {
 			return hash('sha256', $key);

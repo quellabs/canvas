@@ -181,7 +181,7 @@ Migrate one route at a time. When a Canvas controller claims a URL, it takes pre
 - **Payments & shipments** — provider-agnostic routers that auto-discover installed payment and carrier packages via Composer metadata
 - **Loom** — definition-driven builder for admin pages, forms, and settings panels with automatic data binding
 - **Validation & sanitization** — declarative rules applied as aspects, keeping controllers clean
-- **Visual inspector** — debug bar with database queries, request analysis, and custom panels
+- **Visual inspector** — debug bar with database queries, request analysis, and custom panels. `config/inspector.php`'s `enabled` defaults to `false`; when `true` it injects into every HTML response for every visitor, exposing raw POST data, all cookies, and full SQL text with bound parameter values. Enable it only for local development, never in production.
 - **CLI tooling** — route listing, route matching, task management, asset publishing, entity generation
 
 ## Documentation
