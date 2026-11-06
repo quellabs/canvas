@@ -75,7 +75,7 @@ Canvas uses [Smarty](https://www.smarty.net/) as its default template engine. Tw
 
 ## Security headers & CORS
 
-`config/app.php`'s `security_header_policy` accepts a single policy class or an ordered list, applied to every response in that order:
+Create `config/app.php` with `php sculpt canvas:init`. Its `security_header_policy` accepts a single policy class or an ordered list, applied to every response in that order:
 
 ```php
 // config/app.php
@@ -181,8 +181,8 @@ Migrate one route at a time. When a Canvas controller claims a URL, it takes pre
 - **Payments & shipments** — provider-agnostic routers that auto-discover installed payment and carrier packages via Composer metadata
 - **Loom** — definition-driven builder for admin pages, forms, and settings panels with automatic data binding
 - **Validation & sanitization** — declarative rules applied as aspects, keeping controllers clean
-- **Visual inspector** — debug bar with database queries, request analysis, and custom panels. `config/inspector.php`'s `enabled` defaults to `false`; when `true` it injects into every HTML response for every visitor, exposing raw POST data, all cookies, and full SQL text with bound parameter values. Restrict who can reach it (e.g. an IP allowlist or auth check) before enabling it anywhere other than local development.
-- **CLI tooling** — route listing, route matching, task management, asset publishing, entity generation
+- **Visual inspector** — debug bar with database queries, request analysis, and custom panels. `php sculpt inspector:init` creates `config/inspector.php` with `enabled` defaulting to `false`; when `true` it injects into every HTML response for every visitor, exposing raw POST data, all cookies, and full SQL text with bound parameter values. Restrict who can reach it (e.g. an IP allowlist or auth check) before enabling it anywhere other than local development.
+- **CLI tooling** — route listing, route matching, task management, asset publishing, entity generation, config scaffolding (`canvas:init`, `inspector:init`, `cache:init`, `jwt:init`, `rate-limit:init`, `cors:init`)
 
 ## Documentation
 
