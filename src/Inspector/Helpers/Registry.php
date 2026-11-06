@@ -268,10 +268,6 @@ HTML;
 }
 
 /* Minimized state - only show header */
-.canvas-debug-bar.minimized {
-    max-height: 40px;
-}
-
 .canvas-debug-bar.minimized .canvas-debug-bar-content {
     display: none;
 }
