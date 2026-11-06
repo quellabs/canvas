@@ -130,6 +130,15 @@
 					"JWT secret is not configured. Set 'secret' in config/jwt.local.php."
 				);
 			}
+
+			// HS256 signatures are only as strong as the secret's entropy; a short secret
+			// is brute-forceable offline against any captured token. Require at least 256
+			// bits (32 bytes), matching HS256's own key-size recommendation (RFC 2104/7518).
+			if (strlen($resolvedSecret) < 32) {
+				throw new \RuntimeException(
+					'JWT secret must be at least 32 bytes long for HS256. Generate one with, e.g., bin2hex(random_bytes(32)).'
+				);
+			}
 			
 			// Negative clock skew would reverse the intended expiry logic — a negative value
 			// for exp would require the token to have expired before it is accepted, and a

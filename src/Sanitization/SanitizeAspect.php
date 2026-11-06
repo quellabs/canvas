@@ -102,11 +102,11 @@
 			// Capture original data
 			$originalPost = $request->request->all();
 			$originalQuery = $request->query->all();
-			
+
 			// Apply sanitization rules
 			$sanitizedPost = $this->applySanitization($originalPost, $rules);
 			$sanitizedQuery = $this->applySanitization($originalQuery, $rules);
-			
+
 			// Store sanitized results in request attributes for explicit downstream access
 			$request->attributes->set('sanitized', [
 				'post'   => $sanitizedPost,

@@ -592,19 +592,28 @@
 			if (str_contains($filename, '..') || str_contains($filename, '/') || str_contains($filename, '\\')) {
 				return "Filename contains invalid characters";
 			}
-			
+
+			// Reserved server-configuration filenames are dangerous regardless of extension
+			// count - they change how the web server treats the directory itself, not just
+			// the one file, if the upload directory is ever reachable by the web server.
+			$reservedFilenames = ['.htaccess', '.htpasswd', 'web.config'];
+
+			if (in_array(strtolower($filename), $reservedFilenames, true)) {
+				return "Filename is reserved";
+			}
+
 			// Check for executable extensions in compound filenames
 			// Split filename by dots to examine each part (e.g., "file.php.txt" becomes ["file", "php", "txt"])
 			$parts = explode('.', $filename);
-			
+
 			// Simple filenames (name + single extension) don't need compound extension checks
 			if (count($parts) <= 2) {
 				return null;
 			}
-			
+
 			// List of potentially dangerous executable file extensions
 			// These could be executed by the web server if placed in accessible directories
-			$dangerousExtensions = ['php', 'phtml', 'php3', 'php4', 'php5', 'pl', 'py', 'jsp', 'asp', 'sh', 'cgi'];
+			$dangerousExtensions = ['php', 'phtml', 'php3', 'php4', 'php5', 'php7', 'php8', 'phps', 'pht', 'phar', 'pl', 'py', 'jsp', 'asp', 'sh', 'cgi'];
 			
 			// Check each part of the filename against the dangerous extensions list
 			foreach ($parts as $part) {

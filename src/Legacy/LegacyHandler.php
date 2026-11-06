@@ -13,6 +13,13 @@
 	/**
 	 * Handles fallthrough routing for legacy PHP files when modern routes don't match.
 	 * This allows gradual migration from legacy PHP files to modern framework routes.
+	 *
+	 * Deployment requirement: executeLegacyFile() uses a process-wide chdir() and relies
+	 * on process-wide globals ($__canvas_headers, superglobals) that are reset per request
+	 * but not isolated between requests running concurrently in the same process. This is
+	 * safe under a one-request-per-process model (PHP-FPM, mod_php, CLI server) but not
+	 * under a coroutine/persistent-worker runtime (e.g. Swoole) serving concurrent requests
+	 * on the same worker.
 	 */
 	class LegacyHandler {
 		
@@ -201,6 +208,13 @@
 		 * @throws \Exception
 		 */
 		private function executeLegacyFile(string $file, Request $request): Response {
+			// Reset per-request state. LegacyHelper.php only initializes $__canvas_headers
+			// once per process (require_once); under a persistent worker (e.g. Swoole) that
+			// process serves many requests, so without this reset one request's headers
+			// (Location, Status, ...) could leak into the next request's response.
+			global $__canvas_headers;
+			$__canvas_headers = [];
+
 			// Set up basic environment variables for legacy compatibility
 			$this->setupGlobals($request);
 			

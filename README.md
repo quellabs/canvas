@@ -42,7 +42,7 @@ Canvas separates cross-cutting concerns — auth, caching, rate limiting, loggin
  * @Route("/admin/users")
  * @InterceptWith(RequireAuthAspect::class, priority=100)
  * @InterceptWith(CacheAspect::class, ttl=300)
- * @InterceptWith(RateLimitAspect::class, limit=100, window=3600)
+ * @InterceptWith(RateLimitAspect::class, limit=100, window=3600, throwOnFailure=true)
  */
 public function manage() {
     $users = $this->em()->findBy(User::class, ['active' => true]);
@@ -51,6 +51,8 @@ public function manage() {
 ```
 
 Each aspect is a standalone class — `BeforeAspect` for checks that can short-circuit the request, `AroundAspect` for wrapping behavior like caching, `AfterAspect` for post-processing. Aspects inherit through controller hierarchies — apply `@InterceptWith` on a base class and every child controller gets it automatically — with priority ordering controlling execution sequence within each inheritance level.
+
+`RateLimitAspect` and `CsrfProtectionAspect` default `throwOnFailure` to `false`: on failure they write a request attribute (`rate_limit_exceeded`, `csrf_validation_succeeded`) and let the request continue, leaving your controller responsible for checking it. Pass `throwOnFailure=true` (as above) when you want the aspect itself to reject the request — the common case for most routes.
 
 ## ObjectQuel ORM
 
@@ -123,7 +125,11 @@ return [
 ];
 ```
 
-Canvas checks its own routes first. Unmatched URLs fall through to your legacy files — every existing page keeps working from day one. Your legacy code can immediately use Canvas services:
+Canvas checks its own routes first. Unmatched URLs fall through to your legacy files — every existing page keeps working from day one.
+
+`legacy_enabled` relies on process-wide state (the current working directory, and a header buffer for `header()`/`exit()` support) that is reset once per request but is not isolated *between* requests running concurrently in the same process. This is safe on a traditional one-request-per-process setup (PHP-FPM, Apache mod_php, CLI server) but not under a coroutine/persistent-worker runtime (e.g. Swoole) handling multiple requests concurrently on the same worker — a legacy file's relative `include`/`fopen` calls could then run against the wrong working directory. Keep legacy mode on a non-coroutine deployment, or ensure its worker never serves more than one request at a time.
+
+Your legacy code can immediately use Canvas services:
 
 ```php
 // legacy/admin/dashboard.php — your existing file, now with Canvas services

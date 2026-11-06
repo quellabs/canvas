@@ -276,7 +276,7 @@
 			
 			// Validate that the file exists
 			if (file_exists($relativePath)) {
-				$real = realpath($includePath);
+				$real = realpath($relativePath);
 				return $real !== false ? $real : null;
 			}
 			

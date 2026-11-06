@@ -39,12 +39,17 @@
 			if (empty($this->allowedTags)) {
 				return strip_tags($value);
 			}
-			
+
 			// Build allowed tags string in format required by strip_tags()
 			// Converts ['p', 'br'] to '<p><br>'
-			return strip_tags($value, $this->transformAllowedTags($this->allowedTags));
+			$stripped = strip_tags($value, $this->transformAllowedTags($this->allowedTags));
+
+			// strip_tags() only filters tag names; it leaves every attribute on an
+			// allowed tag untouched, so "<a href=javascript:...  onclick=...>" survives
+			// intact. Strip all attributes from the surviving tags to close that XSS vector.
+			return $this->stripAttributes($stripped);
 		}
-		
+
 		/**
 		 * Build allowed tags string in format required by strip_tags()
 		 * Converts ['p', 'br'] to '<p><br>'
@@ -53,5 +58,14 @@
 		 */
 		private function transformAllowedTags(array $tags): string {
 			return '<' . implode('><', $tags) . '>';
+		}
+
+		/**
+		 * Removes every attribute from tags, keeping only the tag name (and closing slash).
+		 * @param string $value
+		 * @return string
+		 */
+		private function stripAttributes(string $value): string {
+			return preg_replace('#<(/?)([a-zA-Z][a-zA-Z0-9]*)[^>]*>#', '<$1$2>', $value) ?? $value;
 		}
 	}
