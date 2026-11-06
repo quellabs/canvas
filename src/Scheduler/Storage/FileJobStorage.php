@@ -32,7 +32,10 @@
 		
 		/**
 		 * FileJobStorage constructor
-		 * @param string|null $storageDirectory
+		 * @param string|null $storageDirectory Defaults to a subdirectory of sys_get_temp_dir(),
+		 *   a world-writable, shared location on most systems. On shared/multi-tenant hosting,
+		 *   pass an app-private directory instead so another local user can't pre-create a
+		 *   lock/job file there to disrupt scheduling.
 		 * @param int $lockTimeout
 		 * @param int $maxLockWaitTime
 		 */
