@@ -20,10 +20,10 @@
 	 * neither issues nor refreshes credentials itself.
 	 *
 	 * Must run after the authenticator — before-aspects execute in
-	 * declaration order. Instantiate twice for a two-tier policy:
-	 *
-	 * @InterceptWith(Quellabs\Canvas\Security\JwtAuthenticationAspect::class)
-	 * @InterceptWith(Quellabs\Canvas\Security\StepUpAuthenticationAspect::class, maxAge=300, requiredMethods={"pwd"})
+	 * declaration order. Instantiate twice for a two-tier policy, as
+	 * InterceptWith annotations on a controller method:
+	 * - Quellabs\Canvas\Security\JwtAuthenticationAspect::class
+	 * - Quellabs\Canvas\Security\StepUpAuthenticationAspect::class, maxAge=300, requiredMethods={"pwd"}
 	 */
 	readonly class StepUpAuthenticationAspect implements BeforeAspectInterface, NonStackableAspectInterface {
 

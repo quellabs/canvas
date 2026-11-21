@@ -35,10 +35,10 @@
 	 *   issuer           — defaults to '' (not validated when empty)
 	 *   audience         — defaults to '' (not validated when empty)
 	 *
-	 * Usage:
-	 * @InterceptWith(Quellabs\Canvas\Security\JwtAuthenticationAspect::class)
-	 * @InterceptWith(Quellabs\Canvas\Security\JwtAuthenticationAspect::class, throwOnFailure=true)
-	 * @InterceptWith(Quellabs\Canvas\Security\JwtAuthenticationAspect::class, secret="service-secret", issuer="service-a")
+	 * Usage, as an InterceptWith annotation on a controller method:
+	 * - Quellabs\Canvas\Security\JwtAuthenticationAspect::class
+	 * - Quellabs\Canvas\Security\JwtAuthenticationAspect::class, throwOnFailure=true
+	 * - Quellabs\Canvas\Security\JwtAuthenticationAspect::class, secret="service-secret", issuer="service-a"
 	 */
 	class JwtAuthenticationAspect implements BeforeAspectInterface, NonStackableAspectInterface {
 		
