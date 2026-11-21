@@ -12,7 +12,9 @@
 	 * Runner strategy that executes jobs in separate processes with configurable timeouts.
 	 * Isolates job execution by creating temporary PHP scripts that run in separate
 	 * processes, allowing for proper timeout handling and process termination when
-	 * jobs exceed their allocated time.
+	 * jobs exceed their allocated time. The job is resolved fresh inside the subprocess
+	 * via the DI container rather than serialized, since real jobs commonly carry
+	 * WeakMap-backed services (e.g. the EntityManager) that serialize() refuses outright.
 	 */
 	class StrategyTimeout implements TaskRunnerInterface {
 		
@@ -39,8 +41,9 @@
 		
 		/**
 		 * Executes a job with a specified timeout in a separate process.
-		 * Creates a temporary script containing the serialized job, starts a new process
-		 * to execute it, and monitors the process until completion or timeout.
+		 * Creates a temporary script that resolves and runs the job by class name,
+		 * starts a new process to execute it, and monitors the process until completion
+		 * or timeout.
 		 * @param JobInterface $job The job to execute
 		 * @throws TaskTimeoutException If the job exceeds the timeout
 		 * @throws TaskException If the job fails to execute or start
@@ -63,29 +66,34 @@
 		
 		/**
 		 * Creates a temporary PHP script that executes the given job.
-		 * The script contains the serialized job and handles its execution,
-		 * including proper error handling and exit codes.
-		 * @param JobInterface $job The job to serialize into the script
+		 * The script only carries the job's class name; it boots a fresh Kernel
+		 * and resolves the job through the DI container inside the subprocess,
+		 * instead of serializing the live object graph, which fails outright for
+		 * any job whose dependencies hold a WeakMap (e.g. the EntityManager).
+		 * @param JobInterface $job The job to run in the subprocess
 		 * @return string Path to the created temporary script
 		 */
 		private function createJobScript(JobInterface $job): string {
 			// Determine the autoload-directory (composer)
 			$autoloadPath = ComposerUtils::getProjectRoot() . "/vendor/autoload.php";
-			
+
 			// Create a temporary file for the script
 			$tempScript = tempnam(sys_get_temp_dir(), 'job_');
-			
-			// Serialize and encode the job for safe inclusion in the script
-			$serializedJob = base64_encode(serialize($job));
-			
+
+			// Encode the class name for safe inclusion in the script
+			$encodedJobClass = base64_encode(get_class($job));
+
 			// Generate the PHP script content
 			$scriptContent = <<<PHP
 <?php
 	require_once '$autoloadPath';
 
 	try {
-	    // Deserialize and execute the job
-	    \$job = unserialize(base64_decode('{$serializedJob}'));
+	    // Resolve a fresh instance through the DI container rather than
+	    // unserializing the original object, which can't survive a WeakMap-backed
+	    // dependency (e.g. the EntityManager) crossing the process boundary
+	    \$jobClass = base64_decode('{$encodedJobClass}');
+	    \$job = (new \Quellabs\Canvas\Kernel())->getDependencyInjector()->make(\$jobClass);
 	    \$job->handle();
 	    exit(0); // Success exit code
 	} catch (Throwable \$e) {
@@ -97,7 +105,7 @@
 	    exit(1);
 	}
 PHP;
-			
+
 			// Write the script content to the temporary file
 			file_put_contents($tempScript, $scriptContent);
 			return $tempScript;
