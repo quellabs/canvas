@@ -62,7 +62,7 @@ NOTES:
     - Turn off 'debug_mode' in production
     - Set 'security_header_policy' to null to disable the default security headers
     - Exceptions that end in a server error are logged to 'monolog_file' in every
-      mode; set 'log_uncaught_exceptions' to false to stop
+      mode
 HELP;
 		}
 

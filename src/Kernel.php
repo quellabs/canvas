@@ -432,8 +432,7 @@
 		/**
 		 * Create an error response from an exception. An exception that reaches
 		 * the default handler and is not a client error, and a custom handler that
-		 * fails, are logged (unless config 'log_uncaught_exceptions' is false):
-		 * the generic error page shows nothing of either.
+		 * fails, are logged: the generic error page shows nothing of either.
 		 * @param \Throwable $exception
 		 * @param Request $request
 		 * @return Response
@@ -451,8 +450,11 @@
 					}
 				}
 			} catch (\Throwable $handlerFailure) {
-				// Fall through to the default handler below
-				$this->logException('Error handler failed', $handlerFailure, $request);
+				// Fall through to the default handler below. A handler rethrowing the
+				// exception it was given is logged there once, as the unhandled exception.
+				if ($handlerFailure !== $exception) {
+					$this->logException('Error handler failed', $handlerFailure, $request);
+				}
 			}
 
 			// No custom handler found (or one of them failed). Show a generic message
@@ -486,19 +488,14 @@
 		/**
 		 * Logs $exception, with its stack trace and the request it ended, to the
 		 * application's logger (config 'monolog_file'), or to PHP's error_log
-		 * when no logger can be resolved. Does nothing when config
-		 * 'log_uncaught_exceptions' is false (it defaults to true, in every mode).
-		 * Never throws: it runs while an error page is being built.
+		 * when no logger can be resolved. Never throws: it runs while an error
+		 * page is being built.
 		 * @param string $message
 		 * @param \Throwable $exception
 		 * @param Request $request
 		 * @return void
 		 */
 		private function logException(string $message, \Throwable $exception, Request $request): void {
-			if (!$this->configuration->getAs('log_uncaught_exceptions', 'bool', true)) {
-				return;
-			}
-
 			$context = [
 				'exception' => $exception,
 				'method'    => $request->getMethod(),
