@@ -91,7 +91,7 @@
 			// Resolve logfile
 			$logfile = is_string($loggerContext['logfile'] ?? null) ? $loggerContext['logfile'] : $this->logfile;
 			
-			if (!str_starts_with($logfile, DIRECTORY_SEPARATOR)) {
+			if (!self::isAbsoluteOrStream($logfile)) {
 				$logfile = ComposerUtils::getProjectRoot() . '/storage/logs/' . $logfile;
 			}
 			
@@ -120,6 +120,17 @@
 			return $this->loggers[$cacheKey] = $logger;
 		}
 		
+		/**
+		 * Whether $path is used as given rather than below storage/logs: an
+		 * absolute path on Unix or Windows (C:\ or C:/), or a stream such as php://stderr.
+		 * @param string $path
+		 * @return bool
+		 */
+		private static function isAbsoluteOrStream(string $path): bool {
+			return $path !== ''
+				&& ($path[0] === '/' || $path[0] === '\\' || preg_match('/^[A-Za-z]:[\\\\\/]/', $path) === 1 || str_contains($path, '://'));
+		}
+
 		/**
 		 * Reads @LoggerContext parameters off the requesting method, if present.
 		 * A method may carry several @LoggerContext instances, one per resolved
