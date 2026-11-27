@@ -430,9 +430,7 @@
 		}
 		
 		/**
-		 * Create an error response from an exception. An exception that reaches
-		 * the default handler and is not a client error, and a custom handler that
-		 * fails, are logged: the generic error page shows nothing of either.
+		 * Create an error response from an exception, logging server errors and failing custom handlers.
 		 * @param \Throwable $exception
 		 * @param Request $request
 		 * @return Response
@@ -450,8 +448,7 @@
 					}
 				}
 			} catch (\Throwable $handlerFailure) {
-				// Fall through to the default handler below. A handler rethrowing the
-				// exception it was given is logged there once, as the unhandled exception.
+				// A handler rethrowing its own exception is logged once, below
 				if ($handlerFailure !== $exception) {
 					$this->logException('Error handler failed', $handlerFailure, $request);
 				}
@@ -470,9 +467,7 @@
 		}
 
 		/**
-		 * True for an HttpException carrying a 4xx code (e.g. a missing route): the
-		 * client's doing, not worth an error entry. Judged by type, since any other
-		 * exception's code is no statement about the HTTP status.
+		 * True for an HttpException with a 4xx code; other exceptions' codes say nothing about HTTP status.
 		 * @param \Throwable $exception
 		 * @return bool
 		 */
@@ -486,10 +481,7 @@
 		}
 
 		/**
-		 * Logs $exception, with its stack trace and the request it ended, to the
-		 * application's logger (config 'monolog_file'), or to PHP's error_log
-		 * when no logger can be resolved. Never throws: it runs while an error
-		 * page is being built.
+		 * Logs $exception and its request to the app logger, falling back to error_log; never throws.
 		 * @param string $message
 		 * @param \Throwable $exception
 		 * @param Request $request
