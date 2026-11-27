@@ -28,9 +28,7 @@
 		private Slot $handleNewSignalSlot;
 		
 		/**
-		 * Slots created in handleNewSignal() for debug signals. Never read — exists solely to hold strong references so
-		 * Slots are not GC'd after connect() returns. Signal owns Slots strongly too,
-		 * but only after connect() is called; this array guards the gap before that.
+		 * Strong references to the Slots created in handleNewSignal(); never read.
 		 * @var Slot[]
 		 * @phpstan-ignore property.onlyWritten
 		 */
