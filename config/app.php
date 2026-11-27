@@ -32,6 +32,10 @@
 		// Default file for Monolog logging
 		'monolog_file'            => dirname(__FILE__) . '/../storage/logs/canvas.log',
 
+		// Log exceptions that end in a server error (5xx) to monolog_file, in every
+		// mode; the generic error page shows nothing of them. Set false to stop.
+		'log_uncaught_exceptions' => true,
+
 		// Whether to match routes with trailing slashes
 		'match_trailing_slashes'  => false,
 

@@ -39,10 +39,10 @@
 			return <<<HELP
 DESCRIPTION:
     Creates config/app.php with sensible defaults: debug mode on, the 'smarty'
-    template engine, HtmlMinifyFilter as the output filter, the standard
-    src/Controllers, src/Errors, src/Aspects, src/Entities, and src/Listeners
-    directories, attribute-based annotations, and BasicSecurityHeaderPolicy
-    as the default security header policy.
+    template engine, no output filter, the standard src/Controllers,
+    src/Errors, src/Aspects, src/Tasks, and src/Listeners directories,
+    docblock-based annotations, logging to storage/logs/canvas.log, and
+    BasicSecurityHeaderPolicy as the default security header policy.
 
 USAGE:
     php sculpt canvas:init [--force]
@@ -61,6 +61,8 @@ NOTES:
     - The config directory is created automatically if it does not exist
     - Turn off 'debug_mode' in production
     - Set 'security_header_policy' to null to disable the default security headers
+    - Exceptions that end in a server error are logged to 'monolog_file' in every
+      mode; set 'log_uncaught_exceptions' to false to stop
 HELP;
 		}
 

@@ -55,6 +55,7 @@
 	use Quellabs\SignalHub\SignalHub;
 	use Quellabs\SignalHub\SignalHubLocator;
 	use Quellabs\Support\ComposerUtils;
+	use Psr\Log\LoggerInterface;
 	use Symfony\Component\HttpFoundation\Request;
 	use Symfony\Component\HttpFoundation\Response;
 	use Symfony\Component\HttpFoundation\Session\SessionInterface;
@@ -427,7 +428,10 @@
 		}
 		
 		/**
-		 * Create an error response from an exception
+		 * Create an error response from an exception. An exception that reaches
+		 * the default handler as a server error (5xx), and a custom handler that
+		 * fails, are logged (unless config 'log_uncaught_exceptions' is false):
+		 * the generic error page shows nothing of either.
 		 * @param \Throwable $exception
 		 * @param Request $request
 		 * @return Response
@@ -444,14 +448,68 @@
 						return $handler->handle($exception, $request);
 					}
 				}
-			} catch (\Throwable) {
+			} catch (\Throwable $handlerFailure) {
 				// Fall through to the default handler below
+				$this->logException('Error handler failed', $handlerFailure, $request);
 			}
 
 			// No custom handler found (or one of them failed). Show a generic message
 			$isDevelopment = $this->configuration->get('debug_mode', false);
 			$defaultHandler = new DefaultErrorHandler($this->defaultSecurityHeaderPolicy);
-			return $defaultHandler->handle($exception, $request, $isDevelopment);
+			$response = $defaultHandler->handle($exception, $request, $isDevelopment);
+
+			// A 4xx (e.g. a route that does not exist) is the client's doing, not worth an error entry
+			if ($response->getStatusCode() >= Response::HTTP_INTERNAL_SERVER_ERROR) {
+				$this->logException('Unhandled exception', $exception, $request);
+			}
+
+			return $response;
+		}
+
+		/**
+		 * Logs $exception, with its stack trace and the request it ended, to the
+		 * application's logger (config 'monolog_file'), or to PHP's error_log
+		 * when no logger can be resolved. Does nothing when config
+		 * 'log_uncaught_exceptions' is false (it defaults to true, in every mode).
+		 * Never throws: it runs while an error page is being built.
+		 * @param string $message
+		 * @param \Throwable $exception
+		 * @param Request $request
+		 * @return void
+		 */
+		private function logException(string $message, \Throwable $exception, Request $request): void {
+			if (!$this->configuration->getAs('log_uncaught_exceptions', 'bool', true)) {
+				return;
+			}
+
+			$context = [
+				'exception' => $exception,
+				'method'    => $request->getMethod(),
+				'uri'       => $request->getRequestUri(),
+				'trace'     => $exception->getTraceAsString(),
+			];
+
+			try {
+				$logger = $this->dependencyInjector->get(LoggerInterface::class);
+
+				if ($logger instanceof LoggerInterface) {
+					$logger->error($message, $context);
+					return;
+				}
+			} catch (\Throwable) {
+				// Fall back to error_log below
+			}
+
+			error_log(sprintf(
+				'%s: %s: %s in %s:%d (%s %s)',
+				$message,
+				$exception::class,
+				$exception->getMessage(),
+				$exception->getFile(),
+				$exception->getLine(),
+				$context['method'],
+				$context['uri'],
+			));
 		}
 		
 		/**
