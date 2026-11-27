@@ -34,6 +34,8 @@
 	use Quellabs\Canvas\Discover\DependencyAwareDiscover;
 	use Quellabs\Canvas\Error\DefaultErrorHandler;
 	use Quellabs\Canvas\Error\ErrorHandlerInterface;
+	use Quellabs\Canvas\Exceptions\RouteNotFoundException;
+	use Quellabs\Contracts\Http\HttpException;
 	use Quellabs\Canvas\Routing\RequestHandler;
 	use Quellabs\Canvas\Inspector\EventCollector;
 	use Quellabs\Canvas\Cache\CacheInterfaceProvider;
@@ -429,7 +431,7 @@
 		
 		/**
 		 * Create an error response from an exception. An exception that reaches
-		 * the default handler as a server error (5xx), and a custom handler that
+		 * the default handler and is not a client error, and a custom handler that
 		 * fails, are logged (unless config 'log_uncaught_exceptions' is false):
 		 * the generic error page shows nothing of either.
 		 * @param \Throwable $exception
@@ -458,12 +460,27 @@
 			$defaultHandler = new DefaultErrorHandler($this->defaultSecurityHeaderPolicy);
 			$response = $defaultHandler->handle($exception, $request, $isDevelopment);
 
-			// A 4xx (e.g. a route that does not exist) is the client's doing, not worth an error entry
-			if ($response->getStatusCode() >= Response::HTTP_INTERNAL_SERVER_ERROR) {
+			if (!$this->isClientError($exception)) {
 				$this->logException('Unhandled exception', $exception, $request);
 			}
 
 			return $response;
+		}
+
+		/**
+		 * True for an HttpException carrying a 4xx code (e.g. a missing route): the
+		 * client's doing, not worth an error entry. Judged by type, since any other
+		 * exception's code is no statement about the HTTP status.
+		 * @param \Throwable $exception
+		 * @return bool
+		 */
+		private function isClientError(\Throwable $exception): bool {
+			if ($exception instanceof RouteNotFoundException) {
+				return true;
+			}
+
+			$code = $exception->getCode();
+			return $exception instanceof HttpException && $code >= 400 && $code <= 499;
 		}
 
 		/**
@@ -485,8 +502,8 @@
 			$context = [
 				'exception' => $exception,
 				'method'    => $request->getMethod(),
-				'uri'       => $request->getRequestUri(),
-				'trace'     => $exception->getTraceAsString(),
+				'uri'       => $request->getBaseUrl() . $request->getPathInfo(),
+				'trace'     => $exception->getTraceAsString()
 			];
 
 			try {
