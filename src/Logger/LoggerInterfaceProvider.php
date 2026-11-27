@@ -91,7 +91,7 @@
 			// Resolve logfile
 			$logfile = is_string($loggerContext['logfile'] ?? null) ? $loggerContext['logfile'] : $this->logfile;
 			
-			if (!self::isAbsoluteOrStream($logfile)) {
+			if (!$this->isAbsoluteOrStream($logfile)) {
 				$logfile = ComposerUtils::getProjectRoot() . '/storage/logs/' . $logfile;
 			}
 			
@@ -126,7 +126,7 @@
 		 * @param string $path
 		 * @return bool
 		 */
-		private static function isAbsoluteOrStream(string $path): bool {
+		private function isAbsoluteOrStream(string $path): bool {
 			return $path !== ''
 				&& ($path[0] === '/' || $path[0] === '\\' || preg_match('/^[A-Za-z]:[\\\\\/]/', $path) === 1 || str_contains($path, '://'));
 		}
