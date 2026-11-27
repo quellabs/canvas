@@ -28,15 +28,7 @@
 		private Slot $handleNewSignalSlot;
 		
 		/**
-		 * Slot for the debug.canvas.query signal, if it existed at construction time.
-		 * Stored as a property to keep the Slot alive for the lifetime of this object.
-		 * @var Slot|null
-		 */
-		private ?Slot $debugCanvasQuerySlot = null;
-		
-		/**
-		 * Slots created dynamically in handleNewSignal() for debug signals registered
-		 * after construction. Never read — exists solely to hold strong references so
+		 * Slots created in handleNewSignal() for debug signals. Never read — exists solely to hold strong references so
 		 * Slots are not GC'd after connect() returns. Signal owns Slots strongly too,
 		 * but only after connect() is called; this array guards the gap before that.
 		 * @var Slot[]
@@ -54,8 +46,10 @@
 			$this->handleNewSignalSlot = new Slot([$this, 'handleNewSignal']);
 			$signalHub->signalRegistered()->connect($this->handleNewSignalSlot);
 			
-			// Connect to any debug signals that already exist in the hub
-			$this->connectToCanvasQuerySignal($signalHub);
+			// The meta-signal only reports future registrations, so connect to existing debug signals too
+			foreach ($signalHub->findSignals('debug.*') as $signal) {
+				$this->handleNewSignal($signal);
+			}
 		}
 		
 		/**
@@ -116,28 +110,6 @@
 		 */
 		public function getEventsBySignal(string $signal): array {
 			return $this->getEventsBySignals([$signal]);
-		}
-		
-		/**
-		 * Connects to the debug.canvas.query signal if it already exists in the hub.
-		 * @param SignalHub $signalHub The signal hub to check for existing signals
-		 */
-		private function connectToCanvasQuerySignal(SignalHub $signalHub): void {
-			$signal = $signalHub->getSignal('debug.canvas.query');
-			
-			if (!$signal) {
-				return;
-			}
-			
-			$this->debugCanvasQuerySlot = new Slot(function (array $data): void {
-				$this->events[] = [
-					'signal'    => 'debug.canvas.query',
-					'data'      => $data,
-					'timestamp' => microtime(true),
-				];
-			});
-			
-			$signal->connect($this->debugCanvasQuerySlot);
 		}
 		
 		/**
