@@ -60,7 +60,8 @@ EXAMPLES:
 NOTES:
     - The config directory is created automatically if it does not exist
     - Turn off 'debug_mode' in production
-    - Set 'security_header_policy' to null to disable the default security headers
+    - Set 'security_header_policy' to NullSecurityHeaderPolicy::class to disable
+      the default security headers
     - Exceptions that end in a server error are logged to 'monolog_file' in every
       mode
 HELP;
