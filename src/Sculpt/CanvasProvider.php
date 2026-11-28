@@ -14,6 +14,7 @@
 				ListRoutesCommand::class,
 				MatchRoutesCommand::class,
 				RoutesCacheClearCommand::class,
+				AnnotationsCacheClearCommand::class,
 				ScheduleRunCommand::class,
 				SchedulerListCommand::class,
 				CanvasInitCommand::class,
